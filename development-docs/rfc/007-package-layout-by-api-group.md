@@ -2,7 +2,7 @@
 
 ## Status
 <!-- Draft | In review | Accepted | Declined | Withdrawn | Implemented — and the GitHub issue that carries the discussion, e.g. "Draft · #42" -->
-Accepted
+Implemented
 
 > [!NOTE]
 > Implemented for both groups now in use: the eight original packages moved to `package/platform/<name>/`, `VERSIONS.yaml` gained

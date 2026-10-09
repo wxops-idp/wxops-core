@@ -1,6 +1,6 @@
 # Your First Change
 
-> A guided edit to `gitea-team`, start to finish: schema, template, test, PR. The field this adds
+> A guided edit to `scm-oauth-app`, start to finish: schema, template, test, PR. The field this adds
 > (`notes`) is a deliberately trivial teaching example — it wires through every mechanical step
 > without touching Gitea's real API. Don't merge it as-is; it's here so you make the *real* first
 > edit on a copy you understand, then apply the same steps to a change that matters.
@@ -19,20 +19,25 @@
 
 ## What we're adding
 
-An optional `notes` string on `XGiteaTeam`, round-tripped to `status.notes` — no real Gitea
+An optional `notes` string on `XScmOAuthApp`, round-tripped to `status.notes` — no real host
 behavior, just so you can see a field travel: **schema → patch → Terraform variable → Terraform
 output → patch → status**, the same six hops every real field in this repo takes.
 
+`scm-oauth-app` is the simplest package with real HCL to practice on: unlike `scm-repository`, it
+declares only one Terraform provider (`gitea`) in its module — GitHub's path is pure variable
+passthrough, no second provider to keep straight (see [ADR-004](../../development-docs/adr/004-scm-repository-vendor-field.md)
+for why `scm-repository` itself needs two full module variants instead of one).
+
 ## 1 — Add the field to the schema
 
-`package/gitea-team/xrd.yaml`, alongside the other optional fields under
+`package/scm/oauth-app/xrd.yaml`, alongside the other optional fields under
 `spec.parameters.properties`:
 
 ```yaml
 notes:
   type: string
   default: ""
-  description: Free-text note. Teaching field — not sent to Gitea.
+  description: Free-text note. Teaching field — not sent to the host.
 ```
 
 New optional field, with a default: this is a `safe`-tier change — nothing existing can break. See
@@ -41,7 +46,7 @@ New optional field, with a default: this is a `safe`-tier change — nothing exi
 
 ## 2 — Wire it through the Composition
 
-`package/gitea-team/composition.yaml`. Three edits, all inside the inline HCL module:
+`package/scm/oauth-app/composition.yaml`. Three edits, all inside the inline HCL module:
 
 **a. Declare the Terraform variable**, next to the others:
 ```hcl
@@ -52,13 +57,13 @@ variable "notes" {
 ```
 
 **b. Add an output** so it round-trips back out (nothing consumes it — this alone proves the wiring
-without touching the real `gitea_team` resource):
+without touching the real `gitea_oauth2_app` resource):
 ```hcl
 output "notes" { value = var.notes }
 ```
 
 **c. Two patches** — one `FromCompositeFieldPath` into a **new, last** entry in `vars` (append, per
-[the vars-index warning](02-terraform-here.md#how-xr-fields-reach-terraform-variables) — never
+[the vars-index warning](02-opentofu-here.md#how-xr-fields-reach-opentofu-variables) — never
 insert in the middle), one `ToCompositeFieldPath` back out:
 
 ```yaml
@@ -70,7 +75,7 @@ insert in the middle), one `ToCompositeFieldPath` back out:
 # in patches, appended after the existing entries:
 - type: FromCompositeFieldPath
   fromFieldPath: spec.parameters.notes
-  toFieldPath: spec.forProvider.vars[14].value   # whatever index this new entry landed at
+  toFieldPath: spec.forProvider.vars[5].value   # whatever index this new entry landed at
 
 - type: ToCompositeFieldPath
   fromFieldPath: status.atProvider.outputs.notes
@@ -89,13 +94,13 @@ This package uses inline HCL, not KCL, so there's no `make kcl-sync` step here. 
 Optional fields with defaults don't strictly need new cases, but exercise the one you added:
 
 ```bash
-# examples/gitea-team/xr.yaml — add one line under spec.parameters:
+# examples/scm-oauth-app/xr.yaml — add one line under spec.parameters:
 notes: "onboarding cohort 3"
 ```
 
-Test cases live under `tests/cases/gitea-team/`; see
-[Adding a case](../../tests/README.md#adding-a-case) if you're adding a new one rather than editing
-`examples/`.
+Test cases live under `tests/cases/scm-oauth-app/` (`gitea-managed`, `gitea-tenant-path`,
+`github-observed`); see [Adding a case](../../tests/README.md#adding-a-case) if you're adding a new
+one rather than editing `examples/`.
 
 ## 4 — Run the suite
 
@@ -108,7 +113,7 @@ make test-api-compat   # confirms this is classified `safe` against the last rel
 
 ```bash
 make test-update
-git diff tests/cases/gitea-team/
+git diff tests/cases/scm-oauth-app/
 ```
 
 You should see exactly one new line per affected case: the `notes` variable and output now appear in
@@ -122,16 +127,16 @@ make test    # the full merge gate, green
 ## 6 — Commit and open a PR
 
 ```bash
-git add package/gitea-team/ examples/gitea-team/ tests/cases/gitea-team/
-git commit -m "feat(gitea-team): add optional notes field to XRD v1alpha1"
+git add package/scm/oauth-app/ examples/scm-oauth-app/ tests/cases/scm-oauth-app/
+git commit -m "feat(scm-oauth-app): add optional notes field to XRD v1alpha1"
 ```
 
 Commit message format and the full PR checklist: [`CONTRIBUTING.md`](../../CONTRIBUTING.md#commit-messages).
 `pre-commit` runs the same checks locally that CI runs on the PR — see
-[pre-commit hooks](../development/README.md#pre-commit-hooks).
+[pre-commit hooks](../../development-docs/development/README.md#pre-commit-hooks).
 
-**Now revert this teaching change** (`git checkout -- package/gitea-team/ examples/gitea-team/
-tests/cases/gitea-team/`) and apply the same six steps to something real.
+**Now revert this teaching change** (`git checkout -- package/scm/oauth-app/ examples/scm-oauth-app/
+tests/cases/scm-oauth-app/`) and apply the same six steps to something real.
 
 ## What you just practiced
 
@@ -144,4 +149,4 @@ tests/cases/gitea-team/`) and apply the same six steps to something real.
 | 6 | Conventional commit, `pre-commit`, PR |
 
 This is the loop for every change in this repo, described in full at
-[the development guide](../development/README.md#the-change-loop).
+[the development guide](../../development-docs/development/README.md#the-change-loop).

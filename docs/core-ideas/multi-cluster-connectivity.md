@@ -259,7 +259,7 @@ flowchart TB
 ```
 
 The dotted **path B** is a genuinely open decision — *Portal → Git vs. Portal → API*, tracked in
-`ROADMAP.md`'s open-decisions table. Both work with this architecture; path A gives immediate
+`development-docs/_archives/ROADMAP.md`'s open-decisions table. Both work with this architecture; path A gives immediate
 status, path B gives a Git audit trail for tenant intent. Nothing in this document depends on which
 wins.
 
@@ -439,7 +439,7 @@ Three details carry most of the security value:
   trust *every* workload on the hub. Without it, any pod on the hub that can mint a token for that
   audience authenticates as a hub controller. Note the subject above matches this repo's fixed
   `provider-kubernetes-runtime` ServiceAccount, established in
-  [`providers/runtimeconfig-provider-kubernetes.yaml`](../../providers/) precisely so the name is
+  [`providers/runtimeconfig-provider-kubernetes.yaml`](../../providers) precisely so the name is
   stable and not package-hash-derived — that decision pays off here.
 - **`groups` is a constant, not a claim passthrough.** The spoke decides what group the hub lands in;
   the hub does not get to assert it.
@@ -631,7 +631,7 @@ That list is a strong argument, and it is worth stating plainly: **the enrollmen
 the main way this design gets compromised in practice, which is a human performing steps 1–5 by
 hand and quietly taking the convenient shortcut on one of them.**
 
-> **The RBAC caveat is not a technicality.** `ROADMAP.md` §Decided and rejected forbids compositions
+> **The RBAC caveat is not a technicality.** `development-docs/_archives/ROADMAP.md` §Decided and rejected forbids compositions
 > from emitting RBAC, and the `no-rbac-emitted` invariant enforces it. An enrollment composition
 > emitting a spoke `ClusterRole` either needs that invariant scoped to tenant-facing packages only,
 > or the grant must be delivered by `ClusterResourceSet`/GitOps instead. **Decide this before

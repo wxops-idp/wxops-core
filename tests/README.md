@@ -100,7 +100,7 @@ Golden files catch *changes*. These catch *wrongness*, in cases nobody has
 written yet. Two groups:
 
 **Architecture and contract** — no Kubernetes RBAC is ever emitted (compositions
-must not mint RBAC; see `ROADMAP.md` → *Decided and rejected*), nothing sensitive
+must not mint RBAC; see `development-docs/_archives/ROADMAP.md` → *Decided and rejected*), nothing sensitive
 reaches XR status, every `Object` names a `providerConfigRef`, every composed
 resource carries a `composition-resource-name`, `ready` never true while
 `created` is false.
@@ -206,7 +206,7 @@ server or a running provider is out of reach:
   resources
 
 Those need a real cluster. A kind-based e2e tier (chainsaw or kuttl) is the
-follow-up; see `ROADMAP.md`.
+follow-up; tracked, archived, in `development-docs/_archives/ROADMAP.md` (not an open RFC yet).
 
 ## Layout
 

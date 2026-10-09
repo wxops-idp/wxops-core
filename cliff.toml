@@ -28,7 +28,7 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 > This file is regenerated from git history by running `make changelog`.
 > Do not edit it manually.
 
-> Each release below links to a tag-pinned snapshot of [`docs/`](docs/)
+> Each release below links to a tag-pinned snapshot of [`docs/`](docs/) and [`development-docs/`](development-docs/)
 > (API reference) and [`VERSIONS.yaml`](VERSIONS.yaml) as they existed at
 > that tag — not the current `main`. Follow the links in-repo for the
 > latest state.
@@ -115,7 +115,9 @@ commit_parsers = [
 
 # Package-level scopes — these keep per-package history filterable.
 # Valid scopes: gitea-user, gitea-org, gitea-team, gitea-repository,
-#               random-password, ci, providers, docs
+#               platform-database-clusters, tenant-database, tenant-app,
+#               random-password, scm-connection, scm-repository, scm-oauth-app,
+#               ci, providers, docs
 protect_breaking_commits = true
 filter_commits = false
 # Literal string: a TOML basic string would reject the `\.` escapes.

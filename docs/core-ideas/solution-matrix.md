@@ -66,7 +66,7 @@
 | M11 | ARM/edge sites (IoT, EV charging) | Node-vs-cluster rule: k3s/Talos per autonomous site, KubeEdge/OpenYurt nodes otherwise | ❌ direction + worked use case | [multi-cluster-scale.md](multi-cluster-scale.md#worked-use-cases) | Chick-fil-A's publicly presented per-restaurant edge clusters; KubeEdge (Huawei origin), OpenYurt (Alibaba origin) |
 | M12 | Mixed hardware scheduling | `scheduling:` block (nodeSelector/tolerations/spread) + multi-arch images | ❌ **verified gap** — no scheduling fields in any XRD; `resources` schema also prunes GPU keys | [multi-cluster-scale.md](multi-cluster-scale.md#the-verified-wxops-gaps) | buildx manifest-list practice; `kubernetes.io/arch` labels |
 | M13 | Darlane interactive access across clusters | Tunnel (Tailscale incl. laptops; Teleport if audited sessions) | ❌ prototype; identity stays Pinniped | [multi-cluster.md](multi-cluster.md#darlane-across-clusters) | Tailscale K8s operator; Teleport session recording |
-| M14 | Composition-emitted RBAC | — | ⛔ rejected permanently — SA published in status, GitOps binds | `ROADMAP.md` §Decided and rejected | — |
+| M14 | Composition-emitted RBAC | — | ⛔ rejected permanently — SA published in status, GitOps binds | `development-docs/_archives/ROADMAP.md` §Decided and rejected | — |
 
 ## Domain 3 — AI Intelligence & Self-Service Operations
 

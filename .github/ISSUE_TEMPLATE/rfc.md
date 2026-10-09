@@ -13,8 +13,9 @@ Feature request template is enough — use this when the change touches an
 XRD's public schema, adds a package, changes a composition's emitted
 resources, or commits the platform to a new tool.
 
-Before writing: check ROADMAP.md "Out of scope" and "Decided and rejected",
-and docs/core-ideas/solution-matrix.md — your idea may be tracked, planned, or already
+Before writing: check the RFC index's Status column, each RFC's own rejections, the archived
+development-docs/_archives/ROADMAP.md "Out of scope" and "Decided and rejected", and
+docs/core-ideas/solution-matrix.md — your idea may be tracked, planned, or already
 closed. Referencing that beats rediscovering it in review.
 -->
 
@@ -47,7 +48,7 @@ should usually be listed with its actual cost.
 
 ## Compatibility & change tier
 
-- Change tier per ROADMAP's taxonomy: `safe` / `careful` / `breaking`
+- Change tier per `release-notes/README.md`'s taxonomy: `safe` / `careful` / `breaking`
 - Existing XRs affected? Rename or immutable-field hazard involved?
 - `VERSIONS.yaml` impact
 
@@ -63,8 +64,8 @@ What this RFC deliberately does not cover, so review stays bounded.
 ---
 <!--
 Lifecycle: needs-review → accepted (label) or declined (closed with reason).
-An RFC worth keeping graduates to a committed file, docs/rfc/NNN-title.md
-(see docs/rfc/README.md), or straight to a PR when small.
-Decisions of lasting consequence also get a row in ROADMAP.md
-"Decided and rejected", linking back to this issue as the full record.
+An RFC worth keeping graduates to a committed file, development-docs/rfc/NNN-title.md
+(see development-docs/rfc/README.md), or straight to a PR when small.
+Decisions of lasting consequence also get a committed file in development-docs/adr/
+(see development-docs/adr/README.md), linking back to this issue as the full record.
 -->

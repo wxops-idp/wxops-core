@@ -1,7 +1,7 @@
 # Security Policy
 
 W'xOps Core is a Crossplane Configuration library: XRDs and Compositions that render Kubernetes
-objects via `provider-terraform`, `provider-kubernetes`, and `function-kcl`. It has no server of
+objects via `provider-opentofu`, `provider-terraform`, `provider-kubernetes`, and `function-kcl`. It has no server of
 its own — most of what a "vulnerability" means here is a composition that can be made to produce
 something it shouldn't (an RBAC grant, a credential leak, a privilege escalation via a composed
 resource), or a supply-chain issue in a published package. See
