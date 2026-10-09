@@ -1,0 +1,16 @@
+# expect: parameters.mode
+# expect: is not one of
+#
+# Only `managed` and `observed` exist. A typo must not fall through to a default that silently
+# writes to a host.
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmRepository
+metadata:
+  name: bad-mode
+spec:
+  parameters:
+    scmRef:
+      name: gitea-internal
+    vendor: gitea
+    mode: adopt
+    repoName: api-service

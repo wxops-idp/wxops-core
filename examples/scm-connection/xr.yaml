@@ -1,0 +1,26 @@
+# The platform's GitHub connection. Platform-owned: tenants reference it by name and never see the
+# token. An operator writes the token to the secret store first — see token-secret.md in this folder.
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmConnection
+metadata:
+  name: github-wxops-idp
+  labels:
+    wxops.cloud/owner: platform
+spec:
+  # spec.crossplane is a sibling of spec.parameters, not a field inside it — track a channel
+  # (every release labels its Composition channel: stable; make install-dev applies channel:
+  # nightly). See development-docs/development/releasing.md#channels for the Manual-pin alternative.
+  # crossplane:
+  #   compositionRevisionSelector:
+  #     matchLabels:
+  #       channel: stable          # or nightly
+  #   compositionUpdatePolicy: Automatic
+  parameters:
+    vendor: github
+    org: wxops-idp
+    # baseUrl is only needed for a self-hosted host (GitHub Enterprise, Gitea, GitLab).
+    # baseUrl: https://github.com
+    access: write
+    # secretStoreRef defaults to vault-platform; tokenKey defaults to token.
+    # secretStoreRef:
+    #   name: vault-platform

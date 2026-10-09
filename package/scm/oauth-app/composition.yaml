@@ -1,0 +1,406 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: xscmoauthapps.scm.wxops.cloud
+  labels:
+    crossplane.io/xrd: xscmoauthapps.scm.wxops.cloud
+    channel: stable
+spec:
+  compositeTypeRef:
+    apiVersion: scm.wxops.cloud/v1alpha1
+    kind: XScmOAuthApp
+
+  mode: Pipeline
+  pipeline:
+    - step: patch-and-transform
+      functionRef:
+        name: function-patch-and-transform
+      input:
+        apiVersion: pt.fn.crossplane.io/v1beta1
+        kind: Resources
+        resources:
+          # 1. The application itself, through one OpenTofu module. Gitea registers it; GitHub has no
+          #    creation API, so there `mode: observed` passes an operator-registered pair through.
+          #    Either way the module ends with the same two outputs, so what follows is identical.
+          - name: tf-workspace
+            base:
+              apiVersion: opentofu.upbound.io/v1beta1
+              kind: Workspace
+              spec:
+                providerConfigRef:
+                  name: default
+                forProvider:
+                  source: Inline
+                  module: |
+                    terraform {
+                      required_providers {
+                        gitea = { source = "go-gitea/gitea", version = "~> 0.8" }
+                      }
+                    }
+
+                    # ── From the XScmConnection Secret (varFiles) ─────────────────────────────────
+                    # default_org is unused here but declared: the connection Secret always sets it, and an undeclared
+                    # variable in a -var-file is a warning this module should not emit.
+                    variable "vendor" {
+                      type = string
+                      validation {
+                        condition     = contains(["gitea", "github"], var.vendor)
+                        error_message = "vendor must be gitea or github (the XScmConnection decides it)."
+                      }
+                    }
+                    variable "base_url" { type = string }
+                    variable "default_org" { type = string }
+                    variable "access" {
+                      type = string
+                      validation {
+                        condition     = contains(["write", "read"], var.access)
+                        error_message = "access must be write or read."
+                      }
+                    }
+                    variable "token" {
+                      type      = string
+                      sensitive = true
+                    }
+
+                    # ── From the XR ───────────────────────────────────────────────────────────────
+                    variable "mode" {
+                      type = string
+                      validation {
+                        condition     = contains(["managed", "observed"], var.mode)
+                        error_message = "mode must be managed or observed."
+                      }
+                    }
+                    variable "app_name" { type = string }
+                    variable "redirect_uris" { type = string }
+                    variable "confidential" { type = bool }
+
+                    # Bumping this replaces the application, so the host issues a new secret. A commit is the audit
+                    # trail; the previous value stays in the store's own version history.
+                    variable "rotation_generation" { type = string }
+
+                    # ── From the operator's Secret, in `observed` mode only (varFiles) ───────────
+                    variable "existing_client_id" {
+                      type    = string
+                      default = ""
+                    }
+                    variable "existing_client_secret" {
+                      type      = string
+                      sensitive = true
+                      default   = ""
+                    }
+
+                    locals {
+                      managed       = var.mode == "managed"
+                      gitea_managed = var.vendor == "gitea" && local.managed
+                      redirect_list = var.redirect_uris == "" ? [] : [for u in split(",", var.redirect_uris) : trimspace(u)]
+                    }
+
+                    provider "gitea" {
+                      base_url = var.base_url != "" ? var.base_url : "https://gitea.invalid"
+                      token    = var.token
+                    }
+
+                    # Rotation trigger. terraform_data is built in — no provider, no API call.
+                    resource "terraform_data" "rotation" {
+                      input = var.rotation_generation
+                    }
+
+                    # The rules a schema cannot express, checked before anything is written. This resource always
+                    # exists, so its preconditions always run — a precondition on a count = 0 resource would not.
+                    resource "terraform_data" "guard" {
+                      input = var.vendor
+
+                      lifecycle {
+                        precondition {
+                          condition     = !local.managed || var.vendor == "gitea"
+                          error_message = "mode: managed is only available on Gitea. GitHub has no API to create an OAuth App, so register it by hand and use mode: observed with credentialsSecretRef."
+                        }
+                        precondition {
+                          condition     = !local.managed || var.access == "write"
+                          error_message = "mode: managed needs a write connection; this XScmConnection is access: read."
+                        }
+                        precondition {
+                          condition     = local.managed || (var.existing_client_id != "" && var.existing_client_secret != "")
+                          error_message = "mode: observed needs credentialsSecretRef to name a Secret whose `credentials` key sets existing_client_id and existing_client_secret in tfvars form."
+                        }
+                        precondition {
+                          condition     = !local.managed || length(local.redirect_list) > 0
+                          error_message = "redirectUris must list at least one URI to create an application."
+                        }
+                      }
+                    }
+
+                    resource "gitea_oauth2_app" "this" {
+                      count = local.gitea_managed ? 1 : 0
+
+                      name                = var.app_name
+                      redirect_uris       = local.redirect_list
+                      confidential_client = var.confidential
+
+                      lifecycle {
+                        replace_triggered_by = [terraform_data.rotation]
+                      }
+                    }
+
+                    # ── Outputs ───────────────────────────────────────────────────────────────────
+                    # client_id is not secret and is read into the XR's status. client_secret is sensitive, so
+                    # provider-opentofu routes it to the Workspace's connection Secret and it never reaches status.
+                    output "client_id" {
+                      value = local.gitea_managed ? gitea_oauth2_app.this[0].client_id : var.existing_client_id
+                    }
+
+                    output "client_secret" {
+                      value     = local.gitea_managed ? gitea_oauth2_app.this[0].client_secret : var.existing_client_secret
+                      sensitive = true
+                    }
+
+                    output "generation" {
+                      value = var.rotation_generation
+                    }
+                  vars:
+                    - key: mode
+                      value: managed
+                    - key: app_name
+                      value: placeholder
+                    - key: redirect_uris
+                      value: ""
+                    - key: confidential
+                      value: "true"
+                    - key: rotation_generation
+                      value: "1"
+
+                  # varFiles[0] is the connection: vendor, base_url, default_org, access, token.
+                  #
+                  # varFiles[1] carries the operator-registered pair in `observed` mode. It defaults
+                  # to the SAME connection Secret, because a list entry cannot be removed by a patch
+                  # and a varFiles entry naming a Secret that does not exist would fail the apply.
+                  # Loading the connection twice is harmless — identical values — and in `observed`
+                  # mode credentialsSecretRef overrides it with the operator's Secret.
+                  varFiles:
+                    - source: SecretKey
+                      secretKeyRef:
+                        namespace: crossplane-system
+                        name: placeholder
+                        key: credentials
+                    - source: SecretKey
+                      secretKeyRef:
+                        namespace: crossplane-system
+                        name: placeholder
+                        key: credentials
+
+                # The client secret arrives here, never in status. A sensitive OpenTofu output is
+                # routed to this Secret by provider-opentofu; the PushSecret below mirrors it.
+                writeConnectionSecretToRef:
+                  namespace: crossplane-system
+                  name: placeholder
+
+            patches:
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.uid
+                toFieldPath: spec.writeConnectionSecretToRef.name
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: "tf-scm-oauth-app-%s"
+
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.parameters.scmRef.name
+                toFieldPath: spec.forProvider.varFiles[0].secretKeyRef.name
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: "scm-connection-%s"
+
+              # The same default for varFiles[1] …
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.parameters.scmRef.name
+                toFieldPath: spec.forProvider.varFiles[1].secretKeyRef.name
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: "scm-connection-%s"
+
+              # … which credentialsSecretRef overrides when it is set. A later patch wins, and this
+              # one is skipped entirely while the field is absent.
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.parameters.credentialsSecretRef.name
+                toFieldPath: spec.forProvider.varFiles[1].secretKeyRef.name
+                policy:
+                  fromFieldPath: Optional
+
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.parameters.credentialsSecretRef.namespace
+                toFieldPath: spec.forProvider.varFiles[1].secretKeyRef.namespace
+                policy:
+                  fromFieldPath: Optional
+
+              # ── XR fields → module variables (vars[] is APPEND-ONLY) ───────
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.parameters.mode
+                toFieldPath: spec.forProvider.vars[0].value
+
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.parameters.appName
+                toFieldPath: spec.forProvider.vars[1].value
+
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.parameters.redirectUris
+                toFieldPath: spec.forProvider.vars[2].value
+                transforms:
+                  - type: string
+                    string:
+                      type: Join
+                      join:
+                        separator: ","
+
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.parameters.confidential
+                toFieldPath: spec.forProvider.vars[3].value
+                transforms:
+                  - type: convert
+                    convert:
+                      toType: string
+
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.parameters.rotation.generation
+                toFieldPath: spec.forProvider.vars[4].value
+                transforms:
+                  - type: convert
+                    convert:
+                      toType: string
+
+              # ── Status write-back ──────────────────────────────────────────
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.outputs.client_id
+                toFieldPath: status.clientId
+                policy:
+                  fromFieldPath: Optional
+
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.outputs.generation
+                toFieldPath: status.generation
+                policy:
+                  fromFieldPath: Optional
+                transforms:
+                  - type: convert
+                    convert:
+                      toType: int64
+
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.outputs.client_id
+                toFieldPath: status.created
+                policy:
+                  fromFieldPath: Optional
+                transforms:
+                  - type: match
+                    match:
+                      patterns:
+                        - type: regexp
+                          regexp: ".+"
+                          result: true
+                      fallbackValue: false
+
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.outputs.client_id
+                toFieldPath: status.ready
+                policy:
+                  fromFieldPath: Optional
+                transforms:
+                  - type: match
+                    match:
+                      patterns:
+                        - type: regexp
+                          regexp: ".+"
+                          result: true
+                      fallbackValue: false
+
+          # 2. The credentials, mirrored to the secret store. The whole Secret is pushed as one
+          #    write, so the store records one version per rotation rather than one per key —
+          #    the same reason platform-database-clusters pushes whole Secrets.
+          - name: credentials-push
+            base:
+              apiVersion: kubernetes.crossplane.io/v1alpha2
+              kind: Object
+              spec:
+                providerConfigRef:
+                  name: default
+                forProvider:
+                  manifest:
+                    apiVersion: external-secrets.io/v1alpha1
+                    kind: PushSecret
+                    metadata:
+                      name: placeholder
+                      namespace: crossplane-system
+                    spec:
+                      refreshInterval: 1h
+                      deletionPolicy: Delete
+                      secretStoreRefs:
+                        - name: vault-platform
+                          kind: ClusterSecretStore
+                      selector:
+                        secret:
+                          name: placeholder
+                      data:
+                        - match:
+                            remoteRef:
+                              remoteKey: placeholder
+
+            readinessChecks:
+              - type: MatchCondition
+                matchCondition:
+                  type: Ready
+                  status: "True"
+
+            patches:
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: spec.forProvider.manifest.metadata.name
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: "scm-oauth-app-%s"
+
+              # Same name the Workspace writes its connection Secret to.
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.uid
+                toFieldPath: spec.forProvider.manifest.spec.selector.secret.name
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: "tf-scm-oauth-app-%s"
+
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.parameters.secretStoreRef.name
+                toFieldPath: spec.forProvider.manifest.spec.secretStoreRefs[0].name
+
+              # remoteKey omits the KV mount prefix — the store is already scoped to it
+              # (CLAUDE.md, Vault path convention). Default: oauth/<resource name>/credentials.
+              #
+              # Derived from the XR's name, not appName: two hosts can each carry an application
+              # called `dex`, and keying on appName would make them overwrite each other's record.
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: spec.forProvider.manifest.spec.data[0].match.remoteRef.remoteKey
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: "oauth/%s/credentials"
+
+              # A tenant-owned application sets vaultKey explicitly; absent, the default above stands.
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.parameters.vaultKey
+                toFieldPath: spec.forProvider.manifest.spec.data[0].match.remoteRef.remoteKey
+                policy:
+                  fromFieldPath: Optional
+
+              - type: ToCompositeFieldPath
+                fromFieldPath: spec.forProvider.manifest.spec.data[0].match.remoteRef.remoteKey
+                toFieldPath: status.vaultKey
+                policy:
+                  fromFieldPath: Optional

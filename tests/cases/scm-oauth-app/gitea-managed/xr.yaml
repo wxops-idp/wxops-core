@@ -1,0 +1,26 @@
+# The OAuth application Dex authenticates people against. On Gitea, Core registers it and owns the
+# secret; on GitHub there is no creation API, so an operator registers it and this resource only
+# publishes the credentials — see mode, below.
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmOAuthApp
+metadata:
+  name: dex-gitea
+  labels:
+    wxops.cloud/owner: platform
+spec:
+  parameters:
+    scmRef:
+      name: gitea-internal
+    mode: managed
+    appName: dex
+    redirectUris:
+      - https://dex.example.com/callback
+    confidential: true
+    # Bump to rotate: the host issues a new secret and the store keeps the old version.
+    rotation:
+      generation: 1
+    # vaultKey defaults to oauth/<appName>/credentials, which is what a platform-owned app wants.
+    # A tenant-owned app sets it explicitly, with a tenant-scoped store:
+    # secretStoreRef:
+    #   name: vault-tenants
+    # vaultKey: team-alpha/oauth/dex/credentials

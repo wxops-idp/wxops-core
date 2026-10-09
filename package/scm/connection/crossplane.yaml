@@ -1,0 +1,17 @@
+apiVersion: meta.pkg.crossplane.io/v1
+kind: Configuration
+metadata:
+  name: scm-connection
+  annotations:
+    meta.crossplane.io/maintainer: W'xOps Platform Team
+    meta.crossplane.io/description: Registers one Git hosting service and renders its credential for every other scm.wxops.cloud resource.
+    meta.crossplane.io/source: github.com/wxops-idp/wxops-core
+    meta.crossplane.io/license: Apache-2.0
+spec:
+  crossplane:
+    version: ">=v2.3.0-0"
+  dependsOn:
+    - provider: xpkg.upbound.io/crossplane-contrib/provider-kubernetes
+      version: ">=v1.2.1"
+    - function: xpkg.upbound.io/crossplane-contrib/function-patch-and-transform
+      version: ">=v0.10.6"

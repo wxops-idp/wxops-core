@@ -1,0 +1,14 @@
+# expect: parameters.org
+# expect: does not match
+#
+# org is the SOLE source of org/owner for every resource on this connection (no per-resource
+# override), so the no-`/`-in-org rule belongs here, not on a downstream resource. A `/` would mean
+# a nested GitLab group, which v1 does not support — and the owner label of RFC-005 cannot carry one.
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmConnection
+metadata:
+  name: nested-org
+spec:
+  parameters:
+    vendor: gitea
+    org: wxops/platform

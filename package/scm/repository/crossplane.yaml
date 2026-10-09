@@ -1,0 +1,17 @@
+apiVersion: meta.pkg.crossplane.io/v1
+kind: Configuration
+metadata:
+  name: scm-repository
+  annotations:
+    meta.crossplane.io/maintainer: W'xOps Platform Team
+    meta.crossplane.io/description: Creates or observes a repository on Gitea or GitHub, through one OpenTofu module.
+    meta.crossplane.io/source: github.com/wxops-idp/wxops-core
+    meta.crossplane.io/license: Apache-2.0
+spec:
+  crossplane:
+    version: ">=v2.3.0-0"
+  dependsOn:
+    - provider: xpkg.upbound.io/upbound/provider-opentofu
+      version: ">=v1.1.9"
+    - function: xpkg.upbound.io/crossplane-contrib/function-patch-and-transform
+      version: ">=v0.10.6"

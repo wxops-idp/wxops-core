@@ -1,0 +1,76 @@
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmConnection
+metadata:
+  name: github-wxops-idp
+spec:
+  crossplane:
+    resourceRefs:
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: github-wxops-idp-72f67cd39db3
+status:
+  conditions:
+    - reason: WatchCircuitClosed
+      status: 'True'
+      type: Responsive
+    - reason: ReconcileSuccess
+      status: 'True'
+      type: Synced
+    - message: 'Unready resources: credentials'
+      reason: Creating
+      status: 'False'
+      type: Ready
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: credentials
+  generateName: github-wxops-idp-
+  labels:
+    crossplane.io/composite: github-wxops-idp
+  name: github-wxops-idp-72f67cd39db3
+  ownerReferences:
+    - apiVersion: scm.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XScmConnection
+      name: github-wxops-idp
+      uid: 39d7bb83-275b-515d-a375-cad74f5d379f
+spec:
+  forProvider:
+    manifest:
+      apiVersion: external-secrets.io/v1
+      kind: ExternalSecret
+      metadata:
+        name: scm-connection-github-wxops-idp
+        namespace: crossplane-system
+      spec:
+        data:
+          - remoteRef:
+              key: scm/github-wxops-idp/credentials
+              property: token
+            secretKey: token
+        refreshInterval: 1h
+        secretStoreRef:
+          kind: ClusterSecretStore
+          name: vault-platform
+        target:
+          creationPolicy: Owner
+          name: scm-connection-github-wxops-idp
+          template:
+            data:
+              credentials: 'vendor      = "github"
+
+                base_url    = ""
+
+                default_org = "wxops-idp"
+
+                access      = "write"
+
+                token       = "{{ .token }}"
+
+                '
+            engineVersion: v2
+  providerConfigRef:
+    name: default

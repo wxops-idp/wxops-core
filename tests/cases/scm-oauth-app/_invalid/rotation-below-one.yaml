@@ -1,0 +1,16 @@
+# expect: generation
+# expect: minimum
+#
+# Generations count up from 1. A zero or negative value would make "which generation is published"
+# unanswerable, and status.generation is what a consumer compares against.
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmOAuthApp
+metadata:
+  name: bad-generation
+spec:
+  parameters:
+    scmRef:
+      name: gitea-internal
+    appName: dex
+    rotation:
+      generation: 0

@@ -1,0 +1,121 @@
+apiVersion: apiextensions.crossplane.io/v2
+kind: CompositeResourceDefinition
+metadata:
+  name: xscmconnections.scm.wxops.cloud
+spec:
+  group: scm.wxops.cloud
+  # Cluster-scoped on purpose: a connection carries the platform's host credential, so it is
+  # platform-owned and must not be creatable in a tenant namespace. See ADR-002.
+  scope: Cluster
+  names:
+    kind: XScmConnection
+    plural: xscmconnections
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - parameters
+              properties:
+                parameters:
+                  type: object
+                  required:
+                    - vendor
+                  properties:
+                    vendor:
+                      type: string
+                      description: |
+                        Which hosting service this connection points at. `baseUrl`, `org`, `access` and the token
+                        all come from here and nowhere else. `XScmRepository.spec.parameters.vendor` is the one
+                        exception: it repeats this value so Crossplane can pick the matching Terraform provider
+                        before the connection's Secret is even read — a Terraform limitation, not a design choice;
+                        see the comment on that field.
+                      enum: ["gitea", "github"]
+                    baseUrl:
+                      type: string
+                      description: |
+                        API base URL. Required for a self-hosted Gitea (an in-cluster service URL is
+                        fine); leave unset for github.com.
+                      default: ""
+                    org:
+                      type: string
+                      description: |
+                        Which org this connection operates against. **Optional — the two states are
+                        both real, supported layers, not a fallback:**
+
+                        - **Left unset: the user layer.** Everything built on this connection acts as
+                          the token's own personal account. On Gitea this is resolved with a
+                          `data.gitea_user` lookup that omits `username` (the provider's own way to
+                          say "the authenticated user"); on GitHub the provider's `owner` is left
+                          unset, which it already treats as "my account." Lets someone reproduce
+                          W'xOps Core with nothing but a personal access token — no org required.
+                        - **Set: the org layer.** Every resource acts against this org. This is also
+                          the layer team support (`scm-team`, not built yet) requires — a team is an
+                          org-level concept on both hosts, there is no such thing as a personal team.
+
+                        GitHub's `observed` mode is the one exception: looking up an existing
+                        repository needs an explicit owner to address it, and GitHub has no
+                        whoami-style lookup to supply one. `org` is required there; the module
+                        refuses with a clear message rather than guessing.
+
+                        For a personal GitHub connection, setting `org` to your own username is equivalent to leaving it unset, not
+                        the org layer in disguise: the `integrations/github` provider looks `org` up and only routes through the
+                        organization API when GitHub itself reports it as `type: Organization`; a personal account resolves to the
+                        same `/user/repos` creation path either way. Since `observed` needs it set regardless, setting it explicitly
+                        up front lets one connection serve both modes without you having to remember which one needs what.
+                      default: ""
+                      # The leading group is optional so the empty string — the user layer's actual
+                      # value — validates too. Without the `(...)?`, `default: ""` and this pattern
+                      # contradict each other: the API server applies the default, then rejects its
+                      # own output, which is exactly the bug a real cluster hit (see
+                      # development-docs/rfc/003-scm-connections-and-resources.md).
+                      pattern: '^([A-Za-z0-9][A-Za-z0-9._-]*)?$'
+                    access:
+                      type: string
+                      description: |
+                        What the token is allowed to do. A `read` connection serves `mode: observed`
+                        only; a `managed` resource on it fails before any write.
+                      enum: ["write", "read"]
+                      default: write
+                    secretStoreRef:
+                      type: object
+                      description: |
+                        The ESO ClusterSecretStore holding the host token. The token itself is the
+                        bootstrap secret: an operator writes it to the store, Core never mints it.
+                      properties:
+                        name:
+                          type: string
+                          default: vault-platform
+                      default: {}
+                    tokenKey:
+                      type: string
+                      description: Property to read at the remote path.
+                      default: token
+            status:
+              type: object
+              properties:
+                created:
+                  type: boolean
+                  description: |
+                    True once the credential Secret has been rendered from the store.
+
+                    Absent — not false — until then, because the patch is skipped while its source
+                    path does not exist. Treat absent as false.
+                ready:
+                  type: boolean
+                  description: |
+                    True when the credential Secret is in sync. Equal to `created` by construction:
+                    a connection either has its Secret or it does not. The token is never verified
+                    against the host — only a resource using the connection can prove that.
+                secretName:
+                  type: string
+                  description: |
+                    The Secret every consumer's Workspace reads as `varFiles`. Always
+                    `scm-connection-<name>` in `crossplane-system`; published so the name is
+                    discoverable rather than conventional.

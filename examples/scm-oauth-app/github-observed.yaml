@@ -1,0 +1,33 @@
+# GitHub has no API to create an OAuth App, so an operator registers it once in the GitHub UI and
+# puts the pair in a Secret. This resource then publishes it to the store, which is what gives Dex
+# and OAuth2 Proxy one place to read from.
+#
+# The Secret's `credentials` key is tfvars, the same format every Workspace here reads:
+#
+#   existing_client_id     = "Iv1.0123456789abcdef"
+#   existing_client_secret = "……"
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmOAuthApp
+metadata:
+  name: dex-github
+  labels:
+    wxops.cloud/owner: platform
+spec:
+  # spec.crossplane is a sibling of spec.parameters, not a field inside it — track a channel
+  # (every release labels its Composition channel: stable; make install-dev applies channel:
+  # nightly). See development-docs/development/releasing.md#channels for the Manual-pin alternative.
+  # crossplane:
+  #   compositionRevisionSelector:
+  #     matchLabels:
+  #       channel: stable          # or nightly
+  #   compositionUpdatePolicy: Automatic
+  parameters:
+    scmRef:
+      name: github-wxops-idp
+    mode: observed
+    appName: dex
+    redirectUris:
+      - https://dex.example.com/callback
+    credentialsSecretRef:
+      name: dex-github-oauth
+      namespace: crossplane-system

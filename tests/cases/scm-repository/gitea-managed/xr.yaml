@@ -1,0 +1,24 @@
+# A repository on the connection above. `vendor` must match the connection's own.
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmRepository
+metadata:
+  name: team-alpha-api-service
+  labels:
+    wxops.cloud/owner: team-alpha
+spec:
+  parameters:
+    scmRef:
+      name: gitea-internal
+    vendor: gitea
+    mode: managed
+    repoName: api-service
+    description: Alpha squad API service
+    visibility: private
+    defaultBranch: main
+    autoInit: true
+    hasIssues: true
+    hasWiki: false
+    # topics is GitHub-only: the Gitea provider has no topics attribute, so a non-empty list on a
+    # Gitea connection fails loudly instead of being dropped.
+    # retain defaults to true — deleting this XR leaves the repository in place.
+    # retain: true

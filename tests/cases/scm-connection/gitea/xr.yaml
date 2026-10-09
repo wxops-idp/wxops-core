@@ -1,0 +1,17 @@
+# An in-cluster Gitea connection. Platform-owned: tenants reference it by name and never see the
+# token. An operator writes the token to the secret store first — see token-secret.md in this folder.
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmConnection
+metadata:
+  name: gitea-internal
+  labels:
+    wxops.cloud/owner: platform
+spec:
+  parameters:
+    vendor: gitea
+    org: wxops-idp
+    baseUrl: http://gitea-http.gitea.svc.cluster.local:3000
+    access: write
+    # secretStoreRef defaults to vault-platform; tokenKey defaults to token.
+    # secretStoreRef:
+    #   name: vault-platform

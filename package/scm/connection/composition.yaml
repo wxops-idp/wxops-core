@@ -1,0 +1,159 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: xscmconnections.scm.wxops.cloud
+  labels:
+    crossplane.io/xrd: xscmconnections.scm.wxops.cloud
+    channel: stable
+spec:
+  compositeTypeRef:
+    apiVersion: scm.wxops.cloud/v1alpha1
+    kind: XScmConnection
+
+  mode: Pipeline
+  pipeline:
+    - step: patch-and-transform
+      functionRef:
+        name: function-patch-and-transform
+      input:
+        apiVersion: pt.fn.crossplane.io/v1beta1
+        kind: Resources
+        resources:
+          # One ExternalSecret, rendered into the tfvars Secret every consumer's Workspace reads as
+          # `varFiles`. The host token stays in the secret store; this composition only templates it
+          # next to the connection's non-secret fields, so a consumer needs no vendor, URL or Secret
+          # name of its own — see development-docs/rfc/003-scm-connections-and-resources.md.
+          - name: credentials
+            base:
+              apiVersion: kubernetes.crossplane.io/v1alpha2
+              kind: Object
+              spec:
+                providerConfigRef:
+                  name: default
+                forProvider:
+                  manifest:
+                    apiVersion: external-secrets.io/v1
+                    kind: ExternalSecret
+                    metadata:
+                      name: placeholder
+                      namespace: crossplane-system
+                    spec:
+                      refreshInterval: 1h
+                      secretStoreRef:
+                        name: vault-platform
+                        kind: ClusterSecretStore
+                      target:
+                        name: placeholder
+                        creationPolicy: Owner
+                        template:
+                          engineVersion: v2
+                          data:
+                            # Overwritten by the CombineFromComposite patch below. tfvars, because
+                            # that is the format `Workspace.spec.forProvider.varFiles` reads.
+                            credentials: placeholder
+                      data:
+                        - secretKey: token
+                          remoteRef:
+                            key: placeholder
+                            property: token
+
+            readinessChecks:
+              - type: MatchCondition
+                matchCondition:
+                  type: Ready
+                  status: "True"
+
+            patches:
+              # scm-connection-<name>, in crossplane-system: the one name consumers derive from
+              # `scmRef.name` with the same Format transform.
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: spec.forProvider.manifest.metadata.name
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: "scm-connection-%s"
+
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: spec.forProvider.manifest.spec.target.name
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: "scm-connection-%s"
+
+              # remoteKey omits the KV mount prefix: the ClusterSecretStore is already scoped to it
+              # (CLAUDE.md, Vault path convention). Full logical path: platform/scm/<name>/credentials.
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: spec.forProvider.manifest.spec.data[0].remoteRef.key
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: "scm/%s/credentials"
+
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.parameters.tokenKey
+                toFieldPath: spec.forProvider.manifest.spec.data[0].remoteRef.property
+
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.parameters.secretStoreRef.name
+                toFieldPath: spec.forProvider.manifest.spec.secretStoreRef.name
+
+              # The tfvars body. CombineFromComposite, not Format: Format takes one input and this
+              # needs four. `token` stays an ESO template expression — the secret value is resolved
+              # by ESO inside the cluster and never passes through Crossplane or Git.
+              #
+              # `default_org` rather than `org`: a consumer's own `org` is a separate variable, so
+              # neither source can silently override the other.
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: spec.parameters.vendor
+                    - fromFieldPath: spec.parameters.baseUrl
+                    - fromFieldPath: spec.parameters.org
+                    - fromFieldPath: spec.parameters.access
+                  strategy: string
+                  string:
+                    fmt: "vendor      = \"%s\"\nbase_url    = \"%s\"\ndefault_org = \"%s\"\naccess      = \"%s\"\ntoken       = \"{{ .token }}\"\n"
+                toFieldPath: spec.forProvider.manifest.spec.target.template.data.credentials
+
+              # ── Status write-back ──────────────────────────────────────────
+              # provider-kubernetes mirrors the observed ExternalSecret under
+              # status.atProvider.manifest, so its Ready condition is what says the Secret exists.
+              - type: ToCompositeFieldPath
+                fromFieldPath: spec.forProvider.manifest.spec.target.name
+                toFieldPath: status.secretName
+                policy:
+                  fromFieldPath: Optional
+
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.manifest.status.conditions[0].status
+                toFieldPath: status.created
+                policy:
+                  fromFieldPath: Optional
+                transforms:
+                  - type: match
+                    match:
+                      patterns:
+                        - type: regexp
+                          regexp: "^True$"
+                          result: true
+                      fallbackValue: false
+
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.manifest.status.conditions[0].status
+                toFieldPath: status.ready
+                policy:
+                  fromFieldPath: Optional
+                transforms:
+                  - type: match
+                    match:
+                      patterns:
+                        - type: regexp
+                          regexp: "^True$"
+                          result: true
+                      fallbackValue: false

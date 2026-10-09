@@ -1,0 +1,14 @@
+# expect: 'vendor' is a required property
+#
+# vendor picks which Terraform provider's module runs (see XScmRepository.spec.parameters.vendor);
+# there is no default, because defaulting to either host would silently mismatch some connections.
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmRepository
+metadata:
+  name: no-vendor
+spec:
+  parameters:
+    scmRef:
+      name: gitea-internal
+    mode: managed
+    repoName: api-service

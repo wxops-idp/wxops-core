@@ -1,0 +1,136 @@
+apiVersion: apiextensions.crossplane.io/v2
+kind: CompositeResourceDefinition
+metadata:
+  name: xscmoauthapps.scm.wxops.cloud
+spec:
+  group: scm.wxops.cloud
+  # Cluster-scoped, like every other Kind today. The namespaced twin is designed in RFC-003 and
+  # waits on namespaced Workspace support in provider-opentofu.
+  scope: Cluster
+  names:
+    kind: XScmOAuthApp
+    plural: xscmoauthapps
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - parameters
+              properties:
+                parameters:
+                  type: object
+                  required:
+                    - scmRef
+                    - appName
+                  properties:
+                    scmRef:
+                      type: object
+                      description: |
+                        The XScmConnection this application belongs to. The connection carries the
+                        vendor, the base URL and the token.
+                      required:
+                        - name
+                      properties:
+                        name:
+                          type: string
+                    mode:
+                      type: string
+                      description: |
+                        `managed` — Core registers the application and owns its secret. Gitea only:
+                        GitHub has no API to create an OAuth App.
+                        `observed` — an operator registered it by hand; Core only publishes the
+                        credentials it is given. The only mode available for GitHub.
+                      enum: ["managed", "observed"]
+                      default: managed
+                    appName:
+                      type: string
+                      description: The application name as it appears on the host.
+                    redirectUris:
+                      type: array
+                      description: |
+                        Accepted redirect URIs. Required for `managed`; a login flow that arrives
+                        from any other URI is refused by the host.
+                      items:
+                        type: string
+                      default: []
+                    confidential:
+                      type: boolean
+                      description: |
+                        True for an application that can keep a secret — a server-side client such
+                        as Dex. False for a browser-only client, which must use PKCE instead.
+                      default: true
+                    credentialsSecretRef:
+                      type: object
+                      description: |
+                        `observed` mode only: a Secret whose `credentials` key holds, in tfvars form,
+                        `existing_client_id` and `existing_client_secret` as the host issued them.
+                        Ignored in `managed` mode.
+                      properties:
+                        name:
+                          type: string
+                        namespace:
+                          type: string
+                          default: crossplane-system
+                      default: {}
+                    rotation:
+                      type: object
+                      description: |
+                        `managed` mode only. Bumping `generation` replaces the application, so the
+                        host issues a new secret and the store keeps the old one in its version
+                        history. Rotation is not seamless: an application has one secret, so
+                        consumers fail until they refresh — see the package README.
+                      properties:
+                        generation:
+                          type: integer
+                          minimum: 1
+                          default: 1
+                      default: {}
+                    secretStoreRef:
+                      type: object
+                      description: The ESO ClusterSecretStore the credentials are pushed to.
+                      properties:
+                        name:
+                          type: string
+                          default: vault-platform
+                      default: {}
+                    vaultKey:
+                      type: string
+                      description: |
+                        Where the credentials land inside that store, without the KV mount prefix
+                        (the store is already scoped to it). Defaults to
+                        `oauth/<resource name>/credentials` — the resource name, not `appName`, so two
+                        hosts can each carry an application called `dex` without overwriting each
+                        other. A tenant-owned application sets this explicitly —
+                        `<team>/oauth/<app>/credentials` — together with a tenant-scoped store.
+            status:
+              type: object
+              properties:
+                created:
+                  type: boolean
+                  description: |
+                    True once the application exists and its credentials have been read, derived from
+                    the presence of the `client_id` output.
+
+                    Absent — not `false` — until the first successful apply. Treat absent as false.
+                ready:
+                  type: boolean
+                  description: True when the credentials are available. Equal to `created` by construction.
+                clientId:
+                  type: string
+                  description: |
+                    The public half of the credential pair. The secret half is never in status: it
+                    goes to the store, and to a Kubernetes Secret for consumers to read.
+                vaultKey:
+                  type: string
+                  description: |
+                    The key the credentials were pushed to, inside the store. Published so a consumer
+                    reads the location rather than reconstructing it.
+                generation:
+                  type: integer
+                  description: The rotation generation the published credentials belong to.
