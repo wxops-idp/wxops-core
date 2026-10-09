@@ -6,33 +6,31 @@ Accepted
 
 ## Context
 
-Every inline-HCL package runs its module through a Crossplane `Workspace` composed resource. Until now that meant
-`provider-terraform`, which shells out to the real `terraform` binary. HashiCorp relicensed `terraform` from MPL-2.0 to the Business
-Source License (BSL) in 2023 — a source-available licence with use restrictions, not an open-source one. Shipping an open-source
-Configuration package whose every composed Workspace runs a BSL-licensed binary underneath it is a real inconsistency: the packages
-are open source, but the engine they depend on at runtime is not.
+Every inline-HCL package runs its module through a Crossplane `Workspace` composed resource. Until now that meant `provider-terraform`, which shells out to the
+real `terraform` binary. HashiCorp relicensed `terraform` from MPL-2.0 to the Business Source License (BSL) in 2023 — a source-available licence with use
+restrictions, not an open-source one. Shipping an open-source Configuration package whose every composed Workspace runs a BSL-licensed binary underneath it is a
+real inconsistency: the packages are open source, but the engine they depend on at runtime is not.
 
-`provider-opentofu` runs `tofu`, the Linux Foundation's MPL-2.0-licensed fork of Terraform, forked at the last MPL release and kept a
-drop-in-compatible superset since. [RFC-002](../rfc/002-migrate-terraform-to-opentofu.md) is where the migration was designed and
-tried: `random-password` first, as the Phase 1 proof, with the four `gitea-*` packages deliberately left on `provider-terraform` for a
-later, gradual migration window (Phase 2) once real usage made an orphan-first procedure necessary.
+`provider-opentofu` runs `tofu`, the Linux Foundation's MPL-2.0-licensed fork of Terraform, forked at the last MPL release and kept a drop-in-compatible
+superset since. [RFC-002](../rfc/002-migrate-terraform-to-opentofu.md) is where the migration was designed and tried: `random-password` first, as the Phase 1
+proof, with the four `gitea-*` packages deliberately left on `provider-terraform` for a later, gradual migration window (Phase 2) once real usage made an
+orphan-first procedure necessary.
 
-That gradual window never happened, for a reason RFC-002 didn't originally anticipate: `gitea-*` turned out to have no cluster running
-it anywhere, so there was nothing to migrate carefully around. It was archived outright in the same pass instead (see
-[RFC-003](../rfc/003-scm-connections-and-resources.md) §Removing the old kinds) — which makes this ADR's job simpler than RFC-002's
-Phase 2/3 planned for, not harder: there is no in-place migration to record, because the only packages still on `provider-terraform`
-are retired, not running.
+That gradual window never happened, for a reason RFC-002 didn't originally anticipate: `gitea-*` turned out to have no cluster running it anywhere, so there was
+nothing to migrate carefully around. It was archived outright in the same pass instead (see [RFC-003](../rfc/003-scm-connections-and-resources.md) §Removing the
+old kinds) — which makes this ADR's job simpler than RFC-002's Phase 2/3 planned for, not harder: there is no in-place migration to record, because the only
+packages still on `provider-terraform` are retired, not running.
 
 ## Decision
 
-`provider-opentofu` (`opentofu.upbound.io/v1beta1 Workspace`) is the Workspace engine for every actively-served package, with no
-exception. `tests/invariants.py`'s `workspace-uses-opentofu` rule enforces this for every package `tests/lib/render.py` discovers —
-which, since archived packages moved out of `tests/cases/` into `tests/cases/_archives/` (skipped by discovery), already excludes
-`gitea-*` without the invariant needing a vendor-specific allowlist.
+`provider-opentofu` (`opentofu.upbound.io/v1beta1 Workspace`) is the Workspace engine for every actively-served package, with no exception.
+`tests/invariants.py`'s `workspace-uses-opentofu` rule enforces this for every package `tests/lib/render.py` discovers — which, since archived packages moved
+out of `tests/cases/` into `tests/cases/_archives/` (skipped by discovery), already excludes `gitea-*` without the invariant needing a vendor-specific
+allowlist.
 
-`provider-terraform` is not deleted. It moves to `providers/archive/`, kept for the record and for the one scenario that would need
-it again: if an archived `gitea-*` package is ever resurrected, its Workspace kind and this provider go with it, unchanged — resurrecting
-a package is not an opportunity to also silently re-license its engine out from under it.
+`provider-terraform` is not deleted. It moves to `providers/archive/`, kept for the record and for the one scenario that would need it again: if an archived
+`gitea-*` package is ever resurrected, its Workspace kind and this provider go with it, unchanged — resurrecting a package is not an opportunity to also
+silently re-license its engine out from under it.
 
 ## Consequences
 

@@ -5,19 +5,18 @@
 Implemented
 
 > [!NOTE]
-> Implemented for both groups now in use: the eight original packages moved to `package/platform/<name>/`, `VERSIONS.yaml` gained
-> `group`/`path`, `tests/lib/packages.py` is the one resolver (the five hand-maintained package lists are gone), and `package/scm/`
-> landed with its first three real packages (`scm-connection`, `scm-repository`, `scm-oauth-app`, RFC-003 Phase 1). `auth/` still
-> awaits its first package (RFC-004). See [ADR-002](../adr/002-three-api-groups.md) for the group split this layout serves.
+> Implemented for both groups now in use: the eight original packages moved to `package/platform/<name>/`, `VERSIONS.yaml` gained `group`/`path`,
+> `tests/lib/packages.py` is the one resolver (the five hand-maintained package lists are gone), and `package/scm/` landed with its first three real packages
+> (`scm-connection`, `scm-repository`, `scm-oauth-app`, RFC-003 Phase 1). `auth/` still awaits its first package (RFC-004). See
+> [ADR-002](../adr/002-three-api-groups.md) for the group split this layout serves.
 
 ## Summary
 
-`package/` holds every package in one flat list, so a newcomer cannot tell which packages belong to Git hosting, to authentication, or to the
-workload platform — the three API groups of [ADR-002](../adr/002-three-api-groups.md). Group the directory the same way
-(`package/scm/`, `package/auth/`, `package/platform/`), give each group its own Kustomization for both development and production installs,
-and record the group of each package in `VERSIONS.yaml`. The move is a behaviour-neutral change made once, before the first `scm` package
-lands, so new packages are never written in the old layout. It also lets a contributor, or an adopter who only wants one category, install and
-work on that category alone.
+`package/` holds every package in one flat list, so a newcomer cannot tell which packages belong to Git hosting, to authentication, or to the workload platform
+— the three API groups of [ADR-002](../adr/002-three-api-groups.md). Group the directory the same way (`package/scm/`, `package/auth/`, `package/platform/`),
+give each group its own Kustomization for both development and production installs, and record the group of each package in `VERSIONS.yaml`. The move is a
+behaviour-neutral change made once, before the first `scm` package lands, so new packages are never written in the old layout. It also lets a contributor, or an
+adopter who only wants one category, install and work on that category alone.
 
 ## Motivation
 
@@ -71,24 +70,23 @@ package/
 
 ### What has to learn the new paths
 
-The move touches everything that resolves `package/<name>`: the `Makefile` (build, validate, kubeconform, kcl-sync, install and release
-targets), `.gitea/scripts/{kcl-sync.py,validate-packages.sh,release-state.py,gen-readme-packages.py}`, both `pr-validate.yaml` workflows and
-`publish-packages.yaml`, `.pre-commit-config.yaml`, `tests/api_compat.py`, `tests/structural.py`, `tests/lib/xrdschema.py`, and `kcl/README.md`.
-`tests/cases/` and `kcl/` are keyed by package name rather than by path, so they are untouched in the first step.
+The move touches everything that resolves `package/<name>`: the `Makefile` (build, validate, kubeconform, kcl-sync, install and release targets),
+`.gitea/scripts/{kcl-sync.py,validate-packages.sh,release-state.py,gen-readme-packages.py}`, both `pr-validate.yaml` workflows and `publish-packages.yaml`,
+`.pre-commit-config.yaml`, `tests/api_compat.py`, `tests/structural.py`, `tests/lib/xrdschema.py`, and `kcl/README.md`. `tests/cases/` and `kcl/` are keyed by
+package name rather than by path, so they are untouched in the first step.
 
 ### Done as one behaviour-neutral change
 
-The move is a single pull request with no functional edits: `git mv` for the directories, a path lookup through `VERSIONS.yaml` in the scripts,
-the Kustomizations, and the docs. Its acceptance test is that nothing observable changes — `make test`, `make validate`, `make lint`, `make render`
-and `make release-check` all pass unchanged, `make build` produces byte-identical packages for every existing package, and
-`kubectl kustomize package/install` and `package/dev` render the same resources as before. Because the API group of each *kind* is a separate,
-later change (ADR-002), this RFC does not edit any XRD.
+The move is a single pull request with no functional edits: `git mv` for the directories, a path lookup through `VERSIONS.yaml` in the scripts, the
+Kustomizations, and the docs. Its acceptance test is that nothing observable changes — `make test`, `make validate`, `make lint`, `make render` and `make
+release-check` all pass unchanged, `make build` produces byte-identical packages for every existing package, and `kubectl kustomize package/install` and
+`package/dev` render the same resources as before. Because the API group of each *kind* is a separate, later change (ADR-002), this RFC does not edit any XRD.
 
 ### Docs and contributor guidance
 
 `CLAUDE.md`, `CONTRIBUTING.md`, `development-docs/development/` and the hub's *Where new docs go* table gain a "which category does this belong to" answer. The
-category is also where Crossplane's operational features would be organised if adopted later (for example a scheduled rotation or a
-reactive check per category) — an option, not a dependency; they are alpha in the current Crossplane documentation.
+category is also where Crossplane's operational features would be organised if adopted later (for example a scheduled rotation or a reactive check per category)
+— an option, not a dependency; they are alpha in the current Crossplane documentation.
 
 ## Drawbacks
 
@@ -121,8 +119,8 @@ reactive check per category) — an option, not a dependency; they are alpha in 
 - [ ] **Step 4 — docs and contributor guidance**, including a short "adding a package to a category" page.
 - [ ] **Later, if wanted:** `kcl/`, `examples/` and `tests/cases/` follow the same grouping.
 
-On acceptance, one ADR is optional: the layout is a convention more than a decision with lasting architectural consequence. ADR-002 already
-records the groups it follows.
+On acceptance, one ADR is optional: the layout is a convention more than a decision with lasting architectural consequence. ADR-002 already records the groups
+it follows.
 
 ## Open Questions
 

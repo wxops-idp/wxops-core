@@ -1,19 +1,16 @@
 # Requests for Comments
 
-One committed file per proposal — a design argued *before* it is built. An RFC lays out the option space and asks for
-comment; when it is accepted, it becomes the tracked plan for the work, and the decisions it settles are recorded
-permanently as [ADRs](../adr/README.md).
+One committed file per proposal — a design argued *before* it is built. An RFC lays out the option space and asks for comment; when it is accepted, it becomes
+the tracked plan for the work, and the decisions it settles are recorded permanently as [ADRs](../adr/README.md).
 
 **Template:** [`TEMPLATE.md`](TEMPLATE.md) — copy it, don't start from a blank page.
 
 ## When to write one
 
-Use an RFC when the change touches an XRD's public schema, adds a package, changes what a composition emits, or commits
-the platform to a new tool or external system. A small additive tweak doesn't need one — a
-[feature request](../../.github/ISSUE_TEMPLATE/feature_request.md) is enough. Before writing, check this index's own `Status`
-column, each RFC's own rejections and open questions, the archived
-[`development-docs/_archives/ROADMAP.md`](../_archives/ROADMAP.md) *Decided and rejected*, and
-[`solution-matrix`](../../docs/core-ideas/solution-matrix.md): the idea may already be tracked, planned or closed.
+Use an RFC when the change touches an XRD's public schema, adds a package, changes what a composition emits, or commits the platform to a new tool or external
+system. A small additive tweak doesn't need one — a [feature request](../../.github/ISSUE_TEMPLATE/feature_request.md) is enough. Before writing, check this
+index's own `Status` column, each RFC's own rejections and open questions, the archived [`development-docs/_archives/ROADMAP.md`](../_archives/ROADMAP.md)
+*Decided and rejected*, and [`solution-matrix`](../core-ideas/solution-matrix.md): the idea may already be tracked, planned or closed.
 
 ## Lifecycle
 
@@ -27,9 +24,8 @@ column, each RFC's own rejections and open questions, the archived
 4. **Implemented** — *Status* flips once the work ships, and the *Rollout Plan* is the checklist that tracks it. From
    acceptance on, only *Status* and *Rollout Plan* progress change; a change of design is a new RFC that says so.
 
-Each decision an RFC settles gets its own [ADR](../adr/README.md) when it qualifies — an RFC argues an option space
-across many questions, an ADR records one answer. An RFC that only ever produced work and no lasting decision needs no
-ADR.
+Each decision an RFC settles gets its own [ADR](../adr/README.md) when it qualifies — an RFC argues an option space across many questions, an ADR records one
+answer. An RFC that only ever produced work and no lasting decision needs no ADR.
 
 ## RFC issue vs RFC file
 
@@ -39,8 +35,8 @@ ADR.
 | Who | Anyone, including the community | A maintainer merges it |
 | Lives | While being discussed | Permanently, alongside the code it changes |
 
-The issue template's sections map onto the file template's: *Proposed design* → *Detailed Design*, *Alternatives
-considered* → *Alternatives*, *Motivation / problem statement* → *Motivation*.
+The issue template's sections map onto the file template's: *Proposed design* → *Detailed Design*, *Alternatives considered* → *Alternatives*, *Motivation /
+problem statement* → *Motivation*.
 
 ## Index
 

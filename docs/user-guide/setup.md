@@ -1,8 +1,7 @@
 # Setup — installing W'xOps Core on a cluster
 
-> Install the shared providers once, seed a connection token, install the packages, then apply a
-> first resource. For what each resource does once it exists, see the
-> [API reference](../api-reference/README.md).
+> Install the shared providers once, seed a connection token, install the packages, then apply a first resource. For what each resource does once it exists, see
+> the [API reference](../api-reference/README.md).
 
 **Table of Contents**
 - [Prerequisites](#prerequisites)
@@ -48,14 +47,14 @@ make providers         # providers and functions, then waits for them to report 
 make provider-configs  # the ProviderConfigs, once their CRDs are served
 ```
 
-A ProviderConfig cannot exist before its provider's CRDs are served, which is why they are separate
-targets rather than one apply. Override the wait with `WAIT_TIMEOUT=600s` if image pulls are slow. A
-GitOps engine needs neither step: `providers/kustomization.yaml` is the all-at-once view, and Argo CD
-or Flux retry until the CRDs appear.
+A ProviderConfig cannot exist before its provider's CRDs are served, which is why they are separate targets rather than one apply. Override the wait with
+`WAIT_TIMEOUT=600s` if image pulls are slow. A GitOps engine needs neither step: `providers/kustomization.yaml` is the all-at-once view, and Argo CD or Flux
+retry until the CRDs appear.
 
-Together they apply everything in `providers/`: `provider-opentofu`, `provider-kubernetes` (plus RBAC and a
-`ProviderConfig`), `provider-sql`, `function-patch-and-transform`,
-`function-kcl`, `function-extra-resources`, and the OpenTofu `ProviderConfig`. **`provider-terraform` is archived** (`providers/archive/`) and not applied: the only packages that ran on it (`gitea-*`) are themselves archived — see [`providers/archive/README.md`](../../providers/archive/README.md).
+Together they apply everything in `providers/`: `provider-opentofu`, `provider-kubernetes` (plus RBAC and a `ProviderConfig`), `provider-sql`,
+`function-patch-and-transform`, `function-kcl`, `function-extra-resources`, and the OpenTofu `ProviderConfig`. **`provider-terraform` is archived**
+(`providers/archive/`) and not applied: the only packages that ran on it (`gitea-*`) are themselves archived — see
+[`providers/archive/README.md`](../../providers/archive/README.md).
 
 > [!NOTE]
 > **`make providers` is required before `make install`.**
@@ -70,9 +69,8 @@ Together they apply everything in `providers/`: `provider-opentofu`, `provider-k
 
 ## 2 — Seed a connection token
 
-Every `scm-*` resource reads its vendor/token through one `XScmConnection`; the host token is the
-one secret Core cannot create itself. Write it to the secret store `XScmConnection` renders from
-(`vault-platform` by default), property `token`, at `platform/scm/<connection-name>/credentials`:
+Every `scm-*` resource reads its vendor/token through one `XScmConnection`; the host token is the one secret Core cannot create itself. Write it to the secret
+store `XScmConnection` renders from (`vault-platform` by default), property `token`, at `platform/scm/<connection-name>/credentials`:
 
 ```bash
 export BAO_ADDR=https://openbao.example.com     # or a port-forward to the in-cluster service
@@ -80,8 +78,7 @@ bao login                                       # however your operators authent
 bao kv put platform/scm/github-wxops-idp/credentials token="your-admin-or-pat-token"
 ```
 
-See [Seeding a connection's token](../../examples/scm-connection/token-secret.md) for the full
-walkthrough, including what scope the token needs per vendor.
+See [Seeding a connection's token](../../examples/scm-connection/token-secret.md) for the full walkthrough, including what scope the token needs per vendor.
 
 ## 3 — Install packages
 
@@ -97,9 +94,8 @@ make install
 make install-dev
 ```
 
-`make install-dev` is for a disposable development cluster only. Against a cluster that already runs
-the packages, it overwrites package-managed XRDs and Compositions and skips every release gate.
-Everything it applies carries `channel: nightly` (production packages ship `channel: stable`) — see
+`make install-dev` is for a disposable development cluster only. Against a cluster that already runs the packages, it overwrites package-managed XRDs and
+Compositions and skips every release gate. Everything it applies carries `channel: nightly` (production packages ship `channel: stable`) — see
 [Channels](../../development-docs/development/releasing.md#channels) for how an XR opts into either.
 
 ## 4 — Apply a first resource
@@ -112,8 +108,7 @@ kubectl describe xscmrepository <name>
 crossplane resource trace xscmrepository <name>   # the XR and everything it composed
 ```
 
-Wait for `status.created` and `status.ready`; see
-[Reading status](../api-reference/README.md#reading-status).
+Wait for `status.created` and `status.ready`; see [Reading status](../api-reference/README.md#reading-status).
 
 ## Uninstalling
 
@@ -122,8 +117,7 @@ make uninstall       # remove registry-installed Configuration packages
 make uninstall-dev   # remove XRDs and Compositions applied by make install-dev
 ```
 
-Delete XRs first, and read each Kind's deletion notes before you do. Kinds that hold data, like
-`XTenantDatabase`, keep it by default.
+Delete XRs first, and read each Kind's deletion notes before you do. Kinds that hold data, like `XTenantDatabase`, keep it by default.
 
 ## Next
 

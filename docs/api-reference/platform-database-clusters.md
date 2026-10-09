@@ -1,7 +1,6 @@
 # XPlatformDatabaseCluster
 
-Platform-managed CloudNativePG cluster with pooler, Vault credential seeding,
-and optional shared-cluster labeling for dynamic tenant pool discovery.
+Platform-managed CloudNativePG cluster with pooler, Vault credential seeding, and optional shared-cluster labeling for dynamic tenant pool discovery.
 
 | | |
 |---|---|
@@ -15,17 +14,15 @@ and optional shared-cluster labeling for dynamic tenant pool discovery.
 
 ## `spec.parameters`
 
-> **Vault path convention**: all `PushSecret`/`ExternalSecret` paths in this
-> package omit the `platform/` prefix (e.g. `database-clusters/...`, not
-> `platform/database-clusters/...`). The `vault-platform` `ClusterSecretStore`
-> is itself scoped to the `platform/` KV2 path, so adding `platform/` again
-> here would duplicate it and write to `platform/platform/database-clusters/...`.
+> **Vault path convention**: all `PushSecret`/`ExternalSecret` paths in this package omit the `platform/` prefix (e.g. `database-clusters/...`, not
+> `platform/database-clusters/...`). The `vault-platform` `ClusterSecretStore` is itself scoped to the `platform/` KV2 path, so adding `platform/` again here
+> would duplicate it and write to `platform/platform/database-clusters/...`.
 
 ### Core
 
 | Field | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `cluster` | `string` | | `"default"` | Name of the provider-kubernetes `ProviderConfig` to apply composed resources through. `"default"` is the local hub cluster — the only one wired up today, so leaving this unset is behaviour-neutral. Set it to target a spoke cluster once a `ProviderConfig` for it exists — see [multi-cluster.md](../core-ideas/multi-cluster.md). |
+| `cluster` | `string` | | `"default"` | Name of the provider-kubernetes `ProviderConfig` to apply composed resources through. `"default"` is the local hub cluster — the only one wired up today, so leaving this unset is behaviour-neutral. Set it to target a spoke cluster once a `ProviderConfig` for it exists — see [multi-cluster.md](../../development-docs/core-ideas/multi-cluster.md). |
 | `clusterName` | `string` | yes | | CNPG cluster name. Tenants pass this value as `clusterRef` in `XTenantDatabase` to locate the cluster and its superuser secret. |
 | `namespace` | `string` | yes | | Kubernetes namespace where the CNPG cluster is created. |
 | `instances` | `integer` (1–9) | | `1` | Number of PostgreSQL instances. `1` = standalone (dev/test), `3` = HA. |
@@ -44,11 +41,9 @@ and optional shared-cluster labeling for dynamic tenant pool discovery.
 
 ### `postgresConfig`
 
-PostgreSQL server configuration (`postgresql.conf`) and client authentication
-rules (`pg_hba.conf`), passed through to `spec.postgresql` on the CNPG
-`Cluster`. Some parameters are fixed by CNPG and cannot be overridden here
-(e.g. `archive_command`, `listen_addresses`, `wal_level`, `port`,
-`data_directory`) — see the [CNPG postgresql.conf docs](https://cloudnative-pg.io/documentation/1.29/postgresql_conf/).
+PostgreSQL server configuration (`postgresql.conf`) and client authentication rules (`pg_hba.conf`), passed through to `spec.postgresql` on the CNPG `Cluster`.
+Some parameters are fixed by CNPG and cannot be overridden here (e.g. `archive_command`, `listen_addresses`, `wal_level`, `port`, `data_directory`) — see the
+[CNPG postgresql.conf docs](https://cloudnative-pg.io/documentation/1.29/postgresql_conf/).
 
 | Field | Type | Default | Description |
 |---|---|---|---|
@@ -79,8 +74,7 @@ Prometheus Operator integration.
 
 ### `backup`
 
-Barman object-store backup configuration. When enabled, WAL archiving is
-activated on the cluster and a `ScheduledBackup` CR is created.
+Barman object-store backup configuration. When enabled, WAL archiving is activated on the cluster and a `ScheduledBackup` CR is created.
 
 | Field | Type | Default | Description |
 |---|---|---|---|
@@ -104,16 +98,12 @@ Dedicated read-only PgBouncer Pooler for replica traffic.
 
 ### `managedRoles[]`
 
-General, cluster-wide PostgreSQL roles (e.g. `readonly`, a second superuser)
-managed declaratively via `spec.managed.roles[]` on the CNPG `Cluster` —
-platform fully owns this array, so no Server-Side-Apply coordination with
-`tenant-database` is needed.
+General, cluster-wide PostgreSQL roles (e.g. `readonly`, a second superuser) managed declaratively via `spec.managed.roles[]` on the CNPG `Cluster` — platform
+fully owns this array, so no Server-Side-Apply coordination with `tenant-database` is needed.
 
-Each entry gets its own ESO Password generator and a STABLE `ExternalSecret`
-(`{clusterName}-{name}-creds`, `refreshInterval: "0"` — NOT auto-rotated). To
-change the password, delete that Secret; CNPG then regenerates it and runs
-`ALTER ROLE` with the new value. A `PushSecret` syncs each role's credentials
-to Vault at `database-clusters/{clusterName}/roles/{name}/creds` (whole-secret push, one Vault version per reconcile).
+Each entry gets its own ESO Password generator and a STABLE `ExternalSecret` (`{clusterName}-{name}-creds`, `refreshInterval: "0"` — NOT auto-rotated). To
+change the password, delete that Secret; CNPG then regenerates it and runs `ALTER ROLE` with the new value. A `PushSecret` syncs each role's credentials to
+Vault at `database-clusters/{clusterName}/roles/{name}/creds` (whole-secret push, one Vault version per reconcile).
 
 | Field | Type | Required | Default | Description |
 |---|---|---|---|---|
@@ -131,11 +121,9 @@ to Vault at `database-clusters/{clusterName}/roles/{name}/creds` (whole-secret p
 
 ### `bootstrapFrom`
 
-Override how the cluster is initialized. Default (`initdb`) creates a fresh
-empty cluster.
+Override how the cluster is initialized. Default (`initdb`) creates a fresh empty cluster.
 
-Import types use CNPG's built-in pg_dump-based import — see the
-[CNPG database import docs](https://cloudnative-pg.io/docs/1.29/database_import).
+Import types use CNPG's built-in pg_dump-based import — see the [CNPG database import docs](https://cloudnative-pg.io/docs/1.29/database_import).
 
 - **`import-microservices`** — copy one database from an external PostgreSQL.
   The new cluster owns only that database. Roles are NOT copied; application
@@ -145,9 +133,8 @@ Import types use CNPG's built-in pg_dump-based import — see the
   external PostgreSQL. Roles matching `sourceDatabases` owners are also
   imported. Best for migrating a legacy shared-database application.
 
-Both import types require the source PostgreSQL to be reachable from the
-cluster during bootstrap. The import is a one-time operation; the source
-instance is never touched after the cluster is `Ready`.
+Both import types require the source PostgreSQL to be reachable from the cluster during bootstrap. The import is a one-time operation; the source instance is
+never touched after the cluster is `Ready`.
 
 | Field | Type | Required | Default | Description |
 |---|---|---|---|---|
@@ -165,9 +152,8 @@ instance is never touched after the cluster is `Ready`.
 
 ## Channels
 
-Every release labels its Composition `channel: stable`; `make install-dev` overrides it to
-`channel: nightly` via Kustomize. Track a channel with `spec.crossplane`, a sibling of
-`spec.parameters`, not a field inside it:
+Every release labels its Composition `channel: stable`; `make install-dev` overrides it to `channel: nightly` via Kustomize. Track a channel with
+`spec.crossplane`, a sibling of `spec.parameters`, not a field inside it:
 
 ```yaml
 spec:
@@ -194,9 +180,8 @@ Full mechanism, the `Manual`-pin alternative, and why: [Channels](../../developm
 
 ## Required discovery label
 
-`XTenantDatabase` discovers platform clusters via `function-extra-resources`,
-which selects XRs by label. Every `XPlatformDatabaseCluster` XR **must**
-include this label in its manifest:
+`XTenantDatabase` discovers platform clusters via `function-extra-resources`, which selects XRs by label. Every `XPlatformDatabaseCluster` XR **must** include
+this label in its manifest:
 
 ```yaml
 metadata:
@@ -204,16 +189,12 @@ metadata:
     wxops.cloud/managed-by: platform-database-clusters
 ```
 
-> **Why a manifest label?** Crossplane's composite reconciler writes `status`
-> fields from composition dxr updates, but **ignores `metadata.labels`**. The
-> composition cannot set discovery labels automatically — they must be in the
-> XR manifest applied by the user or GitOps. Without this label,
-> `XTenantDatabase` will not discover the cluster for `tier: shared`
-> auto-assignment.
+> **Why a manifest label?** Crossplane's composite reconciler writes `status` fields from composition dxr updates, but **ignores `metadata.labels`**. The
+> composition cannot set discovery labels automatically — they must be in the XR manifest applied by the user or GitOps. Without this label, `XTenantDatabase`
+> will not discover the cluster for `tier: shared` auto-assignment.
 
-The composition uses `status.shared` and `status.environment` (written by
-the dxr update) to filter the pool — the label only controls **which XRs
-are fetched**, not which ones are selected as shared.
+The composition uses `status.shared` and `status.environment` (written by the dxr update) to filter the pool — the label only controls **which XRs are
+fetched**, not which ones are selected as shared.
 
 ## Example
 

@@ -1,11 +1,8 @@
 # Security Threat Model — trust boundaries, mitigations, and honest gaps
 
-> **Status: consolidation, current as of v0.4.0.** The security posture is
-> real but scattered — across the multi-cluster identity work, Guardian's
-> data boundaries, recorded decisions, the test invariants, and decisions buried in
-> session history. This document puts it in one place: assets, trust
-> boundaries, threats mapped to existing mitigations, and the gaps stated
-> plainly. It is the content basis for [`SECURITY.md`](../../SECURITY.md), and the review artifact
+> **Status: consolidation, current as of v0.4.0.** The security posture is real but scattered — across the multi-cluster identity work, Guardian's data
+> boundaries, recorded decisions, the test invariants, and decisions buried in session history. This document puts it in one place: assets, trust boundaries,
+> threats mapped to existing mitigations, and the gaps stated plainly. It is the content basis for [`SECURITY.md`](../../SECURITY.md), and the review artifact
 > for the OSS release.
 
 ## Assets — what an attacker would want
@@ -34,7 +31,7 @@ developer / SRE agent ──▶ Darlane pod (real secrets, real traffic)   ← B
 
 - **B1 — who may act**: human identity via Pinniped (Gitea OIDC); agent
   identity via dedicated SAs; RBAC authored only in GitOps
-  (`development-docs/_archives/ROADMAP.md` §Decided and rejected; the seam in [tenant-app.md](../api-reference/tenant-app.md#developer-access-and-rbac)).
+  (`development-docs/_archives/ROADMAP.md` §Decided and rejected; the seam in [tenant-app.md](../../docs/api-reference/tenant-app.md#developer-access-and-rbac)).
 - **B2 — what may enter the system**: XRD schema validation at admission
   (B2a) and, for changes to the platform itself, the pr-validate gate — XRD
   conformance, golden render diff, invariants, xpkg build (B2b). The gate is
@@ -70,7 +67,7 @@ developer / SRE agent ──▶ Darlane pod (real secrets, real traffic)   ← B
 ## The rules that hold it together (cross-references)
 
 1. **No custom controllers** (`CLAUDE.md` architecture rule; twice-validated per [multi-cluster-scale.md](multi-cluster-scale.md#gpu-pools--the-third-architecture-already-field-tested-here)) — smaller attack surface, everything renderable offline.
-2. **No RBAC from compositions** + **the SA-in-status seam** — `development-docs/_archives/ROADMAP.md` §Decided and rejected; [tenant-app.md](../api-reference/tenant-app.md#developer-access-and-rbac).
+2. **No RBAC from compositions** + **the SA-in-status seam** — `development-docs/_archives/ROADMAP.md` §Decided and rejected; [tenant-app.md](../../docs/api-reference/tenant-app.md#developer-access-and-rbac).
 3. **One write path for fixes — the PR gate** ([self-service-operations.md](self-service-operations.md#the-suggest-patch-loop--why-l4-is-structurally-cheap-here)); agents get read-only + PR, never kubectl-write (L5 gated behind Guardian).
 4. **Payload/metadata corpus tiering** for any AI ([knowledge-architecture.md](knowledge-architecture.md#architecture-around-the-agent)).
 5. **Access control over obscurity** — gates are real (Pinniped, RBAC, permission-gated forge), not hidden URLs; the only obscurity kept (SSH port) is a free scan-reduction, not a control.
@@ -88,7 +85,6 @@ developer / SRE agent ──▶ Darlane pod (real secrets, real traffic)   ← B
 ## See also
 
 [`multi-cluster.md`](multi-cluster.md) Layer 2 · [`guardian.md`](guardian.md) ·
-[`observability.md`](observability.md#the-kernel-plane--flows-and-runtime-security) — how runtime
-detections and flow data are collected, and why that stays one pipeline rather than two ·
-[`solution-matrix.md`](solution-matrix.md) (M14, A11, A13, O13–O15 rows) ·
-`tests/invariants.py` — the mechanically-enforced subset of this document.
+[`observability.md`](observability.md#the-kernel-plane--flows-and-runtime-security) — how runtime detections and flow data are collected, and why that stays one
+pipeline rather than two · [`solution-matrix.md`](solution-matrix.md) (M14, A11, A13, O13–O15 rows) · `tests/invariants.py` — the mechanically-enforced subset
+of this document.

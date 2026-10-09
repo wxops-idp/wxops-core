@@ -37,7 +37,7 @@ spec:
                         this unset is behaviour-neutral.
 
                         Set it to target a spoke cluster once a ProviderConfig for
-                        that spoke exists. See docs/core-ideas/multi-cluster.md.
+                        that spoke exists. See development-docs/core-ideas/multi-cluster.md.
                     appName:
                       type: string
                       description: |
@@ -491,7 +491,7 @@ spec:
                         nothing on this platform: those are a Prometheus convention
                         honoured only by a kubernetes_sd_config job with matching
                         relabel rules, and kube-prometheus-stack's
-                        additionalScrapeConfigs is empty. See docs/core-ideas/observability.md.
+                        additionalScrapeConfigs is empty. See development-docs/core-ideas/observability.md.
                       properties:
                         enabled:
                           type: boolean
@@ -563,7 +563,7 @@ spec:
                         (<appName>-darlane) sharing the same secrets, database
                         connections, and env as the main app. Scaled to 0 at rest,
                         zero external exposure by default. Supports file sync and
-                        traffic mirroring (mirrord). See docs/core-ideas/darlane.md.
+                        traffic mirroring (mirrord). See development-docs/core-ideas/darlane.md.
 
                         Developer access is NOT granted here. This composition creates
                         the ServiceAccount and publishes its name in

@@ -1,8 +1,7 @@
 # Learn — for contributors new to Crossplane, Terraform or KCL
 
-> `CONTRIBUTING.md` assumes you can already read a `Composition`. These four short pages fill the
-> gap before that, each teaching one concept against a real file from this repo — not a generic
-> tutorial. Read only what you're missing; skip the rest.
+> `CONTRIBUTING.md` assumes you can already read a `Composition`. These four short pages fill the gap before that, each teaching one concept against a real file
+> from this repo — not a generic tutorial. Read only what you're missing; skip the rest.
 
 | # | Page | Read if… |
 |---|---|---|
@@ -19,9 +18,8 @@ Every active package, mapped to which of these to read first:
 | `scm-repository`, `scm-oauth-app` | OpenTofu (inline HCL) | 1, 2 | `package/scm/repository/composition.yaml`, `package/scm/oauth-app/composition.yaml` |
 | `platform-database-clusters`, `tenant-database`, `tenant-app` | KCL | 1, 3 | `kcl/<name>/main.k` |
 
-`gitea-user`/`-org`/`-team`/`-repository` and `random-password` are archived
-(`package/platform/archives/<name>/`) — no cluster ever ran them, and every active package now runs
-on OpenTofu. The pattern these pages teach still applies to the packages above unchanged.
+`gitea-user`/`-org`/`-team`/`-repository` and `random-password` are archived (`package/platform/archives/<name>/`) — no cluster ever ran them, and every active
+package now runs on OpenTofu. The pattern these pages teach still applies to the packages above unchanged.
 
-Once you're past these, the workflow doc is [`CONTRIBUTING.md`](../../CONTRIBUTING.md); the full
-map of every other doc is [`docs/README.md`](../README.md); the development docs start at [`development-docs/README.md`](../../development-docs/README.md).
+Once you're past these, the workflow doc is [`CONTRIBUTING.md`](../../CONTRIBUTING.md); the full map of every other doc is [`docs/README.md`](../README.md); the
+development docs start at [`development-docs/README.md`](../../development-docs/README.md).

@@ -1,17 +1,12 @@
 # Multi-Cluster at Scale — regions, tenants, and heterogeneous hardware
 
-> **Status: research, not implemented.** Third document in the multi-cluster
-> family: [`multi-cluster.md`](multi-cluster.md) is the option space,
-> [`multi-cluster-proposal.md`](multi-cluster-proposal.md) is the chosen path
-> and prototype, and this document is what lies *beyond* the prototype — the
-> three axes a platform grows along when it serves a genuinely large project,
-> the tooling landscape for each, and what each axis concretely demands from
-> W'xOps Core. Nothing here changes the proposal; it maps the territory the
-> proposal grows into.
+> **Status: research, not implemented.** Third document in the multi-cluster family: [`multi-cluster.md`](multi-cluster.md) is the option space,
+> [`multi-cluster-proposal.md`](multi-cluster-proposal.md) is the chosen path and prototype, and this document is what lies *beyond* the prototype — the three
+> axes a platform grows along when it serves a genuinely large project, the tooling landscape for each, and what each axis concretely demands from W'xOps Core.
+> Nothing here changes the proposal; it maps the territory the proposal grows into.
 
-Scale is not one axis. Three independent dimensions get conflated under
-"multi-cluster at scale", and each has its own tools, failure modes, and
-breaking points:
+Scale is not one axis. Three independent dimensions get conflated under "multi-cluster at scale", and each has its own tools, failure modes, and breaking
+points:
 
 ```
                         WHERE does it run?
@@ -27,19 +22,15 @@ breaking points:
    Kamaji · kcp               │             kubernetes.io/arch
 ```
 
-A platform can be large on one axis and small on the others — 40 regions with
-one tenant each, or one region with 400 tenants, or 3 regions with 2,000 ARM
-edge sites. The architecture that serves each corner is different, which is why
-"how do we scale multi-cluster" has no single answer.
+A platform can be large on one axis and small on the others — 40 regions with one tenant each, or one region with 400 tenants, or 3 regions with 2,000 ARM edge
+sites. The architecture that serves each corner is different, which is why "how do we scale multi-cluster" has no single answer.
 
 ---
 
 ## Axis 1 — Multi-region beyond the prototype
 
-The proposal's k8gb + ExternalDNS layer handles the *stateless* half of
-multi-region: same app in N regions, DNS steers clients to a healthy one. What
-it deliberately does not touch is state — and **state is where multi-region
-actually gets hard.**
+The proposal's k8gb + ExternalDNS layer handles the *stateless* half of multi-region: same app in N regions, DNS steers clients to a healthy one. What it
+deliberately does not touch is state — and **state is where multi-region actually gets hard.**
 
 ### The data layer decides the region strategy, not the other way round
 
@@ -49,25 +40,20 @@ actually gets hard.**
 | **Primary + cross-region replica** | CNPG replica clusters — a designated primary in one region, async replicas in others, promotion on failure | RPO = replication lag (seconds), RTO = detection + promote (minutes, and promotion is an operational act, not automatic) | DR for tenants who pay for it — maps onto the existing `tier:` concept |
 | **Active-active distributed SQL** | CockroachDB, YugabyteDB — consensus-replicated across regions | RPO ≈ 0, but write latency includes cross-region consensus, and it is **not PostgreSQL-compatible enough to be a drop-in** for CNPG-shaped workloads | Only when a workload genuinely needs multi-region writes. A different platform service, not a CNPG replacement |
 
-The honest default for W'xOps: **region-pinned, with replica-cluster DR as a
-paid tier.** This is the least architecture and it matches the most common real
-constraint — data residency (a German tenant's data must stay in a German
-region) is a stronger multi-region driver in practice than latency is.
+The honest default for W'xOps: **region-pinned, with replica-cluster DR as a paid tier.** This is the least architecture and it matches the most common real
+constraint — data residency (a German tenant's data must stay in a German region) is a stronger multi-region driver in practice than latency is.
 
 ### The supporting decision that arrives with region three
 
-**Vault topology.** One Vault reachable from all spokes (single point of
-failure and a latency tax), or one Vault per region with ESO per cluster
-(operational N×, path-collision question from the proposal's open decision
+**Vault topology.** One Vault reachable from all spokes (single point of failure and a latency tax), or one Vault per region with ESO per cluster (operational
+N×, path-collision question from the proposal's open decision
 #1 becomes mandatory). Vault Enterprise performance replicas solve this
-cleanly but are paid; the OSS answer is per-region Vault with the
-`{cluster}/` path dimension decided *before* region two.
+cleanly but are paid; the OSS answer is per-region Vault with the `{cluster}/` path dimension decided *before* region two.
 
 ### GSLB implementations — three options, one field-tested
 
-The proposal picks k8gb, but it is one of three shapes, and the second has
-already been run in production on this platform's own infrastructure (see the
-field notes in References):
+The proposal picks k8gb, but it is one of three shapes, and the second has already been run in production on this platform's own infrastructure (see the field
+notes in References):
 
 | Option | How | Trade |
 |---|---|---|
@@ -75,41 +61,28 @@ field notes in References):
 | **ExternalDNS + cloud DNS routing policies** — *field-tested* | ExternalDNS annotations drive Route 53 (or Alibaba DNS/GTM) native policies: `aws-region` for latency-based, `aws-failover` PRIMARY/SECONDARY, `aws-weight` for splits, plus Route 53 health checks | No extra runtime component at all — the cloud DNS *is* the GSLB. Measured on this platform's own fleet: ~39 s average failover recovery, ~1 ms proximate-region responses. Cost: provider lock-in, and the pitfalls below |
 | **Anycast / global LB** (Cloudflare, AWS Global Accelerator, GCP GLB) | Steering above DNS entirely | The answer when TTL-bounded failover stops being acceptable; a CDN/network decision, not a Kubernetes one — flag it, don't pre-build it |
 
-The field-tested pitfalls from option 2, so they aren't relearned:
-`external-dns.alpha.kubernetes.io/access: public` is required or ExternalDNS
-publishes private node IPs; Route 53 RRSETs cannot mix CNAME and A records, so
-health checks must target IPs; and per-cluster `txtOwnerId`/`txtPrefix` is
-what stops two clusters fighting over one hostname — the same ownership rule
-the proposal states, confirmed the hard way.
+The field-tested pitfalls from option 2, so they aren't relearned: `external-dns.alpha.kubernetes.io/access: public` is required or ExternalDNS publishes
+private node IPs; Route 53 RRSETs cannot mix CNAME and A records, so health checks must target IPs; and per-cluster `txtOwnerId`/`txtPrefix` is what stops two
+clusters fighting over one hostname — the same ownership rule the proposal states, confirmed the hard way.
 
-For W'xOps the sequencing writes itself: **option 2 first** (ExternalDNS is
-already in the proposal for NS delegation — using its routing annotations
-costs nothing new and is proven on this stack), **k8gb when provider
-neutrality matters**, anycast when a real traffic requirement forces it.
+For W'xOps the sequencing writes itself: **option 2 first** (ExternalDNS is already in the proposal for NS delegation — using its routing annotations costs
+nothing new and is proven on this stack), **k8gb when provider neutrality matters**, anycast when a real traffic requirement forces it.
 
 ### Hub scale — where the proposal's push model runs out
 
-The proposal is honest that ArgoCD hub-spoke is chosen for its small delta, not
-its ceiling. The ceiling is real: one hub reconciling every XR for every spoke
-puts the hub in the availability path of the whole fleet, per-spoke credentials
-multiply, and a single ArgoCD instance needs controller sharding well before
-the fleet reaches three digits. The doc family already names the exit:
-**OCM `ManifestWork`** — spokes pull, hub holds no credentials, compositions
-change minimally. The scale point reinforces the sequencing: *push to start,
-pull to scale.* Karmada re-enters conversations at this size too, and the
-rejection holds for the same reason as before — its propagation API competes
-with the XR as the fleet API.
+The proposal is honest that ArgoCD hub-spoke is chosen for its small delta, not its ceiling. The ceiling is real: one hub reconciling every XR for every spoke
+puts the hub in the availability path of the whole fleet, per-spoke credentials multiply, and a single ArgoCD instance needs controller sharding well before the
+fleet reaches three digits. The doc family already names the exit: **OCM `ManifestWork`** — spokes pull, hub holds no credentials, compositions change
+minimally. The scale point reinforces the sequencing: *push to start, pull to scale.* Karmada re-enters conversations at this size too, and the rejection holds
+for the same reason as before — its propagation API competes with the XR as the fleet API.
 
 ---
 
 ## Axis 2 — Multi-tenancy: the isolation spectrum
 
-W'xOps today is **namespace-as-tenant**: `tenant-app` deploys into a tenant
-namespace on a shared cluster, Kyverno policies fence it, and
-`tenant-database` already expresses the key idea this axis generalises —
-**`tier: shared | dedicated` is a tenancy spectrum in miniature.** Scaling
-tenancy is extending that same spectrum upward from the database to the whole
-compute environment:
+W'xOps today is **namespace-as-tenant**: `tenant-app` deploys into a tenant namespace on a shared cluster, Kyverno policies fence it, and `tenant-database`
+already expresses the key idea this axis generalises — **`tier: shared | dedicated` is a tenancy spectrum in miniature.** Scaling tenancy is extending that same
+spectrum upward from the database to the whole compute environment:
 
 | Isolation tier | What the tenant gets | Tooling | Cost per tenant | W'xOps mapping |
 |---|---|---|---|---|
@@ -142,8 +115,7 @@ Three observations that matter more than the table:
 
 ## Axis 3 — Heterogeneous hardware: amd64 core, arm64 edge
 
-The axis the current docs don't touch at all, and the one with three
-already-verified gaps in this repo.
+The axis the current docs don't touch at all, and the one with three already-verified gaps in this repo.
 
 ### The two rules of mixed-architecture fleets
 
@@ -169,9 +141,8 @@ already-verified gaps in this repo.
 
 ### GPU pools — the third architecture, already field-tested here
 
-Heterogeneity is not only CPU ISA. A GPU node pool behaves like a third
-architecture — scarce, expensive, taint-fenced, and with its own sharing
-mechanics — and this platform has already run it multi-region (VNG Cloud A40s
+Heterogeneity is not only CPU ISA. A GPU node pool behaves like a third architecture — scarce, expensive, taint-fenced, and with its own sharing mechanics — and
+this platform has already run it multi-region (VNG Cloud A40s
 + Alibaba Cloud L20s; field notes in References). What that experience
 established:
 
@@ -192,13 +163,10 @@ established:
   "no hand-written controllers" rule, reached independently on different
   ground — worth noting because it is now a twice-validated instinct.
 
-For the XRD, GPU adds a **third verified gap** alongside the two below:
-`tenant-app`'s `resources` schema permits only `cpu` and `memory` — an
-extended resource like `nvidia.com/gpu` in `limits` would be **silently
-pruned** by the API server as an unknown field (checked 2026-08-22; the
-description says "passed through verbatim", but the schema closes it).
-Widening `requests`/`limits` to accept extended-resource keys is a `safe`
-additive change, and a prerequisite for any GPU tenant.
+For the XRD, GPU adds a **third verified gap** alongside the two below: `tenant-app`'s `resources` schema permits only `cpu` and `memory` — an extended resource
+like `nvidia.com/gpu` in `limits` would be **silently pruned** by the API server as an unknown field (checked 2026-08-22; the description says "passed through
+verbatim", but the schema closes it). Widening `requests`/`limits` to accept extended-resource keys is a `safe` additive change, and a prerequisite for any GPU
+tenant.
 
 ### Edge distributions — what actually runs at an ARM site
 
@@ -209,16 +177,11 @@ additive change, and a prerequisite for any GPU tenant.
 | **KubeEdge** | ~70 MB edge agent, scales to thousands of nodes | **Node-level edge**: devices join a cloud control plane as autonomous edge nodes; local operation continues through WAN loss | When sites are too small/numerous to each be a cluster — the device fleet pattern |
 | **OpenYurt** | non-intrusive add-on to vanilla K8s | Node-level edge, upstream-K8s flavoured | Same niche as KubeEdge, different trade: stock API surface vs. KubeEdge's richer device twins/MQTT integration |
 
-**The decision rule that picks between them:** *does the site need to be a
-cluster?* If a site must keep scheduling, admission, and local services alive
-autonomously (a factory, a depot), it is a cluster — k3s/Talos, joined to the
-fleet as a (lightweight) spoke. If a site is one or three boxes reporting to a
-regional brain, it is a **node** — KubeEdge/OpenYurt edge nodes of a regional
-spoke, and it never appears in the hub's cluster inventory at all. Getting
-this wrong in the expensive direction (a full spoke per lamp-post) is how edge
-fleets drown their hub; the proposal's ArgoCD push model in particular cannot
-carry thousands of registrations, which is one more argument already banked
-for the OCM evolution.
+**The decision rule that picks between them:** *does the site need to be a cluster?* If a site must keep scheduling, admission, and local services alive
+autonomously (a factory, a depot), it is a cluster — k3s/Talos, joined to the fleet as a (lightweight) spoke. If a site is one or three boxes reporting to a
+regional brain, it is a **node** — KubeEdge/OpenYurt edge nodes of a regional spoke, and it never appears in the hub's cluster inventory at all. Getting this
+wrong in the expensive direction (a full spoke per lamp-post) is how edge fleets drown their hub; the proposal's ArgoCD push model in particular cannot carry
+thousands of registrations, which is one more argument already banked for the OCM evolution.
 
 ---
 
@@ -226,10 +189,8 @@ for the OCM evolution.
 
 ### 1 — EV charging network (arm64 edge + amd64 regional core)
 
-The topology OCPP itself dictates: charge points are WebSocket **clients**
-dialing out over TLS to a CSMS (Central System Management Software); OCPP 1.6
-dominates deployed hardware, 2.0.1 adds certificate-based auth and ISO 15118.
-Charging must continue when the WAN doesn't — offline autonomy is a protocol
+The topology OCPP itself dictates: charge points are WebSocket **clients** dialing out over TLS to a CSMS (Central System Management Software); OCPP 1.6
+dominates deployed hardware, 2.0.1 adds certificate-based auth and ISO 15118. Charging must continue when the WAN doesn't — offline autonomy is a protocol
 expectation, not a nice-to-have.
 
 ```
@@ -264,38 +225,25 @@ W'xOps mapping and the three lessons it surfaces:
 
 ### 2 — Multi-region SaaS (the common case)
 
-The proposal's architecture used as-is, with both other axes layered on:
-region is a **tenant attribute** (`cluster: eu-fra` chosen at onboarding,
-driven by data residency more often than latency), tenancy tiers price
-isolation (namespace → Kamaji-hosted → dedicated spoke), and hardware stays
-homogeneous amd64 until a cost review introduces arm64 node pools — at which
-point the multi-arch image rule and the `scheduling` block are the entire
-migration story. Nothing new to build beyond the gaps already tabled.
+The proposal's architecture used as-is, with both other axes layered on: region is a **tenant attribute** (`cluster: eu-fra` chosen at onboarding, driven by
+data residency more often than latency), tenancy tiers price isolation (namespace → Kamaji-hosted → dedicated spoke), and hardware stays homogeneous amd64 until
+a cost review introduces arm64 node pools — at which point the multi-arch image rule and the `scheduling` block are the entire migration story. Nothing new to
+build beyond the gaps already tabled.
 
 ### 3 — IoT telemetry fleet (thousands of sites)
 
-The corner that breaks the prototype's assumptions hardest: sites are
-KubeEdge/OpenYurt **nodes** (never spokes), telemetry is MQTT with edge-side
-downsampling before uplink, and the hub manages only the regional aggregation
-spokes. Fleet-wide delivery to the edge tier happens through the edge
-platform's own channel (KubeEdge's cloud-edge tunnel), not through ArgoCD —
-the hub's GitOps writ ends at the regional spoke. Accepting that boundary
-early avoids the worst outcome on this axis: trying to make one delivery
-mechanism span both worlds.
+The corner that breaks the prototype's assumptions hardest: sites are KubeEdge/OpenYurt **nodes** (never spokes), telemetry is MQTT with edge-side downsampling
+before uplink, and the hub manages only the regional aggregation spokes. Fleet-wide delivery to the edge tier happens through the edge platform's own channel
+(KubeEdge's cloud-edge tunnel), not through ArgoCD — the hub's GitOps writ ends at the regional spoke. Accepting that boundary early avoids the worst outcome on
+this axis: trying to make one delivery mechanism span both worlds.
 
 ### 4 — Cross-provider GPU inference (field-tested, see References)
 
-The one case here that has actually been run: AI inference replicated across
-**two providers in two countries** — VNG Cloud (Vietnam, A40s, GPU Operator +
-HAMi) and Alibaba Cloud (China, L20s, native cGPU) — with Alibaba DNS/GTM
-geo-routing on top and ArgoCD as the single GitOps control plane across both.
-What it adds to the axes above: *provider* heterogeneity is its own hardware
-axis (GPU sharing mechanics differed per cloud and could not be abstracted),
-cross-border DNS is a real routing constraint, and the replicated-full-stack
-posture held up in practice. Its conclusion — managed, provider-native paths
-over custom orchestration (Virtual Kubelet and a tunnel-CRD operator were
-both evaluated and rejected) — is the same rule this repo's architecture
-already enforces.
+The one case here that has actually been run: AI inference replicated across **two providers in two countries** — VNG Cloud (Vietnam, A40s, GPU Operator + HAMi)
+and Alibaba Cloud (China, L20s, native cGPU) — with Alibaba DNS/GTM geo-routing on top and ArgoCD as the single GitOps control plane across both. What it adds
+to the axes above: *provider* heterogeneity is its own hardware axis (GPU sharing mechanics differed per cloud and could not be abstracted), cross-border DNS is
+a real routing constraint, and the replicated-full-stack posture held up in practice. Its conclusion — managed, provider-native paths over custom orchestration
+(Virtual Kubelet and a tunnel-CRD operator were both evaluated and rejected) — is the same rule this repo's architecture already enforces.
 
 ---
 
@@ -334,8 +282,7 @@ Direction-setting, not yet work:
 
 ## References
 
-**Field notes — this platform's own prior runs** (the source of every
-"field-tested" claim above)
+**Field notes — this platform's own prior runs** (the source of every "field-tested" claim above)
 - [The Story of Mine about Multi-Region Architecture](https://wiki.xeusnguyen.xyz/Tech-Second-Brain/Personal/DevSecOps/The-Story-of-Mine-about-Multi-Region-Architecture)
   — replicated multi-cluster across VNG Cloud (Vietnam) + Alibaba Cloud
   (China): GPU sharing (cGPU vs GPU Operator + HAMi), Alibaba DNS/GTM for
@@ -368,4 +315,4 @@ Direction-setting, not yet work:
 **Internal**
 - [`multi-cluster.md`](multi-cluster.md) — the option space this builds on
 - [`multi-cluster-proposal.md`](multi-cluster-proposal.md) — the chosen path this extends
-- [`tenant-database.md`](../api-reference/tenant-database.md) — the `tier:` concept this generalises
+- [`tenant-database.md`](../../docs/api-reference/tenant-database.md) — the `tier:` concept this generalises

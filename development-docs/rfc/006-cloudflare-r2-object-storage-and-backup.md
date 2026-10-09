@@ -6,12 +6,10 @@ Draft
 
 ## Summary
 
-Bring **Cloudflare R2** into Core as the first service that lives outside the cluster and outside the platform's own vendors:
-Core provisions the bucket and a bucket-scoped credential, publishes that credential to OpenBao, and the platform consumes it.
-It lands in stages. First, an R2 bucket for PostgreSQL backups, using the backup fields `XPlatformDatabaseCluster` already has.
-Then a general `XObjectBucket` resource so tenants get object storage. Then lifecycle, retention and consumer wiring. The
-RFC also defines the pattern any *later* third-party service follows, so R2 is the first instance of a design rather than a
-one-off.
+Bring **Cloudflare R2** into Core as the first service that lives outside the cluster and outside the platform's own vendors: Core provisions the bucket and a
+bucket-scoped credential, publishes that credential to OpenBao, and the platform consumes it. It lands in stages. First, an R2 bucket for PostgreSQL backups,
+using the backup fields `XPlatformDatabaseCluster` already has. Then a general `XObjectBucket` resource so tenants get object storage. Then lifecycle, retention
+and consumer wiring. The RFC also defines the pattern any *later* third-party service follows, so R2 is the first instance of a design rather than a one-off.
 
 ## Motivation
 
@@ -25,8 +23,8 @@ one-off.
    service would otherwise invent its own answers to where the admin credential lives, how per-resource credentials are minted,
    who owns them, and what happens on deletion.
 
-R2 is a good first case because it is S3-compatible (so the existing Barman fields work unchanged) and, per Cloudflare's own
-pricing model, charges no egress fees — which is what makes a restore or a migration off it affordable rather than a bill.
+R2 is a good first case because it is S3-compatible (so the existing Barman fields work unchanged) and, per Cloudflare's own pricing model, charges no egress
+fees — which is what makes a restore or a migration off it affordable rather than a bill.
 
 ## Detailed Design
 
@@ -85,33 +83,29 @@ status:
     path: tenants/team-alpha/object-storage/team-alpha-exports/credentials
 ```
 
-Both `status.created` and `status.ready` follow the [status contract](../../docs/api-reference/status-contract.md). The credential
-never appears in status; only its Vault path does.
+Both `status.created` and `status.ready` follow the [status contract](../../docs/api-reference/status-contract.md). The credential never appears in status; only
+its Vault path does.
 
 ### Decisions taken
 
-**One shared Cloudflare account per environment.** `dev`, `staging` and `prod` each have their own Cloudflare account, and every
-tenant in an environment shares that environment's account. Isolation between tenants is the bucket-scoped token, not the
-account. This keeps a development mistake or a leaked development credential away from production data, at the price of one
-account-level credential to protect per environment rather than one in total. `accountRef` names the environment's account;
-there is one `ProviderConfig` per environment, matching the per-environment OpenBao.
+**One shared Cloudflare account per environment.** `dev`, `staging` and `prod` each have their own Cloudflare account, and every tenant in an environment shares
+that environment's account. Isolation between tenants is the bucket-scoped token, not the account. This keeps a development mistake or a leaked development
+credential away from production data, at the price of one account-level credential to protect per environment rather than one in total. `accountRef` names the
+environment's account; there is one `ProviderConfig` per environment, matching the per-environment OpenBao.
 
-**Backups use CloudNativePG's built-in `barmanObjectStore`**, the configuration `XPlatformDatabaseCluster` already emits. That
-avoids the reported R2 restore failure in the Barman Cloud plugin and needs no change to the composed resources. It has a
-shelf life, and the RFC does not hide it: the built-in support has been deprecated since CloudNativePG 1.26, and its removal
-has been scheduled for 1.30 and, in the most recent release notes found, 1.31 — sources disagree, so the pinned operator
-version's notes are the authority. The repo's documentation targets 1.29. Moving to the plugin later changes what the
-composition emits (an `ObjectStore` resource and plugin configuration in place of the inline block), so it is its own change
-with its own RFC and ADR, triggered by the operator upgrade that would remove the built-in path, and it starts with the
-restore test below.
+**Backups use CloudNativePG's built-in `barmanObjectStore`**, the configuration `XPlatformDatabaseCluster` already emits. That avoids the reported R2 restore
+failure in the Barman Cloud plugin and needs no change to the composed resources. It has a shelf life, and the RFC does not hide it: the built-in support has
+been deprecated since CloudNativePG 1.26, and its removal has been scheduled for 1.30 and, in the most recent release notes found, 1.31 — sources disagree, so
+the pinned operator version's notes are the authority. The repo's documentation targets 1.29. Moving to the plugin later changes what the composition emits (an
+`ObjectStore` resource and plugin configuration in place of the inline block), so it is its own change with its own RFC and ADR, triggered by the operator
+upgrade that would remove the built-in path, and it starts with the restore test below.
 
 ### Credential and Vault layout
 
-Cloudflare documents R2 API tokens that can be scoped to specific buckets with Object Read or Object Read & Write permission,
-and the S3-compatible key pair is derived from the token: the access key id is the token id and the secret access key is the
-SHA-256 of the token value. The composition mints one such token per bucket and per `access` level, and pushes it to OpenBao
-with **the key names `XPlatformDatabaseCluster` already expects** (`ACCESS_KEY_ID`, `ACCESS_SECRET_KEY`) plus `endpoint` and
-`bucket`, so the existing backup fields consume it with no schema change.
+Cloudflare documents R2 API tokens that can be scoped to specific buckets with Object Read or Object Read & Write permission, and the S3-compatible key pair is
+derived from the token: the access key id is the token id and the secret access key is the SHA-256 of the token value. The composition mints one such token per
+bucket and per `access` level, and pushes it to OpenBao with **the key names `XPlatformDatabaseCluster` already expects** (`ACCESS_KEY_ID`, `ACCESS_SECRET_KEY`)
+plus `endpoint` and `bucket`, so the existing backup fields consume it with no schema change.
 
 | `owner` | `remoteKey` | Full logical path |
 |---|---|---|
@@ -120,10 +114,10 @@ with **the key names `XPlatformDatabaseCluster` already expects** (`ACCESS_KEY_I
 
 `remoteKey` omits the KV mount prefix, per the [Vault path convention](../../CLAUDE.md#vault-path-convention).
 
-**Rotation can be seamless here**, unlike a Dex client secret ([RFC-004](004-dex-identity-and-portal-authentication.md)): R2
-allows more than one token per bucket, so the composition keeps the previous generation's token alive while the new one is
-minted, published and picked up, then retires the old one at the *next* rotation. Consumers see a new KV v2 version and
-continue on the old token in the meantime. That two-token overlap is a design intent to confirm in the spike.
+**Rotation can be seamless here**, unlike a Dex client secret ([RFC-004](004-dex-identity-and-portal-authentication.md)): R2 allows more than one token per
+bucket, so the composition keeps the previous generation's token alive while the new one is minted, published and picked up, then retires the old one at the
+*next* rotation. Consumers see a new KV v2 version and continue on the old token in the meantime. That two-token overlap is a design intent to confirm in the
+spike.
 
 ### Composition
 
@@ -158,18 +152,18 @@ A backup that has not been restored is a hope. Two known risks make this concret
 - Newer S3 client checksum behaviour has caused `x-amz-content-sha256` errors against S3-compatible stores, worked around
   with environment settings on the object store. Whether R2 needs them is to be found out, not assumed.
 
-**No backup bucket is called done until a PostgreSQL cluster has been restored from it into a fresh cluster and the data
-checked.** That drill is the exit criterion for Stage 1 and is repeated on any change to the backup path.
+**No backup bucket is called done until a PostgreSQL cluster has been restored from it into a fresh cluster and the data checked.** That drill is the exit
+criterion for Stage 1 and is repeated on any change to the backup path.
 
 ### GitOps streaming
 
-`XObjectBucket` follows the path every Core resource takes: a commit, Argo CD, the XR, the Workspace calling Cloudflare, the
-credential to OpenBao. Nothing secret is in Git; `status.vault.path` is what a consumer's `ExternalSecret` points at.
+`XObjectBucket` follows the path every Core resource takes: a commit, Argo CD, the XR, the Workspace calling Cloudflare, the credential to OpenBao. Nothing
+secret is in Git; `status.vault.path` is what a consumer's `ExternalSecret` points at.
 
 ### Compatibility and change tier
 
-One new package, `object-bucket`, `current: unreleased` in `VERSIONS.yaml`; adding a package is `safe`. Stage 3 and 4 fields are
-additive. Nothing here removes or retypes a released field.
+One new package, `object-bucket`, `current: unreleased` in `VERSIONS.yaml`; adding a package is `safe`. Stage 3 and 4 fields are additive. Nothing here removes
+or retypes a released field.
 
 ### Testing
 
@@ -180,9 +174,8 @@ additive. Nothing here removes or retypes a released field.
 - invariants: `remoteKey` has no KV mount prefix; no credential in any XR field or status; **`retain` defaults to `true`**; no
   RBAC emitted
 
-Offline tests prove the rendered objects only. Whether Cloudflare accepts the HCL, whether the token and its S3 key pair
-work, and whether a restore succeeds all need a real account. A free Cloudflare account is enough for a scratch e2e, and that
-run belongs in the kind-based e2e tier when it exists.
+Offline tests prove the rendered objects only. Whether Cloudflare accepts the HCL, whether the token and its S3 key pair work, and whether a restore succeeds
+all need a real account. A free Cloudflare account is enough for a scratch e2e, and that run belongs in the kind-based e2e tier when it exists.
 
 ## Drawbacks
 
@@ -229,8 +222,7 @@ run belongs in the kind-based e2e tier when it exists.
 - [ ] **Stage 5 — a second backend**, to prove the API.
 - [ ] Add the `cloudflare/cloudflare` provider to `NOTICE` and the reference stack when Stage 1 lands.
 
-On acceptance, ADRs for: the third-party pattern (the six rules), Workspace over a native provider for Cloudflare, and
-retain-by-default deletion.
+On acceptance, ADRs for: the third-party pattern (the six rules), Workspace over a native provider for Cloudflare, and retain-by-default deletion.
 
 ## Open Questions
 

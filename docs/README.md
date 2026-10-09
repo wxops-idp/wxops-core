@@ -1,10 +1,10 @@
 # W'xOps Core Documentation
 
-W'xOps Core publishes platform APIs as Crossplane v2 composite resources: Git hosting, identities, PostgreSQL clusters and databases,
-and tenant applications with Darlane workspaces. You declare one resource, and Crossplane keeps everything behind it reconciled.
+W'xOps Core publishes platform APIs as Crossplane v2 composite resources: Git hosting, identities, PostgreSQL clusters and databases, and tenant applications
+with Darlane workspaces. You declare one resource, and Crossplane keeps everything behind it reconciled.
 
-This folder is for **anyone who uses, operates, builds on or learns from the platform**: the API, how to install and run it, how to
-onboard an application, and where the platform is heading. The decisions, proposals, roadmap and development process live in
+This folder is for **anyone who uses, operates or builds on the platform as it stands today**: the API, how to install and run it, how to onboard an
+application. Where the platform is headed — core ideas, decisions, proposals, the roadmap and the development process — lives in
 [`development-docs/`](../development-docs/README.md).
 
 **Table of Contents**
@@ -12,7 +12,6 @@ onboard an application, and where the platform is heading. The decisions, propos
 - [The sections](#the-sections)
   - [Learn](#learn)
   - [API reference](#api-reference)
-  - [Core ideas](#core-ideas)
   - [User guide](#user-guide)
 - [How the sections connect](#how-the-sections-connect)
 - [Development docs](#development-docs)
@@ -28,7 +27,7 @@ onboard an application, and where the platform is heading. The decisions, propos
 | Ship an application end to end | [App onboarding](user-guide/app-onboarding.md) |
 | Know what a resource does, which fields it takes, and what the reconcile loop does for me | [API reference](api-reference/README.md) |
 | Build a portal or a tool against the API | [Portal integration](user-guide/portal-integration.md) · [Status contract](api-reference/status-contract.md) |
-| Understand where the platform is heading | [Core ideas](#core-ideas) · [Solution matrix](core-ideas/solution-matrix.md) |
+| Understand where the platform is heading | [Core ideas](../development-docs/README.md#core-ideas) · [Solution matrix](../development-docs/core-ideas/solution-matrix.md) |
 | Change the platform, cut a release, or record a decision | [Development docs](../development-docs/README.md) |
 
 ---
@@ -37,9 +36,8 @@ onboard an application, and where the platform is heading. The decisions, propos
 
 ### Learn
 
-Contributor onboarding for someone who hasn't used Crossplane, OpenTofu or KCL before — four short
-pages, each teaching one concept against a real file in this repo rather than a generic tutorial.
-Read only the pages you're missing.
+Contributor onboarding for someone who hasn't used Crossplane, OpenTofu or KCL before — four short pages, each teaching one concept against a real file in this
+repo rather than a generic tutorial. Read only the pages you're missing.
 
 | Doc | What it covers |
 |---|---|
@@ -51,9 +49,8 @@ Read only the pages you're missing.
 
 ### API reference
 
-What each Kind accepts, what Core composes and keeps reconciled for it, and what it reports back.
-The schema source is `package/<group>/<name>/xrd.yaml`; the API group (`platform`, `scm`, ...) is per package — see
-[ADR-002](../development-docs/adr/002-three-api-groups.md).
+What each Kind accepts, what Core composes and keeps reconciled for it, and what it reports back. The schema source is `package/<group>/<name>/xrd.yaml`; the
+API group (`platform`, `scm`, ...) is per package — see [ADR-002](../development-docs/adr/002-three-api-groups.md).
 
 | Doc | Kind | What it covers |
 |---|---|---|
@@ -71,25 +68,6 @@ The schema source is `package/<group>/<name>/xrd.yaml`; the API group (`platform
 | [scm-oauth-app](api-reference/scm-oauth-app.md) | `XScmOAuthApp` | A host-side OAuth application, with its credentials in the secret store |
 | [status-contract](api-reference/status-contract.md) | all | Every package's `status` fields on one page: the absent-vs-`false` split, `ready` vs `dependenciesReady` |
 
-### Core ideas
-
-The ideas and features the platform is built around, from shipped to researched. Each doc opens
-with a status banner that says how settled it is.
-
-| Doc | Maturity | What it covers |
-|---|---|---|
-| [solution-matrix](core-ideas/solution-matrix.md) | Index | **The idea map.** 44 problems across observability, multi-cluster and AI self-service: the chosen tool, what current packages already solve, and the industry practice to study |
-| [darlane](core-ideas/darlane.md) | Shipped in `XTenantApp`; `XDarlane` designed | The in-cluster developer twin: file sync, traffic mirroring, A/B and header routing, SRE-agent workflows |
-| [guardian](core-ideas/guardian.md) | Vision | Platform-injected scanning, audit and AI code-review sidecars for Darlane sessions |
-| [multi-cluster](core-ideas/multi-cluster.md) | Design | Hub-and-spoke architecture: control, identity and data planes, two reference architectures, and the migration path from one cluster |
-| [multi-cluster-proposal](core-ideas/multi-cluster-proposal.md) | Proposal | The chosen path: CAPI + ArgoCD hub-spoke + structured authn, k8gb + ExternalDNS, and a prototype with exit criteria |
-| [multi-cluster-connectivity](core-ideas/multi-cluster-connectivity.md) | Options analysis | Securing the hub→spoke API connection, across three independent trust paths, for new and existing clusters |
-| [multi-cluster-scale](core-ideas/multi-cluster-scale.md) | Research | Regions, tenancy tiers, heterogeneous hardware (arm64 edge, GPU), and the XRD gaps each exposes |
-| [observability](core-ideas/observability.md) | Part 1 shipped, Part 2 options | Metrics emission from `XTenantApp`, then collection at single-cluster, fleet and multi-cluster scale |
-| [self-service-operations](core-ideas/self-service-operations.md) | Research + direction | The operability ladder, status as a diagnosis graph, runbooks, and the agent→PR loop behind the test gate |
-| [knowledge-architecture](core-ideas/knowledge-architecture.md) | Research + direction | ADRs, runbooks, knowledge graph and Agent Skills under the SRE agent, with golden incidents as evals |
-| [security-threat-model](core-ideas/security-threat-model.md) | Consolidation | Assets, trust boundaries, threats mapped to mitigations, and the honest gap list |
-
 ### User guide
 
 Running W'xOps Core and building on it.
@@ -97,7 +75,7 @@ Running W'xOps Core and building on it.
 | Doc | What it covers |
 |---|---|
 | [setup](user-guide/setup.md) | Prerequisites and platform dependencies, providers, credentials, installing packages, and a first resource |
-| [app-onboarding](user-guide/app-onboarding.md) | The golden path from picking a template to a running `XTenantApp`, through `XGiteaRepository` |
+| [app-onboarding](user-guide/app-onboarding.md) | The golden path from picking a template to a running `XTenantApp`, through `XScmRepository` |
 | [portal-integration](user-guide/portal-integration.md) | The consumer side of the API: screen-by-screen field map, health cards, error-to-runbook wiring, and what a portal must never do |
 
 ---
@@ -109,31 +87,31 @@ flowchart LR
     LEARN["Learn<br/>Crossplane · OpenTofu · KCL<br/>as this repo uses them"]
     UG["User guide<br/>setup · app onboarding<br/>portal integration"]
     API["API reference<br/>reconcile loop · every Kind<br/>status contract"]
-    IDEAS["Core ideas<br/>darlane · guardian · multi-cluster<br/>observability · self-service · security"]
-    DEV["Development docs<br/>decisions · proposals · roadmap"]
+    DEV["Development docs<br/>core ideas · decisions · proposals · roadmap"]
 
     LEARN -->|"prerequisite for"| DEV
     UG -->|"fields to write,<br/>status to read"| API
-    IDEAS -->|"features land as<br/>fields on"| API
+    DEV -->|"a core idea lands as<br/>a field on"| API
     DEV -->|"every change is<br/>gated against"| API
 
     classDef hub stroke-width:3px
     class API hub
 ```
 
-The API reference sits in the middle on purpose. A core idea becomes real when it lands as a field on a Kind. A user guide is a path
-through those fields. Learn is prerequisite reading for development, not a section of it — it teaches the underlying tools, not this
-repo's workflow. Every development change is checked against the released API.
+The API reference sits in the middle on purpose. A core idea — in `development-docs/`, since it's about where the platform is headed, not how it's used today —
+becomes real when it lands as a field on a Kind. A user guide is a path through those fields. Learn is prerequisite reading for development, not a section of it
+— it teaches the underlying tools, not this repo's workflow. Every development change is checked against the released API.
 
 ---
 
 ## Development docs
 
-Decisions, proposals, the roadmap and the development process are in [`development-docs/`](../development-docs/README.md):
+Core ideas, decisions, proposals, the roadmap and the development process are in [`development-docs/`](../development-docs/README.md):
 
 | Doc | What it covers |
 |---|---|
 | [**Development docs hub**](../development-docs/README.md) | Find your way, the development matrix, and where new docs go |
+| [Core ideas](../development-docs/README.md#core-ideas) | Darlane, Guardian, multi-cluster, observability, self-service operations, knowledge architecture, security — [solution matrix](../development-docs/core-ideas/solution-matrix.md) is the index |
 | [Development guide](../development-docs/development/README.md) | The change loop, hooks and make targets, and the rules that bite |
 | [Releasing](../development-docs/development/releasing.md) | Version axes, why a released XRD only grows, `make release`, CI publishing |
 | [ROADMAP](../development-docs/_archives/ROADMAP.md) (archived) | Phases, the deferred core, decisions made and rejected, open decisions, as of the release it describes — superseded by the [RFC index](../development-docs/rfc/README.md) |

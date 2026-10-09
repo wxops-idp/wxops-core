@@ -1,16 +1,11 @@
 # Multi-Cluster Proposal — the chosen path
 
-> **Status: proposal, not implemented.** [`multi-cluster.md`](multi-cluster.md)
-> presents the full option space without prescribing; this document is the
-> prescription — one concrete architecture, one prototype, and the decisions
-> locked (or explicitly left open) to build it. Where the two documents
-> disagree, this one is newer and wins; where this one is silent, the research
-> doc is the reference.
+> **Status: proposal, not implemented.** [`multi-cluster.md`](multi-cluster.md) presents the full option space without prescribing; this document is the
+> prescription — one concrete architecture, one prototype, and the decisions locked (or explicitly left open) to build it. Where the two documents disagree,
+> this one is newer and wins; where this one is silent, the research doc is the reference.
 
-The shape in one paragraph: **CAPI provisions spokes, ArgoCD hub-spoke delivers
-to them, structured authentication replaces standing credentials on the machine
-path, Pinniped serves the human path only, a tunnel serves Darlane, and k8gb +
-ExternalDNS provide multi-region DNS-based routing on top.** OCM `ManifestWork`
+The shape in one paragraph: **CAPI provisions spokes, ArgoCD hub-spoke delivers to them, structured authentication replaces standing credentials on the machine
+path, Pinniped serves the human path only, a tunnel serves Darlane, and k8gb + ExternalDNS provide multi-region DNS-based routing on top.** OCM `ManifestWork`
 is the planned second step, not the first.
 
 ```
@@ -45,33 +40,28 @@ is the planned second step, not the first.
 
 ## Why this shape
 
-**Reference architecture 2, for the reason the research doc already gives:**
-the delta from today's codebase is a `cluster` parameter plus per-spoke
-`ProviderConfig`s, and XR status keeps working natively — the two things
-Arch 1 (Git-centric) sacrifices. Arch 1's triggers (spokes the hub cannot
-reach, hard no-standing-credentials compliance) do not currently apply.
+**Reference architecture 2, for the reason the research doc already gives:** the delta from today's codebase is a `cluster` parameter plus per-spoke
+`ProviderConfig`s, and XR status keeps working natively — the two things Arch 1 (Git-centric) sacrifices. Arch 1's triggers (spokes the hub cannot reach, hard
+no-standing-credentials compliance) do not currently apply.
 
-**And the delta is smaller than the research doc says**, because that doc
-predates the v0.4.0 API freeze. Its Phase 0 prerequisites are mostly done:
+**And the delta is smaller than the research doc says**, because that doc predates the v0.4.0 API freeze. Its Phase 0 prerequisites are mostly done:
 
 | Prerequisite (multi-cluster.md §Migration path) | State |
 |---|---|
 | `targetCluster` variable replacing hardcoded `providerConfigRef` | ✅ Done — 30 sites across all three KCL packages |
 | `spec.parameters.cluster` XRD field | ✅ Done — `tenant-app`, `tenant-database`, `platform-database-clusters` |
-| XR status the portal can trust | ✅ Done — `created`/`ready` on all seven packages ([status-contract.md](../api-reference/status-contract.md)) |
+| XR status the portal can trust | ✅ Done — `created`/`ready` on all seven packages ([status-contract.md](../../docs/api-reference/status-contract.md)) |
 | Darlane RBAC binding target | ✅ Done — `status.darlane.serviceAccountName`; binding authored in GitOps |
 | Per-spoke `ProviderConfig` + credential | ❌ The actual remaining gap |
 | Spoke exists at all | ❌ The prototype |
 
-What remains is genuinely small: stand up a spoke, mint one scoped credential,
-create one `ProviderConfig` named after the cluster, and set
-`cluster: <name>` on an XR.
+What remains is genuinely small: stand up a spoke, mint one scoped credential, create one `ProviderConfig` named after the cluster, and set `cluster: <name>` on
+an XR.
 
 ### The join mechanism: CAPI + ArgoCD now, OCM later — not Karmada, not Fleet
 
-CAPI and the delivery tools are not competitors — **CAPI is lifecycle, the
-others are delivery** — so "CAPI or Karmada or Fleet" is really "CAPI, plus
-which delivery mechanism":
+CAPI and the delivery tools are not competitors — **CAPI is lifecycle, the others are delivery** — so "CAPI or Karmada or Fleet" is really "CAPI, plus which
+delivery mechanism":
 
 | Candidate | Verdict | Why |
 |---|---|---|
@@ -82,17 +72,14 @@ which delivery mechanism":
 | **Rancher Fleet** | ❌ Rejected | Solid but Rancher-flavoured; adopts a second GitOps engine alongside ArgoCD for no capability we lack |
 | **Sveltos** | ⚪ Optional later | Not a delivery mechanism; a better `ClusterResourceSet` (which is `ApplyOnce`-only). Adopt if spoke add-on lifecycle becomes painful |
 
-**Fan-out stays out of the compositions.** One XR targets one cluster; running
-an app in two regions is two XRs (portal- or GitOps-driven). Rebuilding
-Karmada-style propagation inside KCL is exactly the trap the Karmada rejection
-avoids.
+**Fan-out stays out of the compositions.** One XR targets one cluster; running an app in two regions is two XRs (portal- or GitOps-driven). Rebuilding
+Karmada-style propagation inside KCL is exactly the trap the Karmada rejection avoids.
 
 ---
 
 ## Identity — who does what
 
-The stack was described as "ArgoCD (GitOps), Pinniped (Authen and Identity)" —
-this proposal deliberately narrows Pinniped's job, per the research doc's
+The stack was described as "ArgoCD (GitOps), Pinniped (Authen and Identity)" — this proposal deliberately narrows Pinniped's job, per the research doc's
 analysis:
 
 | Path | Mechanism | Pinniped involved? |
@@ -116,26 +103,22 @@ Machine-path notes that will bite if forgotten:
   do structured authn — Concierge then serves its machine path too. The
   design degrades gracefully; nothing to pre-build.
 
-**Never `argocd cluster add`** — registration is ApplicationSet Cluster
-generator over declaratively minted, scoped cluster Secrets.
+**Never `argocd cluster add`** — registration is ApplicationSet Cluster generator over declaratively minted, scoped cluster Secrets.
 
 ---
 
 ## Multi-region routing — k8gb and ExternalDNS together
 
-They solve different problems and the k8gb docs themselves recommend running
-both:
+They solve different problems and the k8gb docs themselves recommend running both:
 
 | Tool | Job here |
 |---|---|
 | **k8gb** | The actual GSLB. Each region runs k8gb + CoreDNS serving a delegated zone (e.g. `apps.wxops.cloud`); each answers only with its region's *healthy* endpoints; cross-region health via DNS between the k8gb CoreDNS instances. Strategies: `failover`, `roundRobin`, `geoip`. |
 | **ExternalDNS** | Ordinary record management: per-cluster infra hostnames (`argocd.hub…`, `grafana.sgn…`) and maintaining the parent-zone NS delegation that points at the k8gb CoreDNS services. One `--txt-owner-id` per cluster so two clusters never fight over a record. |
 
-Why this fits the platform's constraints: DNS-layer routing needs **no service
-mesh and no cross-cluster pod networking** — Layer 3 stays deferred, exactly as
-the research doc argues. The only new network requirement is that each
-region's k8gb CoreDNS is reachable (LoadBalancer) for zone queries and
-cross-cluster health checks.
+Why this fits the platform's constraints: DNS-layer routing needs **no service mesh and no cross-cluster pod networking** — Layer 3 stays deferred, exactly as
+the research doc argues. The only new network requirement is that each region's k8gb CoreDNS is reachable (LoadBalancer) for zone queries and cross-cluster
+health checks.
 
 **Platform default: `failover`, not `roundRobin`.** Two reasons:
 
@@ -151,20 +134,15 @@ cross-cluster health checks.
 
 ### ⚠ The Traefik wrinkle — spike before committing
 
-k8gb's integration model keys off standard `Ingress` objects, and **v0.3.0
-migrated `tenant-app` from `Ingress` to Traefik `IngressRoute`** — so the
-default k8gb path does not line up 1:1 with what the composition emits today.
-Whether current k8gb versions can reference Traefik CRDs (or need a standalone
-`Gslb` CR with its own service health reference) is **unverified — this is the
-prototype's first spike**, and the outcome decides the shape of the
-composition work below. Do not design past this unknown.
+k8gb's integration model keys off standard `Ingress` objects, and **v0.3.0 migrated `tenant-app` from `Ingress` to Traefik `IngressRoute`** — so the default
+k8gb path does not line up 1:1 with what the composition emits today. Whether current k8gb versions can reference Traefik CRDs (or need a standalone `Gslb` CR
+with its own service health reference) is **unverified — this is the prototype's first spike**, and the outcome decides the shape of the composition work below.
+Do not design past this unknown.
 
 ### Future composition work (after the spike)
 
-An `ingress.gslb` block on `tenant-app`, following exactly the pattern the
-`monitoring` block established in v0.4.0 — optional object, `enabled` toggle,
-conditional emission of one more wrapped CR, provider RBAC extended with
-k8gb's API group (`k8gb.absa.oss`):
+An `ingress.gslb` block on `tenant-app`, following exactly the pattern the `monitoring` block established in v0.4.0 — optional object, `enabled` toggle,
+conditional emission of one more wrapped CR, provider RBAC extended with k8gb's API group (`k8gb.absa.oss`):
 
 ```yaml
 ingress:
@@ -175,18 +153,15 @@ ingress:
     primaryGeoTag: sgn        # failover only
 ```
 
-Same host + one XR per region + per-region `Gslb` health = the multi-region
-story, with zero new concepts in the XRD beyond one nested block. Remember the
-lesson the monitoring work taught: a new emitted kind means a provider RBAC
-grant (`k8gb.absa.oss`) applied manually per cluster, and a golden test case
-per branch.
+Same host + one XR per region + per-region `Gslb` health = the multi-region story, with zero new concepts in the XRD beyond one nested block. Remember the
+lesson the monitoring work taught: a new emitted kind means a provider RBAC grant (`k8gb.absa.oss`) applied manually per cluster, and a golden test case per
+branch.
 
 ---
 
 ## The prototype
 
-**Scope: one hub + two spokes (two regions), one demo app served under the
-delegated zone, one Darlane session against a spoke.** Everything below exists
+**Scope: one hub + two spokes (two regions), one demo app served under the delegated zone, one Darlane session against a spoke.** Everything below exists
 already except the items marked ❌.
 
 | # | Piece | Exists? |
@@ -220,8 +195,7 @@ already except the items marked ❌.
 
 ## Decisions — locked and open
 
-Locked by this proposal (rationale in [`multi-cluster.md`](multi-cluster.md)
-§Decisions unless noted):
+Locked by this proposal (rationale in [`multi-cluster.md`](multi-cluster.md) §Decisions unless noted):
 
 | Decision | Locked answer |
 |---|---|
@@ -256,7 +230,7 @@ Open — decide before the first *production* spoke, not before the prototype:
   spokes CAPI did **not** provision
 - [`multi-cluster-scale.md`](multi-cluster-scale.md) — what lies beyond this
   prototype: regions at scale, tenancy tiers, arm64/GPU hardware, edge fleets
-- [`status-contract.md`](../api-reference/status-contract.md) — the status fields that make
+- [`status-contract.md`](../../docs/api-reference/status-contract.md) — the status fields that make
   cross-cluster XRs observable from the hub
 - [`darlane.md`](darlane.md) — the interactive workflows that force the tunnel
 - [k8gb](https://www.k8gb.io/) · [ExternalDNS](https://github.com/kubernetes-sigs/external-dns) — the multi-region layer

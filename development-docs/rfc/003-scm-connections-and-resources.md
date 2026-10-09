@@ -5,29 +5,26 @@
 Implemented (Phase 1)
 
 > [!NOTE]
-> Phase 1 shipped: `scm-connection`, `scm-repository` and `scm-oauth-app`, Gitea and GitHub, `managed`/`observed` where each vendor
-> supports it. `gitea-*` is archived (§Removing the old kinds), not migrated through the deprecation window this RFC originally
-> described, since no cluster ever ran it. `XScmRepository` additionally repeats `vendor` from its connection — see
-> [ADR-004](../adr/004-scm-repository-vendor-field.md) for why. Not done: GitLab, `XScmOrg`/`Team`/`User` (see §Org is not a kind for
-> why org/team is deferred, not just unbuilt), the namespaced twin, and `import: true` adoption.
+> Phase 1 shipped: `scm-connection`, `scm-repository` and `scm-oauth-app`, Gitea and GitHub, `managed`/`observed` where each vendor supports it. `gitea-*` is
+> archived (§Removing the old kinds), not migrated through the deprecation window this RFC originally described, since no cluster ever ran it. `XScmRepository`
+> additionally repeats `vendor` from its connection — see [ADR-004](../adr/004-scm-repository-vendor-field.md) for why. Not done: GitLab,
+> `XScmOrg`/`Team`/`User` (see §Org is not a kind for why org/team is deferred, not just unbuilt), the namespaced twin, and `import: true` adoption.
 
 ## Summary
 
-Replace Core's Gitea-only Git coverage with one API family, `XScm*`, that reads and writes Gitea, GitHub and GitLab. A platform-owned
-**`XScmConnection`** registers one hosting service — its vendor, base URL and where its credential lives — and every other resource points
-at it with **`scmRef`**, so tenants never write a vendor, a URL or a credential. The resources are **`XScmOrg`**, **`XScmTeam`**,
-**`XScmUser`**, **`XScmRepository`** and **`XScmOAuthApp`**. Each works in one of two modes: `managed` (Core creates and owns the object) or
-`observed` (Core only reads it, through a data source), so the same manifest can start a new in-cluster Gitea or embed an existing hosted
-service. GitHub and Gitea are implemented together — the largest hosted community and a self-hosted host with full permissions — so the model is
-proven against two very different hosts from the start; GitLab follows on the same model through the official `gitlabhq/gitlab` provider. The
-`gitea-*` kinds are superseded and then removed, with a written migration path off them and, later, between
-hosts. OAuth apps publish their client id and secret to Vault (OpenBao after migration) at a fixed path, the contract the next RFC (Dex) and
-OAuth2 Proxy build on.
+Replace Core's Gitea-only Git coverage with one API family, `XScm*`, that reads and writes Gitea, GitHub and GitLab. A platform-owned **`XScmConnection`**
+registers one hosting service — its vendor, base URL and where its credential lives — and every other resource points at it with **`scmRef`**, so tenants never
+write a vendor, a URL or a credential. The resources are **`XScmOrg`**, **`XScmTeam`**, **`XScmUser`**, **`XScmRepository`** and **`XScmOAuthApp`**. Each works
+in one of two modes: `managed` (Core creates and owns the object) or `observed` (Core only reads it, through a data source), so the same manifest can start a
+new in-cluster Gitea or embed an existing hosted service. GitHub and Gitea are implemented together — the largest hosted community and a self-hosted host with
+full permissions — so the model is proven against two very different hosts from the start; GitLab follows on the same model through the official
+`gitlabhq/gitlab` provider. The `gitea-*` kinds are superseded and then removed, with a written migration path off them and, later, between hosts. OAuth apps
+publish their client id and secret to Vault (OpenBao after migration) at a fixed path, the contract the next RFC (Dex) and OAuth2 Proxy build on.
 
 ## Goals
 
-This RFC is judged by whether it aligns Git SCM with Kubernetes **without hardcoding** the cluster, host, org or tenant, so the same model
-runs across multiple clusters and multiple tenants and can scale:
+This RFC is judged by whether it aligns Git SCM with Kubernetes **without hardcoding** the cluster, host, org or tenant, so the same model runs across multiple
+clusters and multiple tenants and can scale:
 
 - **No hardcoded target.** A resource names a connection (`scmRef`), never a host, URL or credential; adding a cluster, a host or another
   org is adding a resource, not editing a kind.
@@ -41,8 +38,7 @@ runs across multiple clusters and multiple tenants and can scale:
 
 ## Motivation
 
-Today Core can create a Gitea repository, org, team and user ([`gitea-*`](../../docs/api-reference/README.md)) and nothing else. Four gaps
-follow from that:
+Today Core can create a Gitea repository, org, team and user ([`gitea-*`](../../docs/api-reference/README.md)) and nothing else. Four gaps follow from that:
 
 1. **Vendor lock.** GitHub and GitLab tenants cannot use the golden path. A repository is the first thing a scaffolded service
    needs, so the portal cannot offer "new service" to them at all. The Gitea packages are also frozen behind an archived instance
@@ -57,8 +53,8 @@ follow from that:
 4. **The host is hard-wired.** Every `gitea-*` XR is bound to Gitea by its kind. Moving to, or adding, another host means rewriting every
    XR, with no declared path between the two — the lock-in this family exists to remove.
 
-Vault already holds every other generated credential Core creates (database superuser and app creds, connection strings), mirrored by
-an ESO `PushSecret`. OAuth client credentials are the same shape of problem and should follow the same pattern.
+Vault already holds every other generated credential Core creates (database superuser and app creds, connection strings), mirrored by an ESO `PushSecret`. OAuth
+client credentials are the same shape of problem and should follow the same pattern.
 
 ## Detailed Design
 
@@ -76,14 +72,13 @@ an ESO `PushSecret`. OAuth client credentials are the same shape of problem and 
 The full per-host matrix, and why it is uneven, is under *What each host lets Core write*.
 
 Not in scope: Dex itself and its clients (RFC-004), OAuth2 Proxy deployment, cluster-access identity (Pinniped, per
-[`multi-cluster-proposal.md`](../../docs/core-ideas/multi-cluster-proposal.md)), moving repository *content* between hosts (see *Migration*),
-and host features beyond the neutral field sets.
+[`multi-cluster-proposal.md`](../core-ideas/multi-cluster-proposal.md)), moving repository *content* between hosts (see *Migration*), and host features beyond
+the neutral field sets.
 
 ### Tenancy — the org is the platform, the tenant is a team
 
-The **org** is the platform: one organization (a GitHub org, a Gitea org) that spans the platform's clusters, observability and shared
-services. A **tenant is a team inside that org.** This is the model [RFC-005](005-git-mapped-authorization.md) already assumes, and it
-decides what each kind means:
+The **org** is the platform: one organization (a GitHub org, a Gitea org) that spans the platform's clusters, observability and shared services. A **tenant is a
+team inside that org.** This is the model [RFC-005](005-git-mapped-authorization.md) already assumes, and it decides what each kind means:
 
 | Kind | Owned by | Created by |
 |---|---|---|
@@ -92,17 +87,16 @@ decides what each kind means:
 | `XScmRepository` | the owning team | the team, within the org |
 | `XScmOAuthApp`, `XScmUser` | `platform`, or the team for a team's own bots | per owner |
 
-The owner label is the **team slug**, flat and legal as a label value. A repository inherits the org it lives in from its connection (`scmRef`) and is *owned by* a
-team through its label; the team's access to it is expressed on `XScmTeam` (`repositories`, `permission`). On GitHub and Gitea this maps
-directly. On GitLab, which has no teams, a team would map to a **subgroup under the org's group** — a proposal for the GitLab phase, not
-a decision here (open question 8).
+The owner label is the **team slug**, flat and legal as a label value. A repository inherits the org it lives in from its connection (`scmRef`) and is *owned
+by* a team through its label; the team's access to it is expressed on `XScmTeam` (`repositories`, `permission`). On GitHub and Gitea this maps directly. On
+GitLab, which has no teams, a team would map to a **subgroup under the org's group** — a proposal for the GitLab phase, not a decision here (open question 8).
 
 ### How this relates to Dex
 
-The SCM kinds and the Dex kinds ([RFC-004](004-dex-identity-and-portal-authentication.md)) are **independent and each valid alone**: an
-`XScmOAuthApp` is useful without Dex, and an `XDexConnector` can be configured from a plain Secret. They are also **referenceable**: an
-`XDexConnector` may point at an `XScmConnection` (for the vendor and base URL) and an `XScmOAuthApp` (for the client id and secret in
-OpenBao) instead of repeating them. SCM lands first; the Dex integration builds on it afterwards.
+The SCM kinds and the Dex kinds ([RFC-004](004-dex-identity-and-portal-authentication.md)) are **independent and each valid alone**: an `XScmOAuthApp` is useful
+without Dex, and an `XDexConnector` can be configured from a plain Secret. They are also **referenceable**: an `XDexConnector` may point at an `XScmConnection`
+(for the vendor and base URL) and an `XScmOAuthApp` (for the client id and secret in OpenBao) instead of repeating them. SCM lands first; the Dex integration
+builds on it afterwards.
 
 ### The two kinds of OAuth application
 
@@ -112,19 +106,18 @@ This RFC covers one of two, and the split matters for what follows:
   GitHub/GitLab/Gitea connectors need exactly this. **This RFC.**
 - **Downstream** — a client registered *in Dex*, so an application or OAuth2 Proxy can authenticate against Dex. **RFC-004.**
 
-Both end as a `client_id` / `client_secret` pair in Vault at the same path convention, so a consumer reads the same shape whether the
-issuer is a Git host or Dex.
+Both end as a `client_id` / `client_secret` pair in Vault at the same path convention, so a consumer reads the same shape whether the issuer is a Git host or
+Dex.
 
 ### API surface
 
-Six new XRDs, `v1alpha1`, in a new **`scm.wxops.cloud`** API group — every Git-hosting kind lives there, per
-[ADR-002](../adr/002-three-api-groups.md). `XScmRepository` is the one repository kind for all three hosts, **Gitea included**.
+Six new XRDs, `v1alpha1`, in a new **`scm.wxops.cloud`** API group — every Git-hosting kind lives there, per [ADR-002](../adr/002-three-api-groups.md).
+`XScmRepository` is the one repository kind for all three hosts, **Gitea included**.
 
-The four released `gitea-*` kinds (`XGiteaUser`, `XGiteaOrg`, `XGiteaTeam`, `XGiteaRepository`, group `platform.wxops.cloud`) cannot move
-group, so `XScm*` replaces them rather than converting them, in two steps. **Superseded** from the release the `XScm*` kinds ship in:
-documented as replaced, unmaintained beyond fixes. **Removed** in a later, named release through a deliberate allowlisted break
-(`tests/api-compat-allow.yaml`, with release notes), only after the migration below has been run. *Migration* carries the removal
-checklist, because deleting an XRD deletes its XRs and, through them, their Workspaces.
+The four released `gitea-*` kinds (`XGiteaUser`, `XGiteaOrg`, `XGiteaTeam`, `XGiteaRepository`, group `platform.wxops.cloud`) cannot move group, so `XScm*`
+replaces them rather than converting them, in two steps. **Superseded** from the release the `XScm*` kinds ship in: documented as replaced, unmaintained beyond
+fixes. **Removed** in a later, named release through a deliberate allowlisted break (`tests/api-compat-allow.yaml`, with release notes), only after the
+migration below has been run. *Migration* carries the removal checklist, because deleting an XRD deletes its XRs and, through them, their Workspaces.
 
 ```yaml
 apiVersion: scm.wxops.cloud/v1alpha1
@@ -236,16 +229,16 @@ spec:
     mustChangePassword: true
 ```
 
-All six expose `status.created` and `status.ready` per the [status contract](../../docs/api-reference/status-contract.md). The common fields
-are the intersection all three hosts support; host-only options are not part of v1. **There is no `admin` flag on `XScmUser`:** the
-existing `XGiteaUser` has one, and a tenant-writable field that mints site administrators does not belong in a neutral kind. The
-password of a managed user is generated, never written in an XR, and pushed to Vault.
+All six expose `status.created` and `status.ready` per the [status contract](../../docs/api-reference/status-contract.md). The common fields are the
+intersection all three hosts support; host-only options are not part of v1. **There is no `admin` flag on `XScmUser`:** the existing `XGiteaUser` has one, and a
+tenant-writable field that mints site administrators does not belong in a neutral kind. The password of a managed user is generated, never written in an XR, and
+pushed to Vault.
 
 ### `XScmConnection` and `scmRef`
 
-A connection is one hosting service the platform has been given a credential for. It is **platform-owned**: tenants do not create or
-edit it, which plain RBAC can express because it is a distinct kind. In-cluster Gitea is simply a connection with `vendor: gitea` and
-the in-cluster service URL as `baseUrl`; Core does not install it, which stays platform GitOps like Dex.
+A connection is one hosting service the platform has been given a credential for. It is **platform-owned**: tenants do not create or edit it, which plain RBAC
+can express because it is a distinct kind. In-cluster Gitea is simply a connection with `vendor: gitea` and the in-cluster service URL as `baseUrl`; Core does
+not install it, which stays platform GitOps like Dex.
 
 - **The credential** is a token stored by a platform operator in OpenBao at `platform/scm/{name}/credentials` (`remoteKey`
   `scm/{name}/credentials`, key `token`). The connection's composition emits an `ExternalSecret` that renders it into a Secret in
@@ -291,8 +284,8 @@ The Portal reads connections to offer the vendor choices, so it needs read acces
 - Whether `go-gitea/gitea` even ships a writable `gitea_org` *resource* (as opposed to the `data.gitea_org` this RFC already verified) was
   never checked against the real provider schema — the kind matrix's claim predates the spike and should not be trusted until confirmed.
 
-If a reason to observe the platform org through the API ever appears — visibility in the catalogue, something to reference by status — an
-`observed`-only `XScmOrg` is a small addition. It is not planned now.
+If a reason to observe the platform org through the API ever appears — visibility in the catalogue, something to reference by status — an `observed`-only
+`XScmOrg` is a small addition. It is not planned now.
 
 ### What ships next, and what doesn't ship at all
 
@@ -308,35 +301,32 @@ If a reason to observe the platform org through the API ever appears — visibil
 
 ### Observed mode — a data source, not a resource
 
-`mode: observed` means Core **reads** the object and never writes or deletes it. In the Workspace it is a data source instead of a
-resource: `gitea_repo` (which the Gitea provider ships alongside `gitea_org`, `gitea_team` and `gitea_user`), `github_repository` and
-`gitlab_project` — the last two are not verified in this RFC's research. The outputs are the same neutral set as managed mode
-(`id`, `clone_url`, `ssh_url`, `html_url`), plus `status.exists`; a repository that is not found ends `ready: false` with a clear message
-and is never created silently.
+`mode: observed` means Core **reads** the object and never writes or deletes it. In the Workspace it is a data source instead of a resource: `gitea_repo` (which
+the Gitea provider ships alongside `gitea_org`, `gitea_team` and `gitea_user`), `github_repository` and `gitlab_project` — the last two are not verified in this
+RFC's research. The outputs are the same neutral set as managed mode (`id`, `clone_url`, `ssh_url`, `html_url`), plus `status.exists`; a repository that is not
+found ends `ready: false` with a clear message and is never created silently.
 
-This lets a tenant point at a repository that already exists on an external host, or at one on a connection Core does not manage, and
-lets the same manifest be used against a new in-cluster Gitea (`managed`) or an existing hosted service (`observed`) by changing one
-field. In observed mode the fields that only make sense for creation — `description`, `visibility`, `defaultBranch`, `autoInit`,
-`hasIssues`, `hasWiki`, `topics` — are **not applied**. They are not rejected either, and the implementation says so plainly rather than
-claiming otherwise: they carry XRD defaults, so no schema rule can tell "left unset" from "set to the default". Rejecting them would mean
-dropping their defaults and moving them into the module, which costs more clarity than it buys.
+This lets a tenant point at a repository that already exists on an external host, or at one on a connection Core does not manage, and lets the same manifest be
+used against a new in-cluster Gitea (`managed`) or an existing hosted service (`observed`) by changing one field. In observed mode the fields that only make
+sense for creation — `description`, `visibility`, `defaultBranch`, `autoInit`, `hasIssues`, `hasWiki`, `topics` — are **not applied**. They are not rejected
+either, and the implementation says so plainly rather than claiming otherwise: they carry XRD defaults, so no schema rule can tell "left unset" from "set to the
+default". Rejecting them would mean dropping their defaults and moving them into the module, which costs more clarity than it buys.
 
-There is deliberately no "create if missing, otherwise adopt" mode. It would silently take over an object with different settings and
-then begin updating it. Taking an existing object under management is an explicit, one-shot `import: true` on a `managed` resource —
-**kept on the roadmap, deliberately not built yet.** `observed` already covers every case that only needs to read; `import` is the one
-place a kind would gain write/delete power over something it did not create, which is a real step up in risk over everything shipped so
-far and gets its own design and review before it's built, not bundled in as a Phase 1 afterthought. An OpenTofu `import` block is also
-static configuration, so driving one from an XR field is its own design problem regardless.
+There is deliberately no "create if missing, otherwise adopt" mode. It would silently take over an object with different settings and then begin updating it.
+Taking an existing object under management is an explicit, one-shot `import: true` on a `managed` resource — **kept on the roadmap, deliberately not built
+yet.** `observed` already covers every case that only needs to read; `import` is the one place a kind would gain write/delete power over something it did not
+create, which is a real step up in risk over everything shipped so far and gets its own design and review before it's built, not bundled in as a Phase 1
+afterthought. An OpenTofu `import` block is also static configuration, so driving one from an XR field is its own design problem regardless.
 
-`XScmOAuthApp` uses the same word for the same idea. In `observed` mode an operator registers the application by hand, places its client
-id and secret in a Kubernetes Secret, and the XR publishes that to Vault; Core does not create it and cannot rotate it.
+`XScmOAuthApp` uses the same word for the same idea. In `observed` mode an operator registers the application by hand, places its client id and secret in a
+Kubernetes Secret, and the XR publishes that to Vault; Core does not create it and cannot rotate it.
 
 ### Composition — Terraform providers and modules, run by OpenTofu
 
-**SCM is Terraform providers and modules; Crossplane only carries them.** Each kind's composition is a thin `function-patch-and-transform`
-pipeline — the same engine the `gitea-*` packages use — that emits one `provider-opentofu` `Workspace` running the kind's OpenTofu module
-with the vendor's own provider (`go-gitea/gitea`, `integrations/github`, `gitlabhq/gitlab`). There is no KCL, no vendor logic in the
-composition, and no direct API call anywhere (no `http` data source, `null_resource` or `local-exec`): every action goes through a provider.
+**SCM is Terraform providers and modules; Crossplane only carries them.** Each kind's composition is a thin `function-patch-and-transform` pipeline — the same
+engine the `gitea-*` packages use — that emits one `provider-opentofu` `Workspace` running the kind's OpenTofu module with the vendor's own provider
+(`go-gitea/gitea`, `integrations/github`, `gitlabhq/gitlab`). There is no KCL, no vendor logic in the composition, and no direct API call anywhere (no `http`
+data source, `null_resource` or `local-exec`): every action goes through a provider.
 
 - **One generic module per kind** — but, for a kind with a real *creatable* resource on more than one vendor, "one module" means
   Crossplane choosing between vendor-exclusive module variants, not `count` on `var.vendor` inside a shared one: see
@@ -353,8 +343,8 @@ composition, and no direct API call anywhere (no `http` data source, `null_resou
   one fewer script and hook, and the module is read in the same diff as the patches that feed it. It is checked by extracting it and running
   `tofu validate`/`tofu fmt -check` against the pinned providers — done for `scm-repository` before it was committed.
 
-The engine is OpenTofu ([RFC-002](002-migrate-terraform-to-opentofu.md)): these packages use `provider-opentofu` from the first release, so
-they are never migrated. It adds no Crossplane provider beyond that one, so it adds no provider RBAC.
+The engine is OpenTofu ([RFC-002](002-migrate-terraform-to-opentofu.md)): these packages use `provider-opentofu` from the first release, so they are never
+migrated. It adds no Crossplane provider beyond that one, so it adds no provider RBAC.
 
 ### Scope — cluster and namespaced
 
@@ -366,10 +356,9 @@ A Crossplane v2 XRD has one scope, so the tenant kinds come in two, sharing one 
 | `XScmRepository` | `ScmRepository` | cluster-scoped for platform GitOps; namespaced so a team owns its repositories in its own namespace and plain RBAC does the tenancy |
 | `XScmOAuthApp` | `ScmOAuthApp` | as above |
 
-Naming follows Crossplane v2: `X` for cluster-scoped, none for namespaced. **A namespaced XR can only compose namespaced resources**, and
-`provider-opentofu`'s `Workspace` has been cluster-scoped. **Phase 1 therefore ships the cluster-scoped kinds only**; the namespaced twins
-wait on two unanswered questions — whether the provider serves a namespaced `Workspace`, and how one would reach the connection's Secret in
-`crossplane-system`.
+Naming follows Crossplane v2: `X` for cluster-scoped, none for namespaced. **A namespaced XR can only compose namespaced resources**, and `provider-opentofu`'s
+`Workspace` has been cluster-scoped. **Phase 1 therefore ships the cluster-scoped kinds only**; the namespaced twins wait on two unanswered questions — whether
+the provider serves a namespaced `Workspace`, and how one would reach the connection's Secret in `crossplane-system`.
 
 | Vendor | Repository (`managed` / `observed`) | Org (`managed` / `observed`) | Team | User (`managed` / `observed`) | OAuth app (`managed`) |
 |---|---|---|---|---|---|
@@ -377,10 +366,9 @@ wait on two unanswered questions — whether the provider serves a namespaced `W
 | GitLab | `gitlab_project` (+ `data.gitlab_group`) / `data.gitlab_project` | `gitlab_group` / `data.gitlab_group` | none in v1 | `gitlab_user` / `data.gitlab_user` | `gitlab_application` — instance-wide, administrator token only |
 | GitHub | `github_repository` (+ `github_branch_default`) / `data.github_repository` | observe only: `data.github_organization` | `github_team` (+ membership, + repository access) | observe only: `data.github_user` | **none** — observe only |
 
-**Confirmed against the providers' own schemas** (`tofu providers schema -json`, pinned at `go-gitea/gitea ~> 0.8` and
-`integrations/github ~> 6.13`): `gitea_repository`, `data.gitea_repo`, `gitea_oauth2_app` (returning `client_id` and a sensitive
-`client_secret`), `gitea_org`, `github_repository` (resource and data source) and `github_branch_default` all exist with the attributes this
-design uses. Two findings changed the design:
+**Confirmed against the providers' own schemas** (`tofu providers schema -json`, pinned at `go-gitea/gitea ~> 0.8` and `integrations/github ~> 6.13`):
+`gitea_repository`, `data.gitea_repo`, `gitea_oauth2_app` (returning `client_id` and a sensitive `client_secret`), `gitea_org`, `github_repository` (resource
+and data source) and `github_branch_default` all exist with the attributes this design uses. Two findings changed the design:
 
 - **The Gitea provider has no `topics` attribute.** `topics` is therefore GitHub-only, and a non-empty list on a Gitea connection fails the
   apply through an HCL `precondition` rather than being silently dropped. A neutral `topics` needs either a provider change upstream or a
@@ -390,12 +378,11 @@ design uses. Two findings changed the design:
 
 ### Kind matrix — what each provider gives us
 
-**What Core can write is decided by the Terraform provider and the credential, not by the neutral kind.** The providers are
-`go-gitea/gitea`, `gitlabhq/gitlab` (GitLab's own, published on the registry under `gitlabhq`) and `integrations/github`. A different
-provider, or a token with more reach, changes a cell; the kinds do not. GitHub and Gitea are implemented first and together; GitLab follows on the same model and
-is expected to work end to end on self-managed instances, **Community Edition included** — the provider's documentation attaches
-administrator-token requirements to the user and application resources, not an enterprise licence (the only licence note found is for
-the user resource's auditor option).
+**What Core can write is decided by the Terraform provider and the credential, not by the neutral kind.** The providers are `go-gitea/gitea`, `gitlabhq/gitlab`
+(GitLab's own, published on the registry under `gitlabhq`) and `integrations/github`. A different provider, or a token with more reach, changes a cell; the
+kinds do not. GitHub and Gitea are implemented first and together; GitLab follows on the same model and is expected to work end to end on self-managed
+instances, **Community Edition included** — the provider's documentation attaches administrator-token requirements to the user and application resources, not an
+enterprise licence (the only licence note found is for the user resource's auditor option).
 
 | Kind | Gitea — `go-gitea/gitea` | GitLab — `gitlabhq/gitlab` | GitHub — `integrations/github` |
 |---|---|---|---|
@@ -405,14 +392,14 @@ the user resource's auditor option).
 | **`XScmRepository`** | `gitea_repository` · data `gitea_repo` | `gitlab_project` · data `gitlab_project` | `github_repository` (+ `github_branch_default`) · data `github_repository` |
 | **`XScmOAuthApp`** | `gitea_oauth2_app` | `gitlab_application` | none |
 
-Data-source names other than Gitea's are this RFC's expectation from the providers' documentation and are confirmed in the spike; the
-Gitea provider is known to ship data sources for org, repo, team and user.
+Data-source names other than Gitea's are this RFC's expectation from the providers' documentation and are confirmed in the spike; the Gitea provider is known to
+ship data sources for org, repo, team and user.
 
 ### What each host lets Core write
 
-The kinds are uniform; what each host's API allows is not, and that is stated here rather than hidden behind the neutral names. Where a
-host offers no creation API, the kind is **observe only** on that host — still useful, because it confirms the object exists, exposes its
-identifiers, and lets other resources depend on it. GitLab is split in two because the two behave differently.
+The kinds are uniform; what each host's API allows is not, and that is stated here rather than hidden behind the neutral names. Where a host offers no creation
+API, the kind is **observe only** on that host — still useful, because it confirms the object exists, exposes its identifiers, and lets other resources depend
+on it. GitLab is split in two because the two behave differently.
 
 | | Gitea | GitHub.com | GitLab self-managed (CE or EE) | GitLab.com |
 |---|---|---|---|---|
@@ -422,17 +409,17 @@ identifiers, and lets other resources depend on it. GitLab is split in two becau
 | **Repository** | write | write | write | write |
 | **OAuth app** | write | observe — no creation API | write (administrator token, instance-wide) | observe — instance-wide, needs an administrator |
 
-Cells that say *observe* are exactly the places where `mode: managed` is rejected by the composition with an explicit message. GitLab's
-`gitlab_group` and `gitlab_application` limits above are from the provider's own documentation; the GitHub cells and the rest of the
-GitLab column rest on documentation and search, and every cell is confirmed against its provider in the spike.
+Cells that say *observe* are exactly the places where `mode: managed` is rejected by the composition with an explicit message. GitLab's `gitlab_group` and
+`gitlab_application` limits above are from the provider's own documentation; the GitHub cells and the rest of the GitLab column rest on documentation and
+search, and every cell is confirmed against its provider in the spike.
 
 ### Vendor alignment
 
-**GitLab uses the same strategy as Gitea and GitHub** — one Workspace, one credential Secret, one repository resource, and outputs
-mapped to the same neutral names (`id`, `clone_url`, `ssh_url`, `html_url`). It differs in a short, specific list of places. This
-section names each one and the decision that keeps it from spreading into the API. The rule behind every decision: **`XScmRepository`
-contains only fields that mean the same on all three hosts; a host difference is absorbed inside that host's HCL branch, or the
-field is left out.** A field that would need a host-specific meaning is not added until two hosts support it or a tenant asks.
+**GitLab uses the same strategy as Gitea and GitHub** — one Workspace, one credential Secret, one repository resource, and outputs mapped to the same neutral
+names (`id`, `clone_url`, `ssh_url`, `html_url`). It differs in a short, specific list of places. This section names each one and the decision that keeps it
+from spreading into the API. The rule behind every decision: **`XScmRepository` contains only fields that mean the same on all three hosts; a host difference is
+absorbed inside that host's HCL branch, or the field is left out.** A field that would need a host-specific meaning is not added until two hosts support it or a
+tenant asks.
 
 | Concern | Gitea | GitHub | GitLab | Decision |
 |---|---|---|---|---|
@@ -447,18 +434,17 @@ field is left out.** A field that would need a host-specific meaning is not adde
 | **Team on GitLab** | — | — | groups and subgroups with per-user access levels | `XScmTeam` is **not supported on GitLab in v1**. Mapping a team to a subgroup would need the nested-owner design v1 declines; revisited with open question 8 |
 | **User credentials** | initial password, `admin` flag | cannot be created | initial password, admin flag | password generated and pushed to Vault, `mustChangePassword` true, **no `admin` flag** in the neutral kind |
 
-Two of these are things to confirm rather than assume, and both are spike items: the GitLab Terraform provider has an open report of
-project settings such as the README and default branch not being applied on create
-([terraform-provider-gitlab#6309](https://gitlab.com/gitlab-org/terraform-provider-gitlab/-/work_items/6309)), and whether each provider
-exposes topics — the discovery mechanism below depends on them.
+Two of these are things to confirm rather than assume, and both are spike items: the GitLab Terraform provider has an open report of project settings such as
+the README and default branch not being applied on create
+([terraform-provider-gitlab#6309](https://gitlab.com/gitlab-org/terraform-provider-gitlab/-/work_items/6309)), and whether each provider exposes topics — the
+discovery mechanism below depends on them.
 
-**OAuth applications are where GitLab genuinely differs, and it is a capability difference, not a naming one.** GitLab's Applications
-API manages **instance-wide** applications and requires an **administrator**; it cannot manage group or user applications. So a GitLab
-connection can create and rotate an application only on a **self-managed** instance with an administrator token — a much more powerful
-credential than a repository token, so it belongs on its own connection under the platform-only rule. On GitLab.com there is no
-instance administrator, so it is no different from GitHub, whose OAuth Apps have no creation API at all. (Gitea's `gitea_oauth2_app` is,
-as far as this RFC found, created for the token's own user; that ownership needs confirming.) Rather than a rule per vendor, this is
-expressed once, as `mode`:
+**OAuth applications are where GitLab genuinely differs, and it is a capability difference, not a naming one.** GitLab's Applications API manages
+**instance-wide** applications and requires an **administrator**; it cannot manage group or user applications. So a GitLab connection can create and rotate an
+application only on a **self-managed** instance with an administrator token — a much more powerful credential than a repository token, so it belongs on its own
+connection under the platform-only rule. On GitLab.com there is no instance administrator, so it is no different from GitHub, whose OAuth Apps have no creation
+API at all. (Gitea's `gitea_oauth2_app` is, as far as this RFC found, created for the token's own user; that ownership needs confirming.) Rather than a rule per
+vendor, this is expressed once, as `mode`:
 
 - **`managed`** — Core creates the host-side application, publishes its credentials, and can rotate them. Available for Gitea and
   self-managed GitLab.
@@ -468,29 +454,26 @@ What both modes provide is the single tracked location in Vault, which is what D
 
 ### Credentials in Vault
 
-Output flow is the one `platform-database-clusters` already uses: the Workspace writes a connection Secret, an ESO `PushSecret` mirrors
-the whole Secret to Vault as a single write, `deletionPolicy: Delete` so removing the XR removes the entry. Paths follow the
-[Vault path convention](../../CLAUDE.md#vault-path-convention) — `remoteKey` omits the KV mount prefix:
+Output flow is the one `platform-database-clusters` already uses: the Workspace writes a connection Secret, an ESO `PushSecret` mirrors the whole Secret to
+Vault as a single write, `deletionPolicy: Delete` so removing the XR removes the entry. Paths follow the [Vault path
+convention](../../CLAUDE.md#vault-path-convention) — `remoteKey` omits the KV mount prefix:
 
 | `owner` | Store | `remoteKey` | Full logical path |
 |---|---|---|---|
 | `platform` | platform store, scoped to `platform/` | `oauth/{name}/credentials` | `platform/oauth/{name}/credentials` |
 | a tenant | tenant store, scoped to `tenants/` | `{owner}/oauth/{name}/credentials` | `tenants/{owner}/oauth/{name}/credentials` |
 
-A managed `XScmUser`'s generated password follows the same flow, at `{owner}/scm-users/{username}/credentials` (or `scm-users/...` under
-`platform`).
+A managed `XScmUser`'s generated password follows the same flow, at `{owner}/scm-users/{username}/credentials` (or `scm-users/...` under `platform`).
 
-The OAuth entry carries `client_id`, `client_secret`, `vendor`, `base_url`, `redirect_uris` and `generation`. **OpenBao:** it keeps the Vault
-API and KV v2, so the `ClusterSecretStore` changes its server URL and nothing in the composition or the path convention changes.
-External Secrets Operator documents OpenBao as supported through its Vault provider (tested upstream with ESO v0.16.1 and OpenBao
-v2.2.0); running it against this repo's own stores is still a spike.
+The OAuth entry carries `client_id`, `client_secret`, `vendor`, `base_url`, `redirect_uris` and `generation`. **OpenBao:** it keeps the Vault API and KV v2, so
+the `ClusterSecretStore` changes its server URL and nothing in the composition or the path convention changes. External Secrets Operator documents OpenBao as
+supported through its Vault provider (tested upstream with ESO v0.16.1 and OpenBao v2.2.0); running it against this repo's own stores is still a spike.
 
 ### Rotation
 
-Rotation applies to `managed` OAuth apps and is explicit and Git-driven: bumping `spec.parameters.rotation.generation` makes the
-composition replace the host-side application (new client id and secret), the `PushSecret` writes a new KV v2 version, and the previous
-versions stay in Vault as the history that answers "when did this last change, and to what". The bump is a normal commit, so it appears
-in the audit trail like any other change.
+Rotation applies to `managed` OAuth apps and is explicit and Git-driven: bumping `spec.parameters.rotation.generation` makes the composition replace the
+host-side application (new client id and secret), the `PushSecret` writes a new KV v2 version, and the previous versions stay in Vault as the history that
+answers "when did this last change, and to what". The bump is a normal commit, so it appears in the audit trail like any other change.
 
 Known limits, stated up front:
 
@@ -507,8 +490,8 @@ Known limits, stated up front:
 
 A declared, portable shape is what removes the lock-in; moving the *content* of a host is a separate job. Two migrations are covered.
 
-**From `XGiteaOrg` / `Team` / `User` / `Repository` to `XScm*`, on the same Gitea.** Nothing is destroyed at any step, and each step
-before the handover is reversible:
+**From `XGiteaOrg` / `Team` / `User` / `Repository` to `XScm*`, on the same Gitea.** Nothing is destroyed at any step, and each step before the handover is
+reversible:
 
 1. Add an `XScmConnection` for the Gitea.
 2. Declare each existing object as an `XScm*` resource in **`observed`** mode. It reads the object the old kind manages and changes
@@ -519,9 +502,9 @@ before the handover is reversible:
    remove the flag.
 4. Delete the old XR. Because its Workspace was orphaned, the Gitea object is left alone.
 
-**Removing the old kinds.** Only after every old XR has been deleted, in that order, in the release that drops them — unless, as
-happened here, there is no cluster running them to protect in the first place (checked: this project had no live deployment of
-`gitea-*` when `XScm*` shipped), in which case the whole sequence collapses to steps 2–4 done at once:
+**Removing the old kinds.** Only after every old XR has been deleted, in that order, in the release that drops them — unless, as happened here, there is no
+cluster running them to protect in the first place (checked: this project had no live deployment of `gitea-*` when `XScm*` shipped), in which case the whole
+sequence collapses to steps 2–4 done at once:
 
 1. No `XGitea*` XR remains, and each one's Workspace was orphaned **before** it was deleted. Deleting an XRD with XRs still present
    deletes them, which deletes their Workspaces, which runs a destroy against Gitea. (Moot with no live cluster, but the rule stands
@@ -534,8 +517,8 @@ happened here, there is no cluster running them to protect in the first place (c
    and the test fixtures stay in the repo for reference; only `VERSIONS.yaml` and the install manifests say the kind no longer
    exists.
 
-`import` is explicit and one-shot by design. There is still no silent "create if missing, otherwise adopt": adoption always happens
-because a person set `import: true` on one resource.
+`import` is explicit and one-shot by design. There is still no silent "create if missing, otherwise adopt": adoption always happens because a person set
+`import: true` on one resource.
 
 **Between hosts, for example Gitea to GitHub.** Core moves the declared shape; the content moves out of band:
 
@@ -547,8 +530,8 @@ because a person set `import: true` on one resource.
 4. Switch consumers — Argo CD ApplicationSets, Dex connectors — to the target.
 5. Retire the source resources with `retain: true`, so nothing on the old host is deleted.
 
-**`scmRef` is immutable** (enforced by the schema). Repointing an existing managed resource at another host would make its Workspace
-plan a destroy of the object on the old host; a migration is always a *new* resource beside the old one, never an edit.
+**`scmRef` is immutable** (enforced by the schema). Repointing an existing managed resource at another host would make its Workspace plan a destroy of the
+object on the old host; a migration is always a *new* resource beside the old one, never an edit.
 
 ### GitOps streaming
 
@@ -565,25 +548,23 @@ flowchart LR
     V -.->|"topic: wxops-managed"| A["Argo CD ApplicationSet<br/>SCM provider generator"]
 ```
 
-Secrets never travel through Git: a commit carries only the XR, the portal reads `status.vault.path` and the host-side result, and the
-credential itself moves Workspace → Secret → Vault. Created repositories carry a topic so an Argo CD ApplicationSet with an SCM provider
-generator (which supports GitHub, GitLab and Gitea) can discover them across hosts without a per-repository Application. This design
-works under every model in [open decision 3](../_archives/ROADMAP.md#open-decisions) (portal → Git, portal → API, hybrid) and does not
-pre-empt it.
+Secrets never travel through Git: a commit carries only the XR, the portal reads `status.vault.path` and the host-side result, and the credential itself moves
+Workspace → Secret → Vault. Created repositories carry a topic so an Argo CD ApplicationSet with an SCM provider generator (which supports GitHub, GitLab and
+Gitea) can discover them across hosts without a per-repository Application. This design works under every model in [open decision
+3](../_archives/ROADMAP.md#open-decisions) (portal → Git, portal → API, hybrid) and does not pre-empt it.
 
 ### Compatibility and change tier
 
-Five new packages, one per kind: `scm-connection`, `scm-team`, `scm-user`, `scm-repository` and `scm-oauth-app`. Each has
-`current: unreleased` in `VERSIONS.yaml`. Adding a package is `safe` under `tests/api_compat.py`; no released XRD changes. All would be
-labelled `channel: stable` per [ADR-001](../adr/001-package-channel-label.md).
+Five new packages, one per kind: `scm-connection`, `scm-team`, `scm-user`, `scm-repository` and `scm-oauth-app`. Each has `current: unreleased` in
+`VERSIONS.yaml`. Adding a package is `safe` under `tests/api_compat.py`; no released XRD changes. All would be labelled `channel: stable` per
+[ADR-001](../adr/001-package-channel-label.md).
 
 ### Testing
 
-Per the [testing rules](../../CLAUDE.md#testing), each conditional branch needs a case. Most vendor behaviour reaches the module only
-through the connection Secret, with no branch in the composition at all — offline goldens prove the `Workspace` each kind renders
-(module text, variables, `varFiles` Secret name) for each scope, and vendor behaviour is proven where it lives, in OpenTofu.
-`scm-repository` is the exception: its `vendor` field *is* a composition-level branch (a `match` transform choosing the whole module
-string), so its goldens also prove that the right module — and only the right module's provider — gets selected.
+Per the [testing rules](../../CLAUDE.md#testing), each conditional branch needs a case. Most vendor behaviour reaches the module only through the connection
+Secret, with no branch in the composition at all — offline goldens prove the `Workspace` each kind renders (module text, variables, `varFiles` Secret name) for
+each scope, and vendor behaviour is proven where it lives, in OpenTofu. `scm-repository` is the exception: its `vendor` field *is* a composition-level branch (a
+`match` transform choosing the whole module string), so its goldens also prove that the right module — and only the right module's provider — gets selected.
 
 - a golden case per vendor for each kind, in both `managed` and `observed` where applicable, plus owner `platform` vs a tenant for the
   Vault path
@@ -602,9 +583,9 @@ string), so its goldens also prove that the right module — and only the right 
 - **a field-matrix invariant**: every neutral field either renders on all three hosts or is explicitly rejected for those that cannot
   honour it, so no field is ever silently ignored on one host. This is what keeps GitLab from drifting away from the others
 
-This proves the rendered output only. Whether the host API accepts the HCL, and whether the OpenBao store behaves like Vault, need a
-cluster and a live host — the kind-based e2e tier in the roadmap. An in-cluster Gitea (MIT-licensed, one container) is the natural first
-target, and doubles as RFC-002's acceptance environment.
+This proves the rendered output only. Whether the host API accepts the HCL, and whether the OpenBao store behaves like Vault, need a cluster and a live host —
+the kind-based e2e tier in the roadmap. An in-cluster Gitea (MIT-licensed, one container) is the natural first target, and doubles as RFC-002's acceptance
+environment.
 
 ## Drawbacks
 
@@ -648,9 +629,8 @@ target, and doubles as RFC-002's acceptance environment.
 
 ## Rollout Plan
 
-Each phase is useful alone and can ship as its own release. The work starts with **GitHub and Gitea together** (Phases 1–2); GitLab follows. The kind
-matrix is confirmed against each provider in the
-same spike.
+Each phase is useful alone and can ship as its own release. The work starts with **GitHub and Gitea together** (Phases 1–2); GitLab follows. The kind matrix is
+confirmed against each provider in the same spike.
 
 - [ ] **Phase 1 — the backbone, on GitHub and Gitea together.** `scm-connection`; `scm-repository` (`managed` and `observed`);
   `scm-oauth-app` — `managed` on Gitea, `observed` on GitHub. That is enough for the Dex GitHub and Gitea connectors to reference an
@@ -673,9 +653,8 @@ same spike.
 - [ ] **A host-to-host migration rehearsal** — Gitea to GitHub on a scratch pair, following *Migration*, before it is described as
   supported.
 
-On acceptance, the decisions this settles are recorded as ADRs — the connection-and-`scmRef` indirection, the `XScm*` family and
-neutral kinds over per-vendor kinds, `managed | observed` as the one mode vocabulary with `import` as the explicit adoption step, and the
-Vault credential path.
+On acceptance, the decisions this settles are recorded as ADRs — the connection-and-`scmRef` indirection, the `XScm*` family and neutral kinds over per-vendor
+kinds, `managed | observed` as the one mode vocabulary with `import` as the explicit adoption step, and the Vault credential path.
 
 ## Open Questions
 

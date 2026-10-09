@@ -1,7 +1,7 @@
 # XScmConnection
 
-Registers one Git hosting service — its vendor, base URL, default organisation and credential — and
-renders that credential into the Secret every other `scm.wxops.cloud` resource reads.
+Registers one Git hosting service — its vendor, base URL, default organisation and credential — and renders that credential into the Secret every other
+`scm.wxops.cloud` resource reads.
 
 | | |
 |---|---|
@@ -12,9 +12,8 @@ renders that credential into the Secret every other `scm.wxops.cloud` resource r
 | **API versions** | `v1alpha1` (served, storage) |
 | **Package** | [`package/scm/connection/`](../../package/scm/connection) — see [`VERSIONS.yaml`](../../VERSIONS.yaml) for the current package version |
 
-A connection is **platform-owned**: it carries the host token, so tenants reference it by name and
-never see the credential. That is why it is a distinct cluster-scoped Kind — plain RBAC can withhold
-`create` on it while granting the resources that use it.
+A connection is **platform-owned**: it carries the host token, so tenants reference it by name and never see the credential. That is why it is a distinct
+cluster-scoped Kind — plain RBAC can withhold `create` on it while granting the resources that use it.
 
 ## `spec.parameters`
 
@@ -29,9 +28,8 @@ never see the credential. That is why it is a distinct cluster-scoped Kind — p
 
 ## The credential
 
-The token is the **bootstrap secret**: an operator writes it to the secret store, and Core never
-mints it. The composition emits an `ExternalSecret` that renders it, next to the connection's
-non-secret fields, into one Secret in tfvars form:
+The token is the **bootstrap secret**: an operator writes it to the secret store, and Core never mints it. The composition emits an `ExternalSecret` that
+renders it, next to the connection's non-secret fields, into one Secret in tfvars form:
 
 | | |
 |---|---|
@@ -39,12 +37,10 @@ non-secret fields, into one Secret in tfvars form:
 | **Secret** | `crossplane-system/scm-connection-<name>`, key `credentials` |
 | **Contents** | `vendor`, `base_url`, `default_org`, `access`, `token` |
 
-A consumer never reads the connection object: it turns `scmRef.name` into that Secret name with the
-same `Format` transform and hands it to its `Workspace` as `varFiles`. The vendor therefore reaches
-the OpenTofu module as a variable, which is why no composition contains vendor logic.
+A consumer never reads the connection object: it turns `scmRef.name` into that Secret name with the same `Format` transform and hands it to its `Workspace` as
+`varFiles`. The vendor therefore reaches the OpenTofu module as a variable, which is why no composition contains vendor logic.
 
-`default_org` is deliberately not called `org`: a consumer's own `org` is a separate variable, so
-neither source can silently override the other.
+`default_org` is deliberately not called `org`: a consumer's own `org` is a separate variable, so neither source can silently override the other.
 
 ## `status`
 

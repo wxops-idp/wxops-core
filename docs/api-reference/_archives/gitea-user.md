@@ -39,8 +39,7 @@ Manages a single Gitea user lifecycle (create / update / delete).
 | `userId` | `string` | Gitea's internal numeric user ID. |
 | `username` | `string` | Resolved Gitea username (echoed from the Terraform output). |
 
-`initial_password` is marked `sensitive` in the Terraform module and is routed
-to the connection secret — it never appears in status.
+`initial_password` is marked `sensitive` in the Terraform module and is routed to the connection secret — it never appears in status.
 
 ## Example
 

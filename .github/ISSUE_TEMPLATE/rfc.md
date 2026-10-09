@@ -15,7 +15,7 @@ resources, or commits the platform to a new tool.
 
 Before writing: check the RFC index's Status column, each RFC's own rejections, the archived
 development-docs/_archives/ROADMAP.md "Out of scope" and "Decided and rejected", and
-docs/core-ideas/solution-matrix.md — your idea may be tracked, planned, or already
+development-docs/core-ideas/solution-matrix.md — your idea may be tracked, planned, or already
 closed. Referencing that beats rediscovering it in review.
 -->
 

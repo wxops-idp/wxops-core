@@ -1,8 +1,9 @@
 # Solution Matrix — AI Intelligence × Multi-Cluster × Observability
 
->[!NOTE]
-> **Status: summary index, kept current by hand.**
-> One page over the whole doc family: every problem across the three domains, the chosen tool or solution, **what W'xOps solves today with existing packages** vs. what must be introduced, the detail doc for each, and the publicly documented industry practice to learn from. Read it as a map for brainstorming and prioritising — each row links to the place where the reasoning lives.
+> [!NOTE]
+> **Status: summary index, kept current by hand.** One page over the whole doc family: every problem across the three domains, the chosen tool or solution,
+> **what W'xOps solves today with existing packages** vs. what must be introduced, the detail doc for each, and the publicly documented industry practice to
+> learn from. Read it as a map for brainstorming and prioritising — each row links to the place where the reasoning lives.
 
 **Legend — W'xOps state**
 
@@ -32,8 +33,8 @@
 | # | Problem | Solution / tool | W'xOps state | Detail doc | Industry practice to study |
 |---|---|---|---|---|---|
 | O1 | Per-app metrics scrape that actually works | `ServiceMonitor`/`PodMonitor` emission, `kind: auto` | ✅ `XTenantApp` `spec.parameters.monitoring` (v0.4.0) | [observability.md](observability.md) | Prometheus Operator model — standard kube-prometheus-stack practice |
-| O2 | Portal-pollable readiness per resource | `status.created`/`ready` derived from `ocds`, uniform across packages | ✅ all seven packages (v0.4.0) | [status-contract.md](../api-reference/status-contract.md) | Kubernetes operator status conventions; conditions done honestly |
-| O3 | Partial-health honesty (app up, TLS pending) | `ready` / `dependenciesReady` split | ✅ `XTenantApp` | [status-contract.md](../api-reference/status-contract.md#tenant-app--the-one-package-that-needs-two-fields-not-one) | — |
+| O2 | Portal-pollable readiness per resource | `status.created`/`ready` derived from `ocds`, uniform across packages | ✅ all seven packages (v0.4.0) | [status-contract.md](../../docs/api-reference/status-contract.md) | Kubernetes operator status conventions; conditions done honestly |
+| O3 | Partial-health honesty (app up, TLS pending) | `ready` / `dependenciesReady` split | ✅ `XTenantApp` | [status-contract.md](../../docs/api-reference/status-contract.md#tenant-app--the-one-package-that-needs-two-fields-not-one) | — |
 | O4 | Cardinality protection in multi-tenant Prometheus | `sampleLimit` set by the composition, not the tenant | ✅ `XTenantApp` monitoring block | [observability.md](observability.md#cardinality) | Multi-tenant Prometheus guardrail practice (limits at ingest) |
 | O5 | Status says *which*, should say *why* | `status.notReady` reasons list | ❌ proposed — `safe`-tier KCL change, all packages | [self-service-operations.md](self-service-operations.md#whats-missing) | Operator `reason`/`message` condition discipline |
 | O6 | Alerts that carry their runbook | `PrometheusRule` emission + `runbook_url` annotation | ❌ proposed — future `monitoring.alerts` on `XTenantApp` | [self-service-operations.md](self-service-operations.md#pillar-2--runbooks-as-platform-contract) | [Prometheus alerting best practices](https://prometheus.io/docs/practices/alerting/) — `runbook_url` convention |
@@ -109,10 +110,11 @@ The "or more should be introduced" answer, split by where the work lands:
 | `XDarlane` — standalone workspace claim (per-developer, per-agent, TTL) | A10–A11, Guardian's stated prerequisite | [darlane.md](darlane.md#whats-next-xdarlane-xrd) |
 | `XPlatformCluster` — CAPI cluster as a platform API, the cluster-scope `tier: dedicated` | M2, M10 | [multi-cluster-scale.md](multi-cluster-scale.md) (currently out-of-scope in [multi-cluster.md](multi-cluster.md#out-of-scope) — graduates when manual provisioning is stable) |
 
-**Platform infrastructure** (not packages — installed once, per hub or per spoke): spoke `ProviderConfig` + credentials · CAPI + `ClusterResourceSet` · Pinniped Supervisor/Concierge · tunnel (Tailscale/Teleport) · Thanos-or-equivalent + Loki · event exporter (O11) · ExternalDNS routing policies / k8gb · **kernel plane** — Hubble (O13), runtime-security DaemonSet (O15).
+**Platform infrastructure** (not packages — installed once, per hub or per spoke): spoke `ProviderConfig` + credentials · CAPI + `ClusterResourceSet` · Pinniped
+Supervisor/Concierge · tunnel (Tailscale/Teleport) · Thanos-or-equivalent + Loki · event exporter (O11) · ExternalDNS routing policies / k8gb · **kernel plane**
+— Hubble (O13), runtime-security DaemonSet (O15).
 
-The kernel plane is the one bucket where cost is wildly uneven, so it does not collapse into a
-single line:
+The kernel plane is the one bucket where cost is wildly uneven, so it does not collapse into a single line:
 
 | Component | Serves | Cost | Note |
 |---|---|---|---|
@@ -120,18 +122,23 @@ single line:
 | **Retina** — only for non-Cilium spokes | O13 | Medium, per spoke | Optional. The alternative is accepting a non-uniform signal across the fleet, which is probably the right call |
 | **Falco** — detect-only, `falcosidekick` push | O15 | Medium + **ongoing tuning** | A privileged DaemonSet on every node. Budget the tuning or do not start |
 
-**No XRD or composition change is required for any of it** — which is the point of the ownership
-split in [observability.md](observability.md#ownership-what-belongs-here-and-what-does-not). The
-kernel plane is collected like every other signal: same push direction, same label contract, same
-cardinality ladder. If it ever needs a field on `XTenantApp`, that is the signal something has gone
-wrong in the design.
+**No XRD or composition change is required for any of it** — which is the point of the ownership split in
+[observability.md](observability.md#ownership-what-belongs-here-and-what-does-not). The kernel plane is collected like every other signal: same push direction,
+same label contract, same cardinality ladder. If it ever needs a field on `XTenantApp`, that is the signal something has gone wrong in the design.
 
-**Ecosystem** (around core, not in it): portal correlation fork (A2) · docs site as runbook CDN · ADR/RFC issue templates + `docs/incidents/` convention · SRE-agent skill tree ([knowledge-architecture.md](knowledge-architecture.md#the-darlane-sre-agent-mindmap)) · Guardian sidecars · declared-vs-observed dependency diff (O14 — the XR tree supplies the declared graph, flow data the observed one; the delta is the artefact).
+**Ecosystem** (around core, not in it): portal correlation fork (A2) · docs site as runbook CDN · ADR/RFC issue templates + `docs/incidents/` convention ·
+SRE-agent skill tree ([knowledge-architecture.md](knowledge-architecture.md#the-darlane-sre-agent-mindmap)) · Guardian sidecars · declared-vs-observed
+dependency diff (O14 — the XR tree supplies the declared graph, flow data the observed one; the delta is the artefact).
 
 ---
 
 ## How to use this page
 
-Brainstorming: pick a row, read its detail doc, then its industry reference — the row is the claim, the doc is the reasoning, the reference is the practiced version at scale. Prioritising: everything ✅ needed no decision; everything 🔶 has a named missing piece; the ❌ rows are ordered inside their detail docs' own sequenced-adoption sections, not here. And the two ⛔ rows exist so this page also records what *not* to reopen.
+Brainstorming: pick a row, read its detail doc, then its industry reference — the row is the claim, the doc is the reasoning, the reference is the practiced
+version at scale. Prioritising: everything ✅ needed no decision; everything 🔶 has a named missing piece; the ❌ rows are ordered inside their detail docs' own
+sequenced-adoption sections, not here. And the two ⛔ rows exist so this page also records what *not* to reopen.
 
-The single thread across all three domains, stated once: **the platform's declarative core is what makes every hard problem cheaper** — status makes diagnosis walkable (A1), one-XR-per-cluster makes fleets portal-shaped (M7), the declared dependency graph makes drift detectable by subtraction (O14), and PR-through-the-gate makes even AI-suggested fixes as safe as human ones (A9). Every new component above either feeds that core or consumes it; anything that competes with it (Karmada's API composition-emitted RBAC, ungated auto-remediation) is where the ⛔ rows come from.
+The single thread across all three domains, stated once: **the platform's declarative core is what makes every hard problem cheaper** — status makes diagnosis
+walkable (A1), one-XR-per-cluster makes fleets portal-shaped (M7), the declared dependency graph makes drift detectable by subtraction (O14), and
+PR-through-the-gate makes even AI-suggested fixes as safe as human ones (A9). Every new component above either feeds that core or consumes it; anything that
+competes with it (Karmada's API composition-emitted RBAC, ungated auto-remediation) is where the ⛔ rows come from.

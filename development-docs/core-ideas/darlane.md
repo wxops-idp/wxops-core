@@ -1,13 +1,10 @@
 # Darlane — In-Cluster Developer Environment
 
-Darlane is a platform-provisioned parallel deployment running alongside your production
-application inside the same Kubernetes namespace. It shares the same infrastructure —
-Vault secrets, database connections, monitoring, logging, service mesh — with zero
-configuration required from the developer.
+Darlane is a platform-provisioned parallel deployment running alongside your production application inside the same Kubernetes namespace. It shares the same
+infrastructure — Vault secrets, database connections, monitoring, logging, service mesh — with zero configuration required from the developer.
 
-**Darlane is not a sandbox.** It does not simulate, mock, or duplicate production
-infrastructure. It is a second lane inside the real cluster, already wired to everything
-your application needs, scaled to zero at rest.
+**Darlane is not a sandbox.** It does not simulate, mock, or duplicate production infrastructure. It is a second lane inside the real cluster, already wired to
+everything your application needs, scaled to zero at rest.
 
 ---
 
@@ -80,17 +77,15 @@ your application needs, scaled to zero at rest.
 | Wait 8–15 min CI/CD cycle to test a changed prompt template | Sync file to pod → hot-reload → test in seconds |
 | SRE SSHs into prod, guesses at fix, deploys via CI | Agent reads real logs → injects fix into darlane → validates with mirrored traffic → opens PR |
 
-The core insight: **secrets, database connections, and monitoring already exist in
-the cluster.** Darlane inherits all of it without duplication. The cost is one
-extra Deployment at `replicas: 0` most of the time.
+The core insight: **secrets, database connections, and monitoring already exist in the cluster.** Darlane inherits all of it without duplication. The cost is
+one extra Deployment at `replicas: 0` most of the time.
 
 ---
 
 ## Darlane vs. `kubectl debug` / ephemeral containers
 
-`kubectl debug` and ephemeral containers are Kubernetes-native debugging primitives.
-They are the right tool in specific situations — and the wrong tool for everything
-Darlane is designed for. Understanding the difference matters for choosing correctly.
+`kubectl debug` and ephemeral containers are Kubernetes-native debugging primitives. They are the right tool in specific situations — and the wrong tool for
+everything Darlane is designed for. Understanding the difference matters for choosing correctly.
 
 ### What `kubectl debug` actually does
 
@@ -106,10 +101,8 @@ kubectl debug deployment/payment-api \
   --image=ghcr.io/team/payment-api:debug
 ```
 
-An ephemeral container is injected **directly into the target pod**. It shares the
-pod's network namespace (same IP, same sockets), optionally the PID namespace (can
-`strace` the production process), and the pod's volumes. It cannot be restarted —
-if the process exits, the container is gone for the lifetime of that pod.
+An ephemeral container is injected **directly into the target pod**. It shares the pod's network namespace (same IP, same sockets), optionally the PID namespace
+(can `strace` the production process), and the pod's volumes. It cannot be restarted — if the process exits, the container is gone for the lifetime of that pod.
 
 ### The fundamental difference
 
@@ -149,8 +142,7 @@ Darlane (<appName>-darlane Deployment):
 
 ### When `kubectl debug` is the right call
 
-Darlane does not replace ephemeral containers for their core use case. Use
-`kubectl debug` when:
+Darlane does not replace ephemeral containers for their core use case. Use `kubectl debug` when:
 
 | Situation | Why ephemeral is right |
 |---|---|
@@ -172,29 +164,24 @@ Darlane does not replace ephemeral containers for their core use case. Use
 
 ### The underlying reason Darlane was introduced
 
-`kubectl debug` and `kubectl exec` into production both require you to enter the
-production pod or a container that is part of it. Every action you take is inside
-the blast radius of a production workload: a memory-intensive operation risks an OOM
-that kills real user requests, a network call is made from a production identity, a
-filesystem write is inside a production container.
+`kubectl debug` and `kubectl exec` into production both require you to enter the production pod or a container that is part of it. Every action you take is
+inside the blast radius of a production workload: a memory-intensive operation risks an OOM that kills real user requests, a network call is made from a
+production identity, a filesystem write is inside a production container.
 
-The problem Darlane solves is different: **how do you get all the context of
-production (secrets, database, network, real traffic) without being inside production?**
+The problem Darlane solves is different: **how do you get all the context of production (secrets, database, network, real traffic) without being inside
+production?**
 
-A separate Deployment with the same `envFrom`, `secretsFrom`, and network identity
-answers that question. The darlane pod is wired to the same infrastructure but is
-independently scheduled, independently resourced, and carries no production
-request-handling responsibility — unless you explicitly opt in with `trafficWeight`.
+A separate Deployment with the same `envFrom`, `secretsFrom`, and network identity answers that question. The darlane pod is wired to the same infrastructure
+but is independently scheduled, independently resourced, and carries no production request-handling responsibility — unless you explicitly opt in with
+`trafficWeight`.
 
-That's the design choice: isolation by default, access to production context by
-inheritance, production traffic routing only when explicitly declared.
+That's the design choice: isolation by default, access to production context by inheritance, production traffic routing only when explicitly declared.
 
 ---
 
 ## How it works
 
-When `darlane.enabled: true`, the platform composes a second `<appName>-darlane`
-Deployment in the same namespace as your production app:
+When `darlane.enabled: true`, the platform composes a second `<appName>-darlane` Deployment in the same namespace as your production app:
 
 - **`replicas: 0` by default** — zero cost at rest, scale up on demand
 - **No `Service` or `Ingress`** — zero external exposure unless you opt in
@@ -245,10 +232,8 @@ kubectl patch xtenantapp <xr-name> \
   -p '{"spec":{"parameters":{"darlane":{"replicas":0}}}}'
 ```
 
-> **Why not `kubectl scale`?** The darlane Deployment is Crossplane-managed.
-> `kubectl scale` is a temporary override — the next Crossplane reconcile cycle
-> (every ~30–60 seconds) resets replicas back to whatever `darlane.replicas` says
-> in the XR. Always patch the XR to make the change persist.
+> **Why not `kubectl scale`?** The darlane Deployment is Crossplane-managed. `kubectl scale` is a temporary override — the next Crossplane reconcile cycle
+> (every ~30–60 seconds) resets replicas back to whatever `darlane.replicas` says in the XR. Always patch the XR to make the change persist.
 
 ---
 
@@ -256,8 +241,7 @@ kubectl patch xtenantapp <xr-name> \
 
 ### 1 — Exec and debug
 
-The simplest use case. Scale the pod up, exec in, and interact with the running
-application in a real environment.
+The simplest use case. Scale the pod up, exec in, and interact with the running application in a real environment.
 
 ```bash
 kubectl -n <namespace> exec -it deployment/<appName>-darlane -- bash
@@ -270,13 +254,11 @@ psql $DATABASE_URL            # real DB connection, no config
 python scripts/test_rag_pipeline.py
 ```
 
-Useful for: quick inspection, running migration checks, verifying environment
-configuration, ad-hoc testing.
+Useful for: quick inspection, running migration checks, verifying environment configuration, ad-hoc testing.
 
 ### 2 — File sync and hot reload (AI-era development)
 
-For iterative development — especially AI integrations where the feedback loop must
-be seconds, not minutes.
+For iterative development — especially AI integrations where the feedback loop must be seconds, not minutes.
 
 **How it works:**
 
@@ -314,9 +296,8 @@ wxops darlane sync payment-api --env staging
 
 **Why this matters for AI development specifically:**
 
-When iterating on prompt templates, RAG pipeline configuration, Claude tool
-definitions, or agent decision trees, you need real data and real API keys.
-A local mock is insufficient; a full CI/CD cycle is too slow.
+When iterating on prompt templates, RAG pipeline configuration, Claude tool definitions, or agent decision trees, you need real data and real API keys. A local
+mock is insufficient; a full CI/CD cycle is too slow.
 
 ```
 Change prompt template locally
@@ -331,8 +312,7 @@ The entire loop takes 3–5 seconds. The same change via CI/CD takes 8–15 minu
 
 ### 3 — Traffic mirroring (mirrord)
 
-Mirror real production traffic into the darlane pod. Your code handles actual
-requests — without affecting the production pod or real users.
+Mirror real production traffic into the darlane pod. Your code handles actual requests — without affecting the production pod or real users.
 
 ```bash
 # Mirror traffic from the main Deployment to the darlane pod
@@ -343,8 +323,7 @@ mirrord exec \
   -- uvicorn main:app --reload
 ```
 
-mirrord copies incoming requests to both the production pod and your process.
-The production pod still handles real users. You observe real request patterns,
+mirrord copies incoming requests to both the production pod and your process. The production pod still handles real users. You observe real request patterns,
 real payloads, real edge cases — without any user seeing your changes.
 
 **Modes:**
@@ -354,13 +333,11 @@ real payloads, real edge cases — without any user seeing your changes.
 | Mirror (default) | `mirrord exec --target ...` | Traffic copied to your process; prod unaffected |
 | Steal | `mirrord exec --steal --target ...` | Traffic redirected to your process; use with care |
 
-Mirror mode is safe in all environments. Steal mode on production requires
-`darlane.productionOverride: true` in the XR (double-opt-in, auditable).
+Mirror mode is safe in all environments. Steal mode on production requires `darlane.productionOverride: true` in the XR (double-opt-in, auditable).
 
 ### 4 — Traffic interception (Telepresence)
 
-Full tunnel: your local process gets the pod's network identity and handles all
-traffic routed to the darlane pod.
+Full tunnel: your local process gets the pod's network identity and handles all traffic routed to the darlane pod.
 
 ```bash
 telepresence connect --namespace <namespace>
@@ -376,16 +353,14 @@ telepresence intercept <appName>-darlane \
   --env-file .env.local
 ```
 
-Telepresence is heavier (requires a cluster-side Traffic Manager) but gives you
-full network identity — useful when you need to test service-to-service calls
+Telepresence is heavier (requires a cluster-side Traffic Manager) but gives you full network identity — useful when you need to test service-to-service calls
 that originate from the pod's identity, not your laptop's.
 
 ---
 
 ## A/B testing and feature flags
 
-When `darlane.trafficWeight` is set, the platform composes a `Service` for the
-darlane pod and a Traefik `TraefikService` weighted split between the production
+When `darlane.trafficWeight` is set, the platform composes a `Service` for the darlane pod and a Traefik `TraefikService` weighted split between the production
 Deployment and the darlane Deployment.
 
 ```yaml
@@ -404,14 +379,11 @@ This creates a three-mode spectrum via a single parameter:
 
 ### Sticky sessions
 
-By default `trafficWeight` distributes each request independently — a single user
-can hit both backends within the same session. For A/B tests this produces noise:
-the same user sees both variants, and any stateful flow (cart, auth token, multi-step
-form) can break mid-session.
+By default `trafficWeight` distributes each request independently — a single user can hit both backends within the same session. For A/B tests this produces
+noise: the same user sees both variants, and any stateful flow (cart, auth token, multi-step form) can break mid-session.
 
-Enable `stickySession` to pin each client to one backend for the session lifetime.
-Traefik sets a session cookie on the first response; every subsequent request from
-that browser is routed to the same backend.
+Enable `stickySession` to pin each client to one backend for the session lifetime. Traefik sets a session cookie on the first response; every subsequent request
+from that browser is routed to the same backend.
 
 ```yaml
 darlane:
@@ -433,16 +405,13 @@ darlane:
 | Canary validation — aggregate error rate check | No — per-request is fine |
 | Full canary (`trafficWeight: 100`) | No — all traffic goes to darlane |
 
-**Browser clients only.** API clients that do not forward cookies (mobile SDKs,
-service-to-service calls, CLI tools) remain per-request regardless of this setting.
-For API-client A/B testing, use a dedicated feature flag service with SDK-level
-targeting instead.
+**Browser clients only.** API clients that do not forward cookies (mobile SDKs, service-to-service calls, CLI tools) remain per-request regardless of this
+setting. For API-client A/B testing, use a dedicated feature flag service with SDK-level targeting instead.
 
 ### Header routing
 
-Send a specific HTTP header and every request goes directly to the darlane pod —
-no cookie, no session state, no random traffic spill. Works with `trafficWeight: 0`
-(zero production impact) or alongside a weighted canary.
+Send a specific HTTP header and every request goes directly to the darlane pod — no cookie, no session state, no random traffic spill. Works with
+`trafficWeight: 0` (zero production impact) or alongside a weighted canary.
 
 ```yaml
 darlane:
@@ -458,15 +427,12 @@ darlane:
 curl -H "X-Target-Env: darlane" https://payment-api.example.com/api/checkout
 ```
 
-The darlane `ClusterIP` Service is always emitted when header routing is active,
-independent of `trafficWeight`.
+The darlane `ClusterIP` Service is always emitted when header routing is active, independent of `trafficWeight`.
 
 **How the routing is implemented:**
 
-The composition emits **two separate `IngressRoute` objects** with fully explicit
-priorities. Same-IngressRoute priority handling is unreliable in Traefik when routes
-mix `TraefikService` and plain `Service` backends — separate objects with explicit
-integers avoid that entirely:
+The composition emits **two separate `IngressRoute` objects** with fully explicit priorities. Same-IngressRoute priority handling is unreliable in Traefik when
+routes mix `TraefikService` and plain `Service` backends — separate objects with explicit integers avoid that entirely:
 
 ```
 IngressRoute: payment-api          priority: 1   (fallback — no header)
@@ -478,19 +444,16 @@ IngressRoute: payment-api-darlane  priority: 100 (wins when header present)
   → payment-api-darlane Service
 ```
 
-Traefik v3 uses `Header()` (singular) — not `Headers()`. Using `Headers()` produces
-an `unsupported function` parse error and drops the route silently.
+Traefik v3 uses `Header()` (singular) — not `Headers()`. Using `Headers()` produces an `unsupported function` parse error and drops the route silently.
 
 Per the [Traefik priority documentation](https://doc.traefik.io/traefik/reference/routing-configuration/http/routing/rules-and-priority/#priority-calculation),
-default priority equals rule string length, evaluated descending. `100 > 1` is a plain
-integer comparison — no length calculation, no ambiguity. See also:
-[Traefik Weighted Round Robin](https://oneuptime.com/blog/post/2026-02-09-traefik-weighted-round-robin/view)
-for how separate IngressRoute priorities interact with weighted splits.
+default priority equals rule string length, evaluated descending. `100 > 1` is a plain integer comparison — no length calculation, no ambiguity. See also:
+[Traefik Weighted Round Robin](https://oneuptime.com/blog/post/2026-02-09-traefik-weighted-round-robin/view) for how separate IngressRoute priorities interact
+with weighted splits.
 
 ### Combining traffic modes
 
-`trafficWeight`, `stickySession`, and `headerRouting` are independent and compose
-freely. The table below shows the most useful combinations:
+`trafficWeight`, `stickySession`, and `headerRouting` are independent and compose freely. The table below shows the most useful combinations:
 
 | `trafficWeight` | `stickySession` | `headerRouting` | Behaviour |
 |---|---|---|---|
@@ -503,16 +466,13 @@ freely. The table below shows the most useful combinations:
 
 **The composition rule:**
 
-`headerRouting` adds a second, higher-priority route to the `IngressRoute`. `trafficWeight`
-controls what the lower-priority catch-all route points to. They are layered, not mutually
-exclusive — the header route wins first; everything else falls through to the weight.
+`headerRouting` adds a second, higher-priority route to the `IngressRoute`. `trafficWeight` controls what the lower-priority catch-all route points to. They are
+layered, not mutually exclusive — the header route wins first; everything else falls through to the weight.
 
 ### Adding mirrord to the mix
 
-mirrord is a session-bound CLI tool — it runs on the developer's machine and
-mirrors or steals traffic at the pod level without changing any XR parameter. It
-layers on top of the manifest controls to unlock case studies that neither side can
-cover alone.
+mirrord is a session-bound CLI tool — it runs on the developer's machine and mirrors or steals traffic at the pod level without changing any XR parameter. It
+layers on top of the manifest controls to unlock case studies that neither side can cover alone.
 
 | Traffic config | mirrord mode | Target | What you get |
 |---|---|---|---|
@@ -536,15 +496,12 @@ mirrord exec \
   -- uvicorn main:app --reload
 ```
 
-With `headerRouting.header: X-Target-Env` active in the XR, only requests carrying
-that header reach the darlane pod at the Ingress level. mirrord's `--filter` then
-narrows further at the pod level. Production users never touch local code — even if
-the `--filter` flag is accidentally omitted.
+With `headerRouting.header: X-Target-Env` active in the XR, only requests carrying that header reach the darlane pod at the Ingress level. mirrord's `--filter`
+then narrows further at the pod level. Production users never touch local code — even if the `--filter` flag is accidentally omitted.
 
 ### Feature flags
 
-The darlane Deployment inherits `env` and `envFrom` from the main app, but you
-can layer `darlane.env` on top to enable flags that differ from production:
+The darlane Deployment inherits `env` and `envFrom` from the main app, but you can layer `darlane.env` on top to enable flags that differ from production:
 
 ```yaml
 darlane:
@@ -558,18 +515,14 @@ darlane:
       value: debug
 ```
 
-20% of real users are pinned to the darlane pod with the new ranking enabled.
-Metrics come from the same Prometheus stack. No feature flag service required.
+20% of real users are pinned to the darlane pod with the new ranking enabled. Metrics come from the same Prometheus stack. No feature flag service required.
 
-> **Caution:** darlane with `trafficWeight > 0` carries the same responsibility
-> as a canary deployment. If the darlane pod crashes, that percentage of traffic
-> drops. This is a developer-controlled tool for validation — not a replacement
-> for a production traffic-splitting strategy (use ArgoCD Rollouts for that).
+> **Caution:** darlane with `trafficWeight > 0` carries the same responsibility as a canary deployment. If the darlane pod crashes, that percentage of traffic
+> drops. This is a developer-controlled tool for validation — not a replacement for a production traffic-splitting strategy (use ArgoCD Rollouts for that).
 
 ### Honest trade-offs vs. dedicated flag services
 
-Darlane's traffic controls are **not** a replacement for a mature feature flag SDK or
-A/B testing platform. We are honest about that.
+Darlane's traffic controls are **not** a replacement for a mature feature flag SDK or A/B testing platform. We are honest about that.
 
 **Where Darlane genuinely wins:**
 
@@ -594,18 +547,15 @@ A/B testing platform. We are honest about that.
 - **Scale** — Darlane is a single pod with no autoscaler. It is not designed to carry
   a large percentage of production traffic long-term.
 
-Use Darlane for the **developer inner loop**: pre-PR validation, QA opt-in, short-lived
-canaries measured in hours. When a flag needs to run at production scale with user-segment
-targeting and statistical rigour, reach for a dedicated SDK. The two are complementary —
-they solve different parts of the problem.
+Use Darlane for the **developer inner loop**: pre-PR validation, QA opt-in, short-lived canaries measured in hours. When a flag needs to run at production scale
+with user-segment targeting and statistical rigour, reach for a dedicated SDK. The two are complementary — they solve different parts of the problem.
 
 ---
 
 ## Combined workflow patterns
 
-The manifest (XR parameters) and the developer tool layer (mirrord, wxops darlane sync) are
-independent — each works on its own, but they compose into four patterns that cover
-the majority of developer and SRE workflows.
+The manifest (XR parameters) and the developer tool layer (mirrord, wxops darlane sync) are independent — each works on its own, but they compose into four
+patterns that cover the majority of developer and SRE workflows.
 
 ```
 XR manifest (always active, Crossplane-reconciled):
@@ -628,8 +578,7 @@ The XR is always active. The tool layer is optional and session-scoped.
 
 ### Pattern A — Feature flag / A/B test (manifest-only, no laptop required)
 
-The darlane pod in the cluster handles the routed traffic. No developer present
-needed. Runs continuously after a single XR patch.
+The darlane pod in the cluster handles the routed traffic. No developer present needed. Runs continuously after a single XR patch.
 
 **Data flow:**
 ```
@@ -662,16 +611,14 @@ kubectl patch xtenantapp payment-api --type=merge \
 # No further action needed — darlane pod handles its traffic share autonomously
 ```
 
-**When to use:** Feature flag for a percentage of users, A/B test running overnight,
-canary validation without a developer at their laptop.
+**When to use:** Feature flag for a percentage of users, A/B test running overnight, canary validation without a developer at their laptop.
 
 ---
 
 ### Pattern B — Local code handles real users (trafficWeight + mirrord steal)
 
-The manifest routes a slice of Ingress traffic to the darlane pod. mirrord steals
-that slice and delivers it to your local process. Your local code handles real user
-requests and serves responses — no image build, no restart, instant iteration.
+The manifest routes a slice of Ingress traffic to the darlane pod. mirrord steals that slice and delivers it to your local process. Your local code handles real
+user requests and serves responses — no image build, no restart, instant iteration.
 
 **Data flow:**
 ```
@@ -713,22 +660,20 @@ mirrord exec \
   -- uvicorn main:app --reload
 ```
 
-Your local process inherits the darlane pod's complete environment — not just env
-vars, but the full network identity. `DATABASE_URL` resolves AND connects. You reach
-`postgres-service:5432` directly as if your laptop is inside the cluster.
+Your local process inherits the darlane pod's complete environment — not just env vars, but the full network identity. `DATABASE_URL` resolves AND connects. You
+reach `postgres-service:5432` directly as if your laptop is inside the cluster.
 
 `Ctrl+C` exits mirrord. The darlane pod resumes handling that 20% with its base image.
 
-**When to use:** Iterating on a feature where you need real user traffic and real
-production data, but aren't ready to build an image. Fastest possible inner loop.
+**When to use:** Iterating on a feature where you need real user traffic and real production data, but aren't ready to build an image. Fastest possible inner
+loop.
 
 ---
 
 ### Pattern C — Observe real traffic locally (mirrord mirror, read-only)
 
-Your local process receives copies of real traffic. It runs your code, logs output,
-processes requests — but its responses are discarded. The production pod handles every
-user normally. Zero risk to real users.
+Your local process receives copies of real traffic. It runs your code, logs output, processes requests — but its responses are discarded. The production pod
+handles every user normally. Zero risk to real users.
 
 **Data flow:**
 ```
@@ -777,20 +722,18 @@ mirrord exec \
   -- uvicorn main:app --reload
 ```
 
-No `trafficWeight` needed — you are not routing users to darlane. You are a silent
-listener receiving copies of traffic that the production pod handles normally.
+No `trafficWeight` needed — you are not routing users to darlane. You are a silent listener receiving copies of traffic that the production pod handles
+normally.
 
-**When to use:** Reproducing a bug with real traffic shapes, debugging a performance
-issue with real payloads, validating a fix against real request patterns before
-opening a PR.
+**When to use:** Reproducing a bug with real traffic shapes, debugging a performance issue with real payloads, validating a fix against real request patterns
+before opening a PR.
 
 ---
 
 ### Pattern D — Code sync to pod (wxops darlane sync + fileSync, in-cluster)
 
-Code runs inside the darlane pod (not locally). `wxops darlane sync` continuously
-syncs your local `./src` into the pod's `/app`. The pod hot-reloads on each change.
-Combine with `trafficWeight` to serve real users from the pod.
+Code runs inside the darlane pod (not locally). `wxops darlane sync` continuously syncs your local `./src` into the pod's `/app`. The pod hot-reloads on each
+change. Combine with `trafficWeight` to serve real users from the pod.
 
 **Data flow:**
 ```
@@ -847,9 +790,8 @@ kubectl patch xtenantapp payment-api --type=merge \
   -p '{"spec":{"parameters":{"darlane":{"replicas":0}}}}'
 ```
 
-**When to use:** AI agent workflows (agent syncs code, doesn't need a local mirrord
-session), testing code that must run inside the cluster network, validating with real
-users while maintaining a persistent in-cluster process.
+**When to use:** AI agent workflows (agent syncs code, doesn't need a local mirrord session), testing code that must run inside the cluster network, validating
+with real users while maintaining a persistent in-cluster process.
 
 ---
 
@@ -864,27 +806,22 @@ users while maintaining a persistent in-cluster process.
 | AI agent injects and tests code changes | **D** | `fileSync` + `wxops darlane sync` |
 | Canary: real users, code iterates in pod | **D** | `fileSync` + `wxops darlane sync` + `trafficWeight` |
 
-**The composition rule:** `trafficWeight` routes Ingress traffic to the darlane pod.
-mirrord `--steal` moves that traffic from the darlane pod to your local process.
-They compose: the split is decided at the Ingress by `trafficWeight`; mirrord works
-inside the darlane pod's share once traffic arrives there.
+**The composition rule:** `trafficWeight` routes Ingress traffic to the darlane pod. mirrord `--steal` moves that traffic from the darlane pod to your local
+process. They compose: the split is decided at the Ingress by `trafficWeight`; mirrord works inside the darlane pod's share once traffic arrives there.
 
-When you stop mirrord (`Ctrl+C`), the darlane pod resumes handling its traffic share
-with its base image — production is never involved. Scale `darlane.replicas` to `0`
-in the XR when the session is done.
+When you stop mirrord (`Ctrl+C`), the darlane pod resumes handling its traffic share with its base image — production is never involved. Scale
+`darlane.replicas` to `0` in the XR when the session is done.
 
 ---
 
 ## Scenario reference
 
-Five scenarios, five different tool combinations. The matrix below maps each scenario
-to the Darlane controls that drive it, then calls out where to reach for something
-outside Darlane entirely.
+Five scenarios, five different tool combinations. The matrix below maps each scenario to the Darlane controls that drive it, then calls out where to reach for
+something outside Darlane entirely.
 
 ### Tool × scenario matrix
 
-The columns are Darlane controls. A cell shows whether a tool is the **primary driver**,
-plays a **supporting role**, or is **not needed** for that scenario.
+The columns are Darlane controls. A cell shows whether a tool is the **primary driver**, plays a **supporting role**, or is **not needed** for that scenario.
 
 | Scenario | `darlane.env` | `fileSync` | `trafficWeight` | mirrord mirror | mirrord steal | `ttl` | `productionOverride` |
 |---|---|---|---|---|---|---|---|
@@ -902,8 +839,8 @@ plays a **supporting role**, or is **not needed** for that scenario.
 
 #### A/B Testing
 
-Route a percentage of real users to the darlane pod running a different configuration
-or image variant. Both pods run in the same namespace with the same infrastructure.
+Route a percentage of real users to the darlane pod running a different configuration or image variant. Both pods run in the same namespace with the same
+infrastructure.
 
 ```yaml
 darlane:
@@ -919,11 +856,11 @@ darlane:
   ttl: "8h"                                      # auto-cleanup after the test window
 ```
 
-**Risk:** darlane pod is single-replica, no HPA. If it crashes, that 20% of traffic
-drops until it restarts. Keep `trafficWeight` below 30% for initial validation.
+**Risk:** darlane pod is single-replica, no HPA. If it crashes, that 20% of traffic drops until it restarts. Keep `trafficWeight` below 30% for initial
+validation.
 
-**What this is not:** not a statistical A/B test framework. Metrics comparison requires
-your Prometheus/Grafana stack. Darlane routes the traffic; you read the results.
+**What this is not:** not a statistical A/B test framework. Metrics comparison requires your Prometheus/Grafana stack. Darlane routes the traffic; you read the
+results.
 
 **Alternative when to reach outside Darlane:**
 
@@ -937,8 +874,8 @@ your Prometheus/Grafana stack. Darlane routes the traffic; you read the results.
 
 #### Feature Flags
 
-Darlane provides env-based, per-pod feature flags — no feature flag service required.
-Layer `darlane.env` on top of the main app's env (darlane wins on collision).
+Darlane provides env-based, per-pod feature flags — no feature flag service required. Layer `darlane.env` on top of the main app's env (darlane wins on
+collision).
 
 ```yaml
 darlane:
@@ -956,13 +893,10 @@ darlane:
   ttl: "24h"
 ```
 
-**What this is good for:** quick on/off flags that live in your app's env config.
-Zero infrastructure — no SDK, no dashboard, no additional service.
+**What this is good for:** quick on/off flags that live in your app's env config. Zero infrastructure — no SDK, no dashboard, no additional service.
 
-**The fundamental limit:** env-based flags are **per-pod, not per-user**. Every request
-hitting the darlane pod sees the flag enabled — sticky sessions ensure the same user
-doesn't toggle between flag-on and flag-off, but you cannot target a specific user ID
-while leaving everyone else on the default path.
+**The fundamental limit:** env-based flags are **per-pod, not per-user**. Every request hitting the darlane pod sees the flag enabled — sticky sessions ensure
+the same user doesn't toggle between flag-on and flag-off, but you cannot target a specific user ID while leaving everyone else on the default path.
 
 **Alternative when to reach outside Darlane:**
 
@@ -976,8 +910,7 @@ while leaving everyone else on the default path.
 
 #### Debugging
 
-Reproduce a production issue with real traffic and real secrets, without touching the
-production pod or affecting real users.
+Reproduce a production issue with real traffic and real secrets, without touching the production pod or affecting real users.
 
 **Three-phase loop:**
 
@@ -1030,9 +963,8 @@ mirrord exec \
   -- uvicorn main:app --reload
 ```
 
-**No `trafficWeight` needed.** Debugging does not route real users to darlane — mirrord
-mirror makes a read-only copy of production traffic. Real users only ever see the production
-pod.
+**No `trafficWeight` needed.** Debugging does not route real users to darlane — mirrord mirror makes a read-only copy of production traffic. Real users only
+ever see the production pod.
 
 **Alternative when to reach outside Darlane:**
 
@@ -1046,8 +978,7 @@ pod.
 
 #### Canary / Temporary New Feature Delivery
 
-Validate a new feature with real production traffic before the PR lands. The darlane
-pod runs the new code; the main Deployment continues serving the rest.
+Validate a new feature with real production traffic before the PR lands. The darlane pod runs the new code; the main Deployment continues serving the rest.
 
 ```yaml
 darlane:
@@ -1071,9 +1002,8 @@ darlane:
 6. Reset trafficWeight to 0 — main Deployment now carries all traffic
 ```
 
-**What this is not:** not a production-grade progressive delivery mechanism. darlane
-is a single pod with no HPA and no automated rollback. This is pre-PR validation, not
-a substitute for a proper release pipeline.
+**What this is not:** not a production-grade progressive delivery mechanism. darlane is a single pod with no HPA and no automated rollback. This is pre-PR
+validation, not a substitute for a proper release pipeline.
 
 **Alternative when to reach outside Darlane:**
 
@@ -1087,8 +1017,7 @@ a substitute for a proper release pipeline.
 
 #### Hotfix / Emergency Patch
 
-Production is degraded. An agent or on-call engineer needs to develop, validate, and
-promote a fix — fast, with a full audit trail.
+Production is degraded. An agent or on-call engineer needs to develop, validate, and promote a fix — fast, with a full audit trail.
 
 **XR (manifest side):**
 
@@ -1148,8 +1077,7 @@ mirrord exec \
   -- uvicorn main:app --reload
 ```
 
-Only use steal mode when mirror is insufficient — it routes specific real requests
-to your local process. Pair with Guardian audit when available.
+Only use steal mode when mirror is insufficient — it routes specific real requests to your local process. Pair with Guardian audit when available.
 
 **Alternative when to reach outside Darlane:**
 
@@ -1163,8 +1091,8 @@ to your local process. Pair with Guardian audit when available.
 
 ### When to reach outside Darlane entirely
 
-Darlane covers the inner loop: dev/staging debugging, pre-PR canary validation,
-feature flag toggling via env, incident response. These scenarios belong elsewhere:
+Darlane covers the inner loop: dev/staging debugging, pre-PR canary validation, feature flag toggling via env, incident response. These scenarios belong
+elsewhere:
 
 | Need | Why Darlane doesn't fit | Reach for |
 |---|---|---|
@@ -1176,17 +1104,14 @@ feature flag toggling via env, incident response. These scenarios belong elsewhe
 | Blue/green deployment | Needs two production-grade Deployments + atomic switch | ArgoCD Rollouts blue/green strategy |
 | Production load testing | Real user traffic during load test = bad day | k6, Locust against a staging environment |
 
-The pattern: Darlane is fast, low-ceremony, and developer-controlled. It handles
-anything where you need real infrastructure access without waiting for CI/CD. When
-you need durability, statistical rigor, or automated rollback, a dedicated tool is
-the right call.
+The pattern: Darlane is fast, low-ceremony, and developer-controlled. It handles anything where you need real infrastructure access without waiting for CI/CD.
+When you need durability, statistical rigor, or automated rollback, a dedicated tool is the right call.
 
 ---
 
 ## AI Agent workflow
 
-The darlane pod provides a pre-wired execution target for AI coding agents — real
-secrets, real database, real network — without any environment setup.
+The darlane pod provides a pre-wired execution target for AI coding agents — real secrets, real database, real network — without any environment setup.
 
 **Pattern:**
 
@@ -1229,10 +1154,8 @@ result = subprocess.run([
 
 ## SRE Agent — intelligence injector
 
-The SRE Agent is the most advanced use of Darlane: an AI system that autonomously
-debugs production incidents by injecting targeted fixes into the darlane pod and
-validating them against mirrored production traffic — without any human intervention
-in the diagnosis and validation loop.
+The SRE Agent is the most advanced use of Darlane: an AI system that autonomously debugs production incidents by injecting targeted fixes into the darlane pod
+and validating them against mirrored production traffic — without any human intervention in the diagnosis and validation loop.
 
 **Incident response flow:**
 
@@ -1258,46 +1181,37 @@ Human SRE reviews PR — fix already validated against real traffic
 
 **What the platform provides for the SRE Agent:**
 
-The composition emits a dedicated `ServiceAccount` for the darlane pod when
-`darlane.serviceAccount.create: true`. The platform team creates a `Role` +
-`RoleBinding` separately and binds it to that SA — granting the agent's identity
-exactly:
+The composition emits a dedicated `ServiceAccount` for the darlane pod when `darlane.serviceAccount.create: true`. The platform team creates a `Role` +
+`RoleBinding` separately and binds it to that SA — granting the agent's identity exactly:
 - `deployments/scale` on `<appName>-darlane`
 - `pods/exec`, `pods/portforward`, `pods/log` scoped to darlane pods
 - Read access to the namespace's `Events`
 
-The agent authenticates as the SA — a real, auditable Kubernetes identity, not
-cluster-admin access. All activity is logged by the platform's audit stack.
+The agent authenticates as the SA — a real, auditable Kubernetes identity, not cluster-admin access. All activity is logged by the platform's audit stack.
 
 **Why "no manual reproduction steps" matters:**
 
-Traditional incident response: alert → on-call engineer woken up → SSH access
-requested → reproduce locally (or not) → guess at fix → deploy to staging → validate
-→ deploy to prod. 45–90 minutes minimum.
+Traditional incident response: alert → on-call engineer woken up → SSH access requested → reproduce locally (or not) → guess at fix → deploy to staging →
+validate → deploy to prod. 45–90 minutes minimum.
 
-SRE Agent with Darlane: alert → agent activates → fix injected → validated →
-PR ready. Human reviews a validated fix, not a hypothesis. Incident resolution
-time measured in minutes, not hours.
+SRE Agent with Darlane: alert → agent activates → fix injected → validated → PR ready. Human reviews a validated fix, not a hypothesis. Incident resolution time
+measured in minutes, not hours.
 
 ---
 
 ## Guardian Framework (platform-injected safety)
 
-Guardian is the platform's safety layer for Darlane sessions — sidecars injected
-into the darlane pod that provide scanning, audit trail, and AI code review without
-requiring any developer action. Guardian is a long-term workstream independent of
-the Darlane XRD roadmap.
+Guardian is the platform's safety layer for Darlane sessions — sidecars injected into the darlane pod that provide scanning, audit trail, and AI code review
+without requiring any developer action. Guardian is a long-term workstream independent of the Darlane XRD roadmap.
 
-See [docs/core-ideas/guardian.md](guardian.md) for the full Guardian architecture and vision.
+See [development-docs/core-ideas/guardian.md](guardian.md) for the full Guardian architecture and vision.
 
 ---
 
 ## Access control
 
-The composition creates a dedicated `ServiceAccount` for the darlane pod when
-`darlane.serviceAccount.create: true`. RBAC is **not** composed automatically —
-the platform team creates the `Role` + `RoleBinding` manually and binds them to
-that `ServiceAccount`.
+The composition creates a dedicated `ServiceAccount` for the darlane pod when `darlane.serviceAccount.create: true`. RBAC is **not** composed automatically —
+the platform team creates the `Role` + `RoleBinding` manually and binds them to that `ServiceAccount`.
 
 **Compose the SA (in the XR):**
 
@@ -1350,14 +1264,11 @@ roleRef:
 
 **Why manual RBAC:**
 
-The `Role` rules and subjects differ per team, per environment, and per agent type.
-Composing them inside the XRD would require exposing the full RBAC schema as XR
-parameters — that is the platform team's domain, not the tenant's. Keeping the
-`Role`/`RoleBinding` in GitOps lets the platform team audit and evolve them
+The `Role` rules and subjects differ per team, per environment, and per agent type. Composing them inside the XRD would require exposing the full RBAC schema as
+XR parameters — that is the platform team's domain, not the tenant's. Keeping the `Role`/`RoleBinding` in GitOps lets the platform team audit and evolve them
 independently of the app lifecycle.
 
-The `ServiceAccount` is composed because it must exist before the pod starts and
-needs a stable, predictable name for the binding to reference.
+The `ServiceAccount` is composed because it must exist before the pod starts and needs a stable, predictable name for the binding to reference.
 
 ---
 
@@ -1371,8 +1282,7 @@ needs a stable, predictable name for the binding to reference.
 | Steal mode, `prod` | High — dev code handles real prod traffic | `productionOverride: true` in XR (double opt-in) + mirrord `--steal` CLI flag + Guardian audit |
 | Abandoned session | Medium — intercepted requests dropped | Kyverno `ClusterCleanupPolicy` deletes expired darlane Deployment; Crossplane re-creates at `replicas: 0`. See [TTL enforcement](#ttl-enforcement-auto-scale-down). |
 
-The platform enforces the production override at the KCL composition level —
-a darlane pod cannot be enabled in `environment: prod` without the explicit
+The platform enforces the production override at the KCL composition level — a darlane pod cannot be enabled in `environment: prod` without the explicit
 `productionOverride: true` flag visible in the XR diff and PR.
 
 ---
@@ -1387,16 +1297,14 @@ a darlane pod cannot be enabled in `environment: prod` without the explicit
 | Best for | Fast attach, real-traffic observation, AI agent workflows | Full network identity replacement, preview URLs |
 | W'xOps recommendation | Primary path | Fallback for existing users |
 
-Neither tool is installed by the composition — same model as cert-manager for TLS.
-Install once per cluster, use from any darlane pod.
+Neither tool is installed by the composition — same model as cert-manager for TLS. Install once per cluster, use from any darlane pod.
 
 ---
 
 ## TTL enforcement (auto-scale-down)
 
-The `darlane.ttl` field adds a `wxops.cloud/darlane-ttl` annotation to the darlane
-Deployment. Enforcement is a **cluster-level Kyverno policy** — not part of the
-Composition itself. The policy file lives at `providers/policies/darlane-ttl.yaml`.
+The `darlane.ttl` field adds a `wxops.cloud/darlane-ttl` annotation to the darlane Deployment. Enforcement is a **cluster-level Kyverno policy** — not part of
+the Composition itself. The policy file lives at `providers/policies/darlane-ttl.yaml`.
 
 ### XR configuration
 
@@ -1407,8 +1315,7 @@ darlane:
   replicas: 0         # keep 0 in XR — scale up via kubectl on demand
 ```
 
-`ttl` accepts any [Go duration string](https://pkg.go.dev/time#ParseDuration):
-`30m`, `4h`, `8h`, `24h`, and so on.
+`ttl` accepts any [Go duration string](https://pkg.go.dev/time#ParseDuration): `30m`, `4h`, `8h`, `24h`, and so on.
 
 ### How enforcement works
 
@@ -1431,9 +1338,8 @@ Portal (on TTL expiry):
   └─ Also patches XR darlane.replicas: 0 → Crossplane reconciles to 0 replicas
 ```
 
-The warning annotation (`wxops.cloud/darlane-ttl-warning: expiring-soon`) fires 30 minutes
-before expiry. The portal can watch this annotation to show a "Darlane expiring in 30 min"
-banner so the developer can save work.
+The warning annotation (`wxops.cloud/darlane-ttl-warning: expiring-soon`) fires 30 minutes before expiry. The portal can watch this annotation to show a
+"Darlane expiring in 30 min" banner so the developer can save work.
 
 ### Kyverno policies
 
@@ -1458,44 +1364,35 @@ Requires **Kyverno v1.11+** (`CleanupPolicy` GA in v1.12+).
 
 ### Interaction with Crossplane
 
-Kyverno deletes the darlane Deployment (not the `XTenantApp` XR). Crossplane's
-`provider-kubernetes` sees the Deployment missing and re-creates it from the
+Kyverno deletes the darlane Deployment (not the `XTenantApp` XR). Crossplane's `provider-kubernetes` sees the Deployment missing and re-creates it from the
 Composition, which reads `darlane.replicas` from the XR.
 
-The XR is always the source of truth. `darlane.replicas` in the XR determines
-what Crossplane reconciles the Deployment to. `kubectl scale` is overwritten on
+The XR is always the source of truth. `darlane.replicas` in the XR determines what Crossplane reconciles the Deployment to. `kubectl scale` is overwritten on
 every reconcile cycle and must not be used — always patch the XR.
 
 **TTL scale-down requires two coordinated actions:**
 1. **Kyverno** deletes the darlane Deployment when TTL expires.
 2. **The portal** patches the XR `darlane.replicas: 0` at the same time.
 
-Kyverno alone is insufficient — if the XR still has `darlane.replicas: 1`,
-Crossplane re-creates the Deployment at 1 replica immediately after Kyverno
-deletes it. Both the Deployment deletion (Kyverno) and the XR patch (portal) are
-required for a clean scale-down.
+Kyverno alone is insufficient — if the XR still has `darlane.replicas: 1`, Crossplane re-creates the Deployment at 1 replica immediately after Kyverno deletes
+it. Both the Deployment deletion (Kyverno) and the XR patch (portal) are required for a clean scale-down.
 
-> **Portal responsibility:** when activating Darlane, set `darlane.replicas: 1`
-> in the XR. When TTL expires or the developer finishes, reset it to `0`. Kyverno
+> **Portal responsibility:** when activating Darlane, set `darlane.replicas: 1` in the XR. When TTL expires or the developer finishes, reset it to `0`. Kyverno
 > provides a safety-net deletion; the XR patch is what makes it stick.
 
 ---
 
 ## What's next: `XDarlane` XRD
 
-The current `darlane.*` block inside `XTenantApp` is the proven foundation. The next
-evolution promotes Darlane to a **standalone Crossplane XRD** — a purpose-built
-developer workspace that lives independently from the app it mirrors, with native
-integrations for file sync, debugging, feature flags, A/B testing, and AI agent
-workflows baked in as first-class fields rather than nested parameters.
+The current `darlane.*` block inside `XTenantApp` is the proven foundation. The next evolution promotes Darlane to a **standalone Crossplane XRD** — a
+purpose-built developer workspace that lives independently from the app it mirrors, with native integrations for file sync, debugging, feature flags, A/B
+testing, and AI agent workflows baked in as first-class fields rather than nested parameters.
 
 ### Why a standalone XRD
 
-The debug-twin-as-a-field model has one structural limitation: Darlane's lifecycle is
-tied to the app XR. Every Darlane change is a change to the app spec. Multiple
-concurrent Darlane sessions (dev + hotfix + SRE agent) cannot coexist as independent
-claims. The portal cannot create and destroy Darlane workspaces on-demand without
-touching the app XR.
+The debug-twin-as-a-field model has one structural limitation: Darlane's lifecycle is tied to the app XR. Every Darlane change is a change to the app spec.
+Multiple concurrent Darlane sessions (dev + hotfix + SRE agent) cannot coexist as independent claims. The portal cannot create and destroy Darlane workspaces
+on-demand without touching the app XR.
 
 A standalone `XDarlane` resolves all of this:
 
@@ -1571,14 +1468,12 @@ SRE Agent           → XDarlane: payment-api-sre-hotfix    (ttl: 2h, production
 AI Coding Agent     → XDarlane: payment-api-agent-branch  (ttl: 4h, no traffic)
 ```
 
-The app XR (`XTenantApp`) never changes. Each workspace is independently scheduled,
-resourced, TTL-managed, and audited. When the session ends, the `XDarlane` claim is
-deleted — no cleanup needed in the app XR.
+The app XR (`XTenantApp`) never changes. Each workspace is independently scheduled, resourced, TTL-managed, and audited. When the session ends, the `XDarlane`
+claim is deleted — no cleanup needed in the app XR.
 
 ### What changes for developers
 
-The current `darlane.*` fields on `XTenantApp` continue to work. Migration is
-additive — the `XDarlane` XRD is a new path, not a replacement. Existing apps gain
+The current `darlane.*` fields on `XTenantApp` continue to work. Migration is additive — the `XDarlane` XRD is a new path, not a replacement. Existing apps gain
 the option to use standalone claims; no forced migration.
 
 ---

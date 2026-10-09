@@ -61,7 +61,7 @@ spec:
     # Those annotations are a Prometheus convention read only by a
     # kubernetes_sd_config job with matching relabel rules, and
     # kube-prometheus-stack's additionalScrapeConfigs is empty here — so they
-    # scrape nothing. See docs/core-ideas/observability.md.
+    # scrape nothing. See development-docs/core-ideas/observability.md.
     # monitoring:
     #   enabled: true
     #   kind: auto          # auto | ServiceMonitor | PodMonitor
@@ -164,7 +164,7 @@ spec:
     #
     #   # Traffic routing: A/B testing + feature flags + full canary
     #   # Three independent controls — compose freely.
-    #   # See docs/core-ideas/darlane.md#combining-traffic-modes for the full interaction table.
+    #   # See development-docs/core-ideas/darlane.md#combining-traffic-modes for the full interaction table.
     #   #
     #   # trafficWeight: 20              # % of real Ingress traffic → Darlane pod
     #   #                               # 0=debug only | 1-99=A/B split | 100=full canary
