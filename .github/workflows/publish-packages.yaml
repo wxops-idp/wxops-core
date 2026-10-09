@@ -1,27 +1,7 @@
 name: Publish Crossplane Packages
 
-# Fires on a release tag — release-YYYY-MM-DD[.N], cut by `make release`.
-#
-# The release commit is the whole truth. `make release` has already gated the
-# change through tests/api_compat.py, decided which packages changed, pinned
-# them in VERSIONS.yaml and package/install/, and regenerated CHANGELOG.md. This
-# workflow only builds what that commit says: a package is rebuilt when its
-# VERSIONS.yaml `current` equals the pushed tag. Nothing commits back to main —
-# a bot rewriting package/install/ after the tag is how commit f22f0d7 put every
-# manifest back on the Gitea registry.
-#
-# GitHub is primary from the first date-named release. Gitea is archived and no
-# longer publishes; its publish workflow was removed.
-#
-# One-time manual setup:
-#   1. GitHub org "wxops": Settings → Packages → Package creation must permit
-#      this repository to publish. ghcr.io/wxops/* only works with the default
-#      GITHUB_TOKEN because this repo is itself owned by "wxops" — if that ever
-#      changes, this needs a PAT instead.
-#   2. First publish of each package: its ghcr.io package is created PRIVATE
-#      by default even though this repo is public. Go to the package's
-#      Settings → Change visibility → Public (or link it to this repository
-#      and inherit visibility) once per package, after its first push.
+# Builds and pushes the packages a release tag pins, then creates the GitHub release.
+# VERSIONS.yaml is the package list: a package is rebuilt only when its `current` equals the tag.
 
 on:
   push:
@@ -33,7 +13,7 @@ permissions:
   packages: write   # push to ghcr.io
 
 env:
-  REGISTRY: ghcr.io/wxops/wxops-core
+  REGISTRY: ghcr.io/wxops-idp/wxops-core
 
 jobs:
   validate:
@@ -52,22 +32,40 @@ jobs:
       - name: Run package validation
         run: bash .gitea/scripts/validate-packages.sh
 
+  discover:
+    name: Discover packages
+    runs-on: ubuntu-latest
+    needs: validate
+    outputs:
+      packages: ${{ steps.list.outputs.packages }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # VERSIONS.yaml is the only package list (ADR-002 groups, RFC-007 layout).
+      # Adding a package is one edit there — never a second edit here.
+      - name: List packages
+        id: list
+        run: |
+          python3 -m pip install --quiet -r tests/requirements.txt
+          packages=$(python3 tests/lib/packages.py list \
+            | python3 -c 'import json,sys; print(json.dumps([l.strip() for l in sys.stdin if l.strip()]))')
+          echo "packages=$packages" >> "$GITHUB_OUTPUT"
+          echo "→ $packages"
+
   build-push:
     name: Build and push ${{ matrix.package }}
     runs-on: ubuntu-latest
-    needs: validate
+    needs: [validate, discover]
 
     strategy:
       fail-fast: false
       matrix:
-        package:
-          - gitea-user
-          - gitea-org
-          - gitea-team
-          - gitea-repository
-          - platform-database-clusters
-          - tenant-database
-          - tenant-app
+        package: ${{ fromJSON(needs.discover.outputs.packages) }}
 
     steps:
       - name: Checkout
@@ -105,9 +103,14 @@ jobs:
 
       - name: Build package
         if: steps.changed.outputs.value == 'true'
+        env:
+          PKG: ${{ matrix.package }}
         run: |
+          dir=$(sed -n "/^  ${PKG}:/,/^  [a-z]/p" VERSIONS.yaml | awk '/path:/{print $2; exit}')
+          [ -n "$dir" ] || { echo "::error::no path for ${PKG} in VERSIONS.yaml"; exit 1; }
+          echo "→ building $dir"
           crossplane xpkg build \
-            -f package/${{ matrix.package }} \
+            -f "$dir" \
             -o ${{ matrix.package }}.xpkg \
             --ignore kustomization.yaml
 

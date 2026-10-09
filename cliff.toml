@@ -46,29 +46,29 @@ body = """
 ### {{ group | upper_first }}
 
 {% for commit in commits %}\
-- {% if commit.scope %}**{{ commit.scope }}**: {% endif %}{{ commit.message | upper_first }}{% if commit.breaking %} ⚠️ **BREAKING**{% endif %} ([`{{ commit.id | truncate(length=7, end="") }}`](https://github.com/wxops/wxops-core/commit/{{ commit.id }}))
+- {% if commit.scope %}**{{ commit.scope }}**: {% endif %}{{ commit.message | upper_first }}{% if commit.breaking %} ⚠️ **BREAKING**{% endif %} ([`{{ commit.id | truncate(length=7, end="") }}`](https://github.com/wxops-idp/wxops-core/commit/{{ commit.id }}))
 {% endfor %}
 {% endfor %}
 {% if version %}
-📖 [API reference](https://github.com/wxops/wxops-core/tree/{{ version }}/docs) · [`VERSIONS.yaml`](https://github.com/wxops/wxops-core/blob/{{ version }}/VERSIONS.yaml)
+📖 [API reference](https://github.com/wxops-idp/wxops-core/tree/{{ version }}/docs) · [`VERSIONS.yaml`](https://github.com/wxops-idp/wxops-core/blob/{{ version }}/VERSIONS.yaml)
 {% if previous and previous.version %}\
 {% if version is starting_with("v") and previous.version is starting_with("v") %}\
 {% set cur = version | trim_start_matches(pat="v") | split(pat=".") %}\
 {% set prev = previous.version | trim_start_matches(pat="v") | split(pat=".") %}\
 {% if cur.0 != prev.0 or cur.1 != prev.1 %}\
 {% set prev_series_base = "v" ~ prev.0 ~ "." ~ prev.1 ~ ".0" %}\
-🔍 [Full series diff ({{ prev_series_base }} → {{ version }})](https://github.com/wxops/wxops-core/compare/{{ prev_series_base }}...{{ version }})
+🔍 [Full series diff ({{ prev_series_base }} → {{ version }})](https://github.com/wxops-idp/wxops-core/compare/{{ prev_series_base }}...{{ version }})
 
 > ⚠️ **Major/minor version bump** — this diff covers the entire **{{ prev.0 }}.{{ prev.1 }}.x**
 > patch series ({{ prev_series_base }} through {{ previous.version }}) so no intermediate patch is missed.
-> Check [`VERSIONS.yaml`](https://github.com/wxops/wxops-core/blob/{{ version }}/VERSIONS.yaml)
-> for affected packages and [`docs/`](https://github.com/wxops/wxops-core/tree/{{ version }}/docs)
+> Check [`VERSIONS.yaml`](https://github.com/wxops-idp/wxops-core/blob/{{ version }}/VERSIONS.yaml)
+> for affected packages and [`docs/`](https://github.com/wxops-idp/wxops-core/tree/{{ version }}/docs)
 > for schema changes.
 {% else %}\
-🔍 [Diff vs {{ previous.version | trim_start_matches(pat="v") }}](https://github.com/wxops/wxops-core/compare/{{ previous.version }}...{{ version }})
+🔍 [Diff vs {{ previous.version | trim_start_matches(pat="v") }}](https://github.com/wxops-idp/wxops-core/compare/{{ previous.version }}...{{ version }})
 {% endif %}\
 {% else %}\
-🔍 [Diff vs {{ previous.version | trim_start_matches(pat="v") }}](https://github.com/wxops/wxops-core/compare/{{ previous.version }}...{{ version }})
+🔍 [Diff vs {{ previous.version | trim_start_matches(pat="v") }}](https://github.com/wxops-idp/wxops-core/compare/{{ previous.version }}...{{ version }})
 {% endif %}\
 {% endif %}\
 {% endif %}\
@@ -79,12 +79,12 @@ footer = """
 {% for release in releases %}\
 {% if release.version %}\
 [{{ release.version | trim_start_matches(pat="v") }}]: \
-https://github.com/wxops/wxops-core/releases/tag/{{ release.version }}
+https://github.com/wxops-idp/wxops-core/releases/tag/{{ release.version }}
 {% endif %}\
 {% endfor %}\
 {% set latest = releases | filter(attribute="version") | first %}\
 {% if latest %}\
-[Unreleased]: https://github.com/wxops/wxops-core/compare/{{ latest.version }}...HEAD
+[Unreleased]: https://github.com/wxops-idp/wxops-core/compare/{{ latest.version }}...HEAD
 {% endif %}\
 """
 

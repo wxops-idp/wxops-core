@@ -18,7 +18,7 @@ There is no backport policy — a fix lands on `main` and ships in the next rele
 
 **Please do not open a public issue for a security report.**
 
-Use [GitHub Security Advisories](https://github.com/wxops/wxops-core/security/advisories/new) to
+Use [GitHub Security Advisories](https://github.com/wxops-idp/wxops-core/security/advisories/new) to
 report privately — this reaches the maintainer directly and lets us coordinate a fix before
 disclosure. Include:
 

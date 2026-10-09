@@ -125,7 +125,7 @@ make kcl-check                         # verify sync without modifying
 
 # Build & publish
 make build                             # build all OCI packages locally
-make push REGISTRY=ghcr.io/wxops/wxops-core VERSION=release-2026-09-11  # build + push (CI does this on tag)
+make push REGISTRY=ghcr.io/wxops-idp/wxops-core VERSION=release-2026-09-11  # build + push (CI does this on tag)
 make validate                          # crossplane xpkg build (no push)
 
 # Lint & render
