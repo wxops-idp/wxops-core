@@ -8,9 +8,8 @@ assignees: ''
 ---
 
 **Affected package**
-Which one — `gitea-user`, `gitea-org`, `gitea-team`, `gitea-repository`,
-`platform-database-clusters`, `tenant-database`, `tenant-app`,
-`random-password`, or not sure?
+Which one — `platform-database-clusters`, `tenant-database`, `tenant-app`,
+`scm-connection`, `scm-repository`, `scm-oauth-app`, or not sure?
 
 **Package / Crossplane version**
 - Package version: [e.g. tenant-app v0.2.5 — from `spec.package` or `VERSIONS.yaml`]
