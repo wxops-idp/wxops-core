@@ -1,0 +1,75 @@
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmRepository
+metadata:
+  name: team-alpha-api-service
+spec:
+  crossplane:
+    resourceRefs:
+      - apiVersion: opentofu.upbound.io/v1beta1
+        kind: Workspace
+        name: team-alpha-api-service-073174d05cff
+status:
+  conditions:
+    - reason: WatchCircuitClosed
+      status: 'True'
+      type: Responsive
+    - reason: ReconcileSuccess
+      status: 'True'
+      type: Synced
+    - message: 'Unready resources: tf-workspace'
+      reason: Creating
+      status: 'False'
+      type: Ready
+---
+apiVersion: opentofu.upbound.io/v1beta1
+kind: Workspace
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: tf-workspace
+  generateName: team-alpha-api-service-
+  labels:
+    crossplane.io/composite: team-alpha-api-service
+  name: team-alpha-api-service-073174d05cff
+  ownerReferences:
+    - apiVersion: scm.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XScmRepository
+      name: team-alpha-api-service
+      uid: b8a6d88e-2c99-5a59-94df-6cfc90998c9d
+spec:
+  deletionPolicy: Orphan
+  forProvider:
+    module: "terraform {\n  required_providers {\n    gitea = { source = \"go-gitea/gitea\", version = \"~> 0.8\" }\n  }\n}\n\n# \u2500\u2500 From the XScmConnection Secret (varFiles) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nvariable \"vendor\" {\n  type = string\n  validation {\n    # This module only ever runs `gitea_*` resources, so a mismatch here means\n    # the XR's own `vendor` field (used to pick this module) disagrees with what\n    # its `scmRef` connection actually is \u2014 a scmRef/vendor mismatch, not a bad\n    # connection. Caught here, before the gitea provider ever configures with\n    # whatever token the mismatched connection actually holds.\n    condition     = var.vendor == \"gitea\"\n    error_message = \"XScmRepository.spec.parameters.vendor is gitea, but scmRef's XScmConnection resolves to a different vendor. Fix the mismatch on one side.\"\n\
+      \  }\n}\nvariable \"base_url\" {\n  type = string\n  validation {\n    condition     = var.base_url != \"\"\n    error_message = \"baseUrl is required on a Gitea XScmConnection \u2014 there is no default host to fall back to.\"\n  }\n}\nvariable \"default_org\" { type = string } # \"\" means the user layer \u2014 see XScmConnection.org\nvariable \"access\" {\n  type = string\n  validation {\n    condition     = contains([\"write\", \"read\"], var.access)\n    error_message = \"access must be write or read.\"\n  }\n}\nvariable \"token\" {\n  type      = string\n  sensitive = true\n}\n\n# \u2500\u2500 From the XR \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nvariable \"mode\" {\n  type = string\n\
+      \  validation {\n    condition     = contains([\"managed\", \"observed\"], var.mode)\n    error_message = \"mode must be managed or observed.\"\n  }\n}\nvariable \"repo_name\" { type = string }\nvariable \"description\" { type = string }\nvariable \"visibility\" { type = string }\nvariable \"default_branch\" { type = string }\nvariable \"auto_init\" { type = bool }\nvariable \"has_issues\" { type = bool }\nvariable \"has_wiki\" { type = bool }\nvariable \"topics\" { type = string }\n\nlocals {\n  managed           = var.mode == \"managed\"\n  observed          = var.mode == \"observed\"\n  need_gitea_whoami = var.default_org == \"\"\n\n  # The user layer, resolved. Omitting `username` on the data source is the provider's\n  # own way to mean \"the authenticated user\" \u2014 a real whoami, verified against the\n  # provider's schema (the input is optional there, unlike every other username/owner\n  # field in this module).\n  org = var.default_org != \"\" ? var.default_org : data.gitea_user.whoami[0].username\n\
+      }\n\ndata \"gitea_user\" \"whoami\" {\n  count = local.need_gitea_whoami ? 1 : 0\n}\n\nprovider \"gitea\" {\n  base_url = var.base_url\n  token    = var.token\n}\n\nresource \"gitea_repository\" \"this\" {\n  count = local.managed ? 1 : 0\n\n  username       = local.org\n  name           = var.repo_name\n  description    = var.description\n  private        = var.visibility == \"private\"\n  auto_init      = var.auto_init\n  default_branch = var.default_branch\n  has_issues     = var.has_issues\n  has_wiki       = var.has_wiki\n\n  lifecycle {\n    precondition {\n      condition     = var.access == \"write\"\n      error_message = \"mode: managed needs a write connection; this XScmConnection is access: read.\"\n    }\n    precondition {\n      condition     = var.topics == \"\"\n      error_message = \"topics is not supported on Gitea: the go-gitea/gitea provider has no topics attribute. Leave it empty.\"\n    }\n  }\n}\n\ndata \"gitea_repo\" \"this\" {\n  count    = local.observed\
+      \ ? 1 : 0\n  username = local.org\n  name     = var.repo_name\n}\n\n# \u2500\u2500 Neutral outputs: the same five names whatever the host \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\noutput \"repo_id\" {\n  value = local.managed ? tostring(gitea_repository.this[0].id) : tostring(data.gitea_repo.this[0].id)\n}\noutput \"clone_url\" {\n  value = local.managed ? gitea_repository.this[0].clone_url : data.gitea_repo.this[0].clone_url\n}\noutput \"ssh_url\" {\n  value = local.managed ? gitea_repository.this[0].ssh_url : data.gitea_repo.this[0].ssh_url\n}\noutput \"html_url\" {\n  value = local.managed ? gitea_repository.this[0].html_url : data.gitea_repo.this[0].html_url\n}\noutput \"full_name\" {\n  # Gitea's resource/data types have no full_name-shaped attribute, unlike GitHub's.\n  value = \"${local.org}/${var.repo_name}\"\n}\n"
+    source: Inline
+    varFiles:
+      - secretKeyRef:
+          key: credentials
+          name: scm-connection-gitea-internal
+          namespace: crossplane-system
+        source: SecretKey
+    vars:
+      - key: mode
+        value: managed
+      - key: repo_name
+        value: api-service
+      - key: description
+        value: Alpha squad API service
+      - key: visibility
+        value: private
+      - key: default_branch
+        value: main
+      - key: auto_init
+        value: 'true'
+      - key: has_issues
+        value: 'true'
+      - key: has_wiki
+        value: 'false'
+      - key: topics
+        value: ''
+  providerConfigRef:
+    name: default

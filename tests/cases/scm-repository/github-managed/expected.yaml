@@ -1,0 +1,76 @@
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmRepository
+metadata:
+  name: team-alpha-api-service
+spec:
+  crossplane:
+    resourceRefs:
+      - apiVersion: opentofu.upbound.io/v1beta1
+        kind: Workspace
+        name: team-alpha-api-service-073174d05cff
+status:
+  conditions:
+    - reason: WatchCircuitClosed
+      status: 'True'
+      type: Responsive
+    - reason: ReconcileSuccess
+      status: 'True'
+      type: Synced
+    - message: 'Unready resources: tf-workspace'
+      reason: Creating
+      status: 'False'
+      type: Ready
+---
+apiVersion: opentofu.upbound.io/v1beta1
+kind: Workspace
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: tf-workspace
+  generateName: team-alpha-api-service-
+  labels:
+    crossplane.io/composite: team-alpha-api-service
+  name: team-alpha-api-service-073174d05cff
+  ownerReferences:
+    - apiVersion: scm.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XScmRepository
+      name: team-alpha-api-service
+      uid: b8a6d88e-2c99-5a59-94df-6cfc90998c9d
+spec:
+  deletionPolicy: Orphan
+  forProvider:
+    module: "terraform {\n  required_providers {\n    github = { source = \"integrations/github\", version = \"~> 6.13\" }\n  }\n}\n\n# \u2500\u2500 From the XScmConnection Secret (varFiles) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nvariable \"vendor\" {\n  type = string\n  validation {\n    # This module only ever runs `github_*` resources, so a mismatch here means\n    # the XR's own `vendor` field (used to pick this module) disagrees with what\n    # its `scmRef` connection actually is \u2014 a scmRef/vendor mismatch, not a bad\n    # connection. Caught here, before the github provider ever configures with\n    # whatever token the mismatched connection actually holds.\n    condition     = var.vendor == \"github\"\n    error_message = \"XScmRepository.spec.parameters.vendor is github, but scmRef's XScmConnection resolves to a different vendor. Fix the mismatch on one\
+      \ side.\"\n  }\n}\nvariable \"base_url\" { type = string }    # \"\" means github.com\nvariable \"default_org\" { type = string } # \"\" means the user layer \u2014 see XScmConnection.org\nvariable \"access\" {\n  type = string\n  validation {\n    condition     = contains([\"write\", \"read\"], var.access)\n    error_message = \"access must be write or read.\"\n  }\n}\nvariable \"token\" {\n  type      = string\n  sensitive = true\n}\n\n# \u2500\u2500 From the XR \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nvariable \"mode\" {\n  type = string\n  validation {\n    condition     = contains([\"managed\", \"observed\"], var.mode)\n    error_message = \"mode must be managed or observed.\"\n\
+      \  }\n}\nvariable \"repo_name\" { type = string }\nvariable \"description\" { type = string }\nvariable \"visibility\" { type = string }\nvariable \"default_branch\" { type = string }\nvariable \"auto_init\" { type = bool }\nvariable \"has_issues\" { type = bool }\nvariable \"has_wiki\" { type = bool }\nvariable \"topics\" { type = string }\n\nlocals {\n  managed    = var.mode == \"managed\"\n  observed   = var.mode == \"observed\"\n  topic_list = var.topics == \"\" ? [] : [for t in split(\",\", var.topics) : trimspace(t)]\n}\n\nprovider \"github\" {\n  base_url = var.base_url != \"\" ? var.base_url : null\n  # null, not \"\": an empty string is a real (invalid) owner to the provider, where\n  # omitting the argument entirely is what makes it default to the token's own\n  # account \u2014 the user layer.\n  owner = var.default_org != \"\" ? var.default_org : null\n  token = var.token\n}\n\nresource \"github_repository\" \"this\" {\n  count = local.managed ? 1 : 0\n\n  name        \
+      \   = var.repo_name\n  description    = var.description\n  visibility     = var.visibility\n  auto_init      = var.auto_init\n  has_issues     = var.has_issues\n  has_wiki       = var.has_wiki\n  topics         = local.topic_list\n  default_branch = var.default_branch\n\n  lifecycle {\n    precondition {\n      condition     = var.access == \"write\"\n      error_message = \"mode: managed needs a write connection; this XScmConnection is access: read.\"\n    }\n  }\n}\n\nresource \"github_branch_default\" \"this\" {\n  count      = local.managed && var.default_branch != \"\" && var.auto_init ? 1 : 0\n  repository = github_repository.this[0].name\n  branch     = var.default_branch\n}\n\ndata \"github_repository\" \"this\" {\n  count     = local.observed ? 1 : 0\n  full_name = \"${var.default_org}/${var.repo_name}\"\n\n  lifecycle {\n    precondition {\n      # GitHub has no whoami lookup (unlike Gitea's data.gitea_user), so observing \"my own\n      # repo\" has no way to resolve an\
+      \ owner. Required here even though\n      # XScmConnection.org is optional.\n      condition     = var.default_org != \"\"\n      error_message = \"mode: observed on GitHub needs org on the XScmConnection \u2014 there is no way to look up a repository under 'my own account' without one.\"\n    }\n  }\n}\n\n# \u2500\u2500 Neutral outputs: the same five names whatever the host \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\noutput \"repo_id\" {\n  value = local.managed ? tostring(github_repository.this[0].repo_id) : tostring(data.github_repository.this[0].repo_id)\n}\noutput \"clone_url\" {\n  value = local.managed ? github_repository.this[0].http_clone_url : data.github_repository.this[0].http_clone_url\n}\noutput \"ssh_url\" {\n  value = local.managed ? github_repository.this[0].ssh_clone_url : data.github_repository.this[0].ssh_clone_url\n}\noutput \"html_url\" {\n  value = local.managed ? github_repository.this[0].html_url : data.github_repository.this[0].html_url\n\
+      }\noutput \"full_name\" {\n  value = local.managed ? github_repository.this[0].full_name : data.github_repository.this[0].full_name\n}\n"
+    source: Inline
+    varFiles:
+      - secretKeyRef:
+          key: credentials
+          name: scm-connection-github-wxops-idp
+          namespace: crossplane-system
+        source: SecretKey
+    vars:
+      - key: mode
+        value: managed
+      - key: repo_name
+        value: api-service
+      - key: description
+        value: Alpha squad API service
+      - key: visibility
+        value: private
+      - key: default_branch
+        value: main
+      - key: auto_init
+        value: 'true'
+      - key: has_issues
+        value: 'true'
+      - key: has_wiki
+        value: 'false'
+      - key: topics
+        value: wxops-managed
+  providerConfigRef:
+    name: default

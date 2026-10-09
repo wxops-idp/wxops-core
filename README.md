@@ -14,11 +14,11 @@ Deployment Service/Ingress from the last app that looked similar, and wire the s
 operation.
 
 W'xOps Core turns each of those into a Kubernetes object with a schema: `XGiteaUser`, `XTenantDatabase`, `XTenantApp`, and four more. Crossplane reconciles them
-the same way it reconciles anything else — continuously, declaratively, with `status` fields you can poll instead of watching a Terraform apply scroll by. What
-actually executes underneath (Terraform against a Gitea provider, or Kubernetes objects composed via KCL) is an implementation detail the schema hides.
+the same way it reconciles anything else — continuously, declaratively, with `status` fields you can poll instead of watching an apply scroll by. What
+actually executes underneath (HCL run in-cluster against a Gitea provider, or Kubernetes objects composed via KCL) is an implementation detail the schema hides.
 
 This repo is **only the Configuration packages** — the schemas and the composition logic. It has no UI, no CLI, and no build pipeline; **see [Out of
-scope](ROADMAP.md#out-of-scope--what-wxops-core-is-not) for the deliberate boundary.**
+scope](development-docs/_archives/ROADMAP.md#out-of-scope--what-wxops-core-is-not) for the deliberate boundary.**
 
 ---
 **Table of Contents**
@@ -27,7 +27,7 @@ scope](ROADMAP.md#out-of-scope--what-wxops-core-is-not) for the deliberate bound
   - [The problem this solves](#the-problem-this-solves)
   - [Packages](#packages)
   - [Documentation](#documentation)
-  - [Why Crossplane + Terraform](#why-crossplane--terraform)
+  - [Why Crossplane + OpenTofu](#why-crossplane--opentofu)
   - [Repository layout](#repository-layout)
   - [Quick start](#quick-start)
   - [Development](#development)
@@ -44,38 +44,37 @@ scope](ROADMAP.md#out-of-scope--what-wxops-core-is-not) for the deliberate bound
 <!-- packages-table-start -->
 | Package | Kind | Group | API Versions | Last changed in |
 |---|---|---|---|---|
-| [`gitea-user`](package/gitea-user/) | `XGiteaUser` | `platform.wxops.cloud` | `v1alpha1` | `release-2026-09-16` |
-| [`gitea-org`](package/gitea-org/) | `XGiteaOrg` | `platform.wxops.cloud` | `v1alpha1` | `release-2026-09-16` |
-| [`gitea-team`](package/gitea-team/) | `XGiteaTeam` | `platform.wxops.cloud` | `v1alpha1` | `release-2026-09-16` |
-| [`gitea-repository`](package/gitea-repository/) | `XGiteaRepository` | `platform.wxops.cloud` | `v1alpha1` | `release-2026-09-16` |
-| [`platform-database-clusters`](package/platform-database-clusters/) | `XPlatformDatabaseCluster` | `platform.wxops.cloud` | `v1alpha1` | `release-2026-09-16` |
-| [`tenant-database`](package/tenant-database/) | `XTenantDatabase` | `platform.wxops.cloud` | `v1alpha1` | `release-2026-09-16` |
-| [`tenant-app`](package/tenant-app/) | `XTenantApp` | `platform.wxops.cloud` | `v1alpha1` | `release-2026-09-16` |
+| [`platform-database-clusters`](package/platform/platform-database-clusters/) | `XPlatformDatabaseCluster` | `platform.wxops.cloud` | `v1alpha1` | `release-2026-09-16` |
+| [`tenant-database`](package/platform/tenant-database/) | `XTenantDatabase` | `platform.wxops.cloud` | `v1alpha1` | `release-2026-09-16` |
+| [`tenant-app`](package/platform/tenant-app/) | `XTenantApp` | `platform.wxops.cloud` | `v1alpha1` | `release-2026-09-16` |
+| [`scm-connection`](package/scm/connection/) | `XScmConnection` | `scm.wxops.cloud` | `v1alpha1` | `unreleased` |
+| [`scm-repository`](package/scm/repository/) | `XScmRepository` | `scm.wxops.cloud` | `v1alpha1` | `unreleased` |
+| [`scm-oauth-app`](package/scm/oauth-app/) | `XScmOAuthApp` | `scm.wxops.cloud` | `v1alpha1` | `unreleased` |
 <!-- packages-table-end -->
 
 > [!TIP]
-> `random-password` lives in `package/random-password/` as a utility composition and examples, and it will not published as OCI Artifact.
+> `random-password` lives in `package/platform/random-password/` as a utility composition and examples, and it will not published as OCI Artifact.
 
 Served XRD API versions, and the release each package last changed in, are tracked in [`VERSIONS.yaml`](VERSIONS.yaml). Releases are named by date —
-`release-YYYY-MM-DD` — and compatibility is the API version, not the release name; see [`docs/development/releasing.md`](docs/development/releasing.md).
+`release-YYYY-MM-DD` — and compatibility is the API version, not the release name; see [`development-docs/development/releasing.md`](development-docs/development/releasing.md).
 
 ---
 
 ## Documentation
 
-Everything is linked from one hub, [`docs/README.md`](docs/README.md), which also holds the **development matrix**: every package, core idea and delivery
-mechanism, where it stands, and what is next.
+Documentation has two homes. [`docs/README.md`](docs/README.md) is for using, operating and building on the platform. [`development-docs/README.md`](development-docs/README.md)
+holds the development matrix — every package, core idea and delivery mechanism, where it stands and what is next — plus the decisions, proposals and roadmap.
 
 | Section | For | Start with |
 |---|---|---|
 | [API reference](docs/api-reference/README.md) | What each Kind accepts, what Core composes and keeps reconciled, what it reports | The reconcile loop from your side, then one page per Kind |
 | [Core ideas](docs/README.md#core-ideas) | Darlane, Guardian, multi-cluster, observability, self-service operations, security | [Solution matrix](docs/core-ideas/solution-matrix.md) |
 | [User guide](docs/README.md#user-guide) | Installing Core and building on it | [Setup](docs/user-guide/setup.md) · [App onboarding](docs/user-guide/app-onboarding.md) |
-| [Development](docs/development/README.md) | Changing, testing, releasing and rolling out Core | [Development guide](docs/development/README.md) · [Releasing](docs/development/releasing.md) |
+| [Development](development-docs/README.md) | Changing, testing, releasing and rolling out Core, and the decisions behind it | [Development guide](development-docs/development/README.md) · [Releasing](development-docs/development/releasing.md) · [RFC index](development-docs/rfc/README.md) |
 
 ---
 
-## Why Crossplane + Terraform
+## Why Crossplane + OpenTofu
 
 ![W'xOps Core on Crossplane — the runtime (RBAC manager), the definitions layer (Providers, Functions and Configurations composing into XRDs and Compositions), and a composite resource fanning out to real Kubernetes, database and cloud resources](images/w'xops-core-crossplane.png)
 
@@ -88,7 +87,7 @@ The previous direction used `kubebuilder` to build a controller from scratch. Th
 The current approach combines two tools with clear roles:
 
 - **Crossplane** owns the platform API layer: `XRD`s define the schema, `Composition`s wire them to infrastructure, and the control loop reconciles desired state.
-- **Terraform** (via `provider-terraform`) owns the infrastructure execution: each `Workspace` resource runs a plan/apply cycle in-cluster against a Gitea Terraform provider.
+- **OpenTofu** (via `provider-opentofu`) owns the infrastructure execution: each `Workspace` resource runs a plan/apply cycle in-cluster against a vendor's Terraform-compatible provider. OpenTofu is the open-source (MPL-2.0) fork of Terraform and reads the same HCL, which keeps the whole runtime stack open source. The four `gitea-*` packages still run on `provider-terraform` until they are retired (see [RFC-002](development-docs/rfc/002-migrate-terraform-to-opentofu.md)).
 
 Composition functions may be written in Python, Go, CEL, KCL, or Go templating. The `kcl/` directory holds KCL-based composition logic for
 `platform-database-clusters`, `tenant-database`, and `tenant-app` — see [KCL composition functions](#kcl-composition-functions) below.
@@ -120,11 +119,13 @@ package/                      ← Crossplane Configuration packages
                               ← kubectl apply -k package/dev/
   kustomization.yaml          ← delegates to install/ (kubectl apply -k package/)
 providers/                    ← shared Provider + Function installs + ProviderConfig
-docs/                         ← documentation hub + development matrix (docs/README.md)
+docs/                         ← generic documentation hub (docs/README.md): using, operating, building on Core
+  learn/                      ← Crossplane, OpenTofu and KCL as this repo uses them
   api-reference/              ← the reconcile loop, one page per Kind, the status contract
   core-ideas/                 ← Darlane, Guardian, multi-cluster, observability, self-service, security
   user-guide/                 ← setup, app onboarding, portal integration
-  development/                ← development guide, releasing
+development-docs/             ← development hub (development-docs/README.md): matrix, decisions, process
+  adr/ · rfc/ · development/ (guide, releasing) · _archives/ (ROADMAP.md, superseded by the RFC index)
 examples/                     ← minimal XR YAML to exercise each package
   gitea-user/
     credentials-secret.yaml
@@ -180,7 +181,7 @@ pre-commit install --hook-type pre-push --hook-type commit-msg
 make test-deps && make test        # the offline merge gate — no cluster needed
 ```
 
-Every hook, every make target and the rules that bite are in the [development guide](docs/development/README.md); the change loop and the new-package checklist
+Every hook, every make target and the rules that bite are in the [development guide](development-docs/development/README.md); the change loop and the new-package checklist
 are in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
@@ -209,7 +210,7 @@ make release           # gate → pin changed packages → CHANGELOG.md → comm
 git push origin main && git push origin release-YYYY-MM-DD
 ```
 
-The API rule, release notes, what CI publishes and the changelog are in [Releasing](docs/development/releasing.md).
+The API rule, release notes, what CI publishes and the changelog are in [Releasing](development-docs/development/releasing.md).
 
 ---
 
@@ -218,9 +219,10 @@ The API rule, release notes, what CI publishes and the changelog are in [Releasi
 | Component | Version | Reference |
 |---|---|---|
 | Crossplane | v2.3 | https://docs.crossplane.io/v2.3/ |
-| provider-terraform | v1.1.5 | https://marketplace.upbound.io/providers/upbound/provider-terraform/v1.1.5 |
+| provider-opentofu | v1.1.9 | https://marketplace.upbound.io/providers/upbound/provider-opentofu/v1.1.9 |
+| provider-terraform (legacy, `gitea-*` only) | v1.1.5 | https://marketplace.upbound.io/providers/upbound/provider-terraform/v1.1.5 |
 | function-patch-and-transform | v0.10.7 | https://marketplace.upbound.io/functions/crossplane-contrib/function-patch-and-transform/v0.10.7 |
-| function-go-templating | v0.12.2 | https://marketplace.upbound.io/functions/crossplane-contrib/function-go-templating/v0.12.2 |
+| function-go-templating (archived, unused) | v0.12.2 | https://marketplace.upbound.io/functions/crossplane-contrib/function-go-templating/v0.12.2 |
 | function-kcl | v0.12.1 | https://marketplace.upbound.io/functions/crossplane-contrib/function-kcl/v0.12.1 |
 | function-extra-resources | v0.3.0 | https://marketplace.upbound.io/functions/crossplane-contrib/function-extra-resources/v0.3.0 |
 | Gitea Terraform provider | ~> 0.7.0 | https://registry.terraform.io/providers/go-gitea/gitea/latest/docs |
@@ -249,22 +251,6 @@ This project has a [Code of Conduct](CODE_OF_CONDUCT.md). Found a vulnerability?
 ## License
 
 Licensed under the [Apache License, Version 2.0](LICENSE).
-
-```
-Copyright 2026 Xeus Nguyen (W'xOps)
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-```
 
 Third-party components composed by this project are listed in [`NOTICE`](NOTICE), which redistributors must preserve under Section 4(d) of the License. The
 W'xOps name and marks are not granted by the License — see Section 6.

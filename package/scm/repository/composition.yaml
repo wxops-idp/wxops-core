@@ -1,0 +1,501 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: xscmrepositories.scm.wxops.cloud
+  labels:
+    crossplane.io/xrd: xscmrepositories.scm.wxops.cloud
+    channel: stable
+spec:
+  compositeTypeRef:
+    apiVersion: scm.wxops.cloud/v1alpha1
+    kind: XScmRepository
+
+  mode: Pipeline
+  pipeline:
+    - step: patch-and-transform
+      functionRef:
+        name: function-patch-and-transform
+      input:
+        apiVersion: pt.fn.crossplane.io/v1beta1
+        kind: Resources
+        resources:
+          # One OpenTofu Workspace. Which module it runs is NOT a `count`/`if` inside one shared
+          # HCL file — `spec.parameters.vendor` below picks between two complete, vendor-exclusive
+          # module strings via a `match` transform. Terraform configures every provider a module
+          # declares as soon as a resource of its type exists in that module, whether or not that
+          # resource's `count` evaluates to zero — there is no way to make a provider conditional
+          # from inside HCL (verified against both go-gitea/gitea and integrations/github: each
+          # one's `Configure` makes a real, authenticated call, so the unused vendor's provider
+          # fails using the other vendor's token, DNS placeholder or not). See
+          # development-docs/rfc/003-scm-connections-and-resources.md for how this was found and
+          # why `vendor` is repeated on this XR instead of read only from the connection.
+          - name: tf-workspace
+            base:
+              apiVersion: opentofu.upbound.io/v1beta1
+              kind: Workspace
+              spec:
+                providerConfigRef:
+                  name: default
+                forProvider:
+                  source: Inline
+                  # Always overwritten by the `match` transform patch below — never rendered as-is.
+                  module: placeholder
+                  vars:
+                    - key: mode
+                      value: managed
+                    - key: repo_name
+                      value: placeholder
+                    - key: description
+                      value: ""
+                    - key: visibility
+                      value: private
+                    - key: default_branch
+                      value: main
+                    - key: auto_init
+                      value: "true"
+                    - key: has_issues
+                      value: "true"
+                    - key: has_wiki
+                      value: "false"
+                    - key: topics
+                      value: ""
+
+                  # vendor, base_url, default_org, access and token all arrive from the connection's
+                  # Secret, in tfvars form — default_org is the SOLE source of org/owner. There is no
+                  # per-resource override: the connection already names the org, which is why
+                  # scmRef is required and org is not a repository field at all. The composition
+                  # never reads the connection itself: it only derives the Secret's name from
+                  # scmRef.name with the same Format transform the connection used to create it.
+                  varFiles:
+                    - source: SecretKey
+                      secretKeyRef:
+                        namespace: crossplane-system
+                        name: placeholder
+                        key: credentials
+
+            patches:
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.parameters.scmRef.name
+                toFieldPath: spec.forProvider.varFiles[0].secretKeyRef.name
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: "scm-connection-%s"
+
+              # ── Module selection ────────────────────────────────────────────
+              # The whole module is one of two literal strings, chosen by `vendor` — never a `count`
+              # inside a single shared module. See the comment on the composed resource above.
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.parameters.vendor
+                toFieldPath: spec.forProvider.module
+                transforms:
+                  - type: match
+                    match:
+                      fallbackValue: ""
+                      patterns:
+                        - type: literal
+                          literal: gitea
+                          result: |
+                            terraform {
+                              required_providers {
+                                gitea = { source = "go-gitea/gitea", version = "~> 0.8" }
+                              }
+                            }
+
+                            # ── From the XScmConnection Secret (varFiles) ───────────────────────────
+                            variable "vendor" {
+                              type = string
+                              validation {
+                                # This module only ever runs `gitea_*` resources, so a mismatch here means
+                                # the XR's own `vendor` field (used to pick this module) disagrees with what
+                                # its `scmRef` connection actually is — a scmRef/vendor mismatch, not a bad
+                                # connection. Caught here, before the gitea provider ever configures with
+                                # whatever token the mismatched connection actually holds.
+                                condition     = var.vendor == "gitea"
+                                error_message = "XScmRepository.spec.parameters.vendor is gitea, but scmRef's XScmConnection resolves to a different vendor. Fix the mismatch on one side."
+                              }
+                            }
+                            variable "base_url" {
+                              type = string
+                              validation {
+                                condition     = var.base_url != ""
+                                error_message = "baseUrl is required on a Gitea XScmConnection — there is no default host to fall back to."
+                              }
+                            }
+                            variable "default_org" { type = string } # "" means the user layer — see XScmConnection.org
+                            variable "access" {
+                              type = string
+                              validation {
+                                condition     = contains(["write", "read"], var.access)
+                                error_message = "access must be write or read."
+                              }
+                            }
+                            variable "token" {
+                              type      = string
+                              sensitive = true
+                            }
+
+                            # ── From the XR ─────────────────────────────────────────────────────────
+                            variable "mode" {
+                              type = string
+                              validation {
+                                condition     = contains(["managed", "observed"], var.mode)
+                                error_message = "mode must be managed or observed."
+                              }
+                            }
+                            variable "repo_name" { type = string }
+                            variable "description" { type = string }
+                            variable "visibility" { type = string }
+                            variable "default_branch" { type = string }
+                            variable "auto_init" { type = bool }
+                            variable "has_issues" { type = bool }
+                            variable "has_wiki" { type = bool }
+                            variable "topics" { type = string }
+
+                            locals {
+                              managed           = var.mode == "managed"
+                              observed          = var.mode == "observed"
+                              need_gitea_whoami = var.default_org == ""
+
+                              # The user layer, resolved. Omitting `username` on the data source is the provider's
+                              # own way to mean "the authenticated user" — a real whoami, verified against the
+                              # provider's schema (the input is optional there, unlike every other username/owner
+                              # field in this module).
+                              org = var.default_org != "" ? var.default_org : data.gitea_user.whoami[0].username
+                            }
+
+                            data "gitea_user" "whoami" {
+                              count = local.need_gitea_whoami ? 1 : 0
+                            }
+
+                            provider "gitea" {
+                              base_url = var.base_url
+                              token    = var.token
+                            }
+
+                            resource "gitea_repository" "this" {
+                              count = local.managed ? 1 : 0
+
+                              username       = local.org
+                              name           = var.repo_name
+                              description    = var.description
+                              private        = var.visibility == "private"
+                              auto_init      = var.auto_init
+                              default_branch = var.default_branch
+                              has_issues     = var.has_issues
+                              has_wiki       = var.has_wiki
+
+                              lifecycle {
+                                precondition {
+                                  condition     = var.access == "write"
+                                  error_message = "mode: managed needs a write connection; this XScmConnection is access: read."
+                                }
+                                precondition {
+                                  condition     = var.topics == ""
+                                  error_message = "topics is not supported on Gitea: the go-gitea/gitea provider has no topics attribute. Leave it empty."
+                                }
+                              }
+                            }
+
+                            data "gitea_repo" "this" {
+                              count    = local.observed ? 1 : 0
+                              username = local.org
+                              name     = var.repo_name
+                            }
+
+                            # ── Neutral outputs: the same five names whatever the host ───────────────
+                            output "repo_id" {
+                              value = local.managed ? tostring(gitea_repository.this[0].id) : tostring(data.gitea_repo.this[0].id)
+                            }
+                            output "clone_url" {
+                              value = local.managed ? gitea_repository.this[0].clone_url : data.gitea_repo.this[0].clone_url
+                            }
+                            output "ssh_url" {
+                              value = local.managed ? gitea_repository.this[0].ssh_url : data.gitea_repo.this[0].ssh_url
+                            }
+                            output "html_url" {
+                              value = local.managed ? gitea_repository.this[0].html_url : data.gitea_repo.this[0].html_url
+                            }
+                            output "full_name" {
+                              # Gitea's resource/data types have no full_name-shaped attribute, unlike GitHub's.
+                              value = "${local.org}/${var.repo_name}"
+                            }
+                        - type: literal
+                          literal: github
+                          result: |
+                            terraform {
+                              required_providers {
+                                github = { source = "integrations/github", version = "~> 6.13" }
+                              }
+                            }
+
+                            # ── From the XScmConnection Secret (varFiles) ───────────────────────────
+                            variable "vendor" {
+                              type = string
+                              validation {
+                                # This module only ever runs `github_*` resources, so a mismatch here means
+                                # the XR's own `vendor` field (used to pick this module) disagrees with what
+                                # its `scmRef` connection actually is — a scmRef/vendor mismatch, not a bad
+                                # connection. Caught here, before the github provider ever configures with
+                                # whatever token the mismatched connection actually holds.
+                                condition     = var.vendor == "github"
+                                error_message = "XScmRepository.spec.parameters.vendor is github, but scmRef's XScmConnection resolves to a different vendor. Fix the mismatch on one side."
+                              }
+                            }
+                            variable "base_url" { type = string }    # "" means github.com
+                            variable "default_org" { type = string } # "" means the user layer — see XScmConnection.org
+                            variable "access" {
+                              type = string
+                              validation {
+                                condition     = contains(["write", "read"], var.access)
+                                error_message = "access must be write or read."
+                              }
+                            }
+                            variable "token" {
+                              type      = string
+                              sensitive = true
+                            }
+
+                            # ── From the XR ─────────────────────────────────────────────────────────
+                            variable "mode" {
+                              type = string
+                              validation {
+                                condition     = contains(["managed", "observed"], var.mode)
+                                error_message = "mode must be managed or observed."
+                              }
+                            }
+                            variable "repo_name" { type = string }
+                            variable "description" { type = string }
+                            variable "visibility" { type = string }
+                            variable "default_branch" { type = string }
+                            variable "auto_init" { type = bool }
+                            variable "has_issues" { type = bool }
+                            variable "has_wiki" { type = bool }
+                            variable "topics" { type = string }
+
+                            locals {
+                              managed    = var.mode == "managed"
+                              observed   = var.mode == "observed"
+                              topic_list = var.topics == "" ? [] : [for t in split(",", var.topics) : trimspace(t)]
+                            }
+
+                            provider "github" {
+                              base_url = var.base_url != "" ? var.base_url : null
+                              # null, not "": an empty string is a real (invalid) owner to the provider, where
+                              # omitting the argument entirely is what makes it default to the token's own
+                              # account — the user layer.
+                              owner = var.default_org != "" ? var.default_org : null
+                              token = var.token
+                            }
+
+                            resource "github_repository" "this" {
+                              count = local.managed ? 1 : 0
+
+                              name           = var.repo_name
+                              description    = var.description
+                              visibility     = var.visibility
+                              auto_init      = var.auto_init
+                              has_issues     = var.has_issues
+                              has_wiki       = var.has_wiki
+                              topics         = local.topic_list
+                              default_branch = var.default_branch
+
+                              lifecycle {
+                                precondition {
+                                  condition     = var.access == "write"
+                                  error_message = "mode: managed needs a write connection; this XScmConnection is access: read."
+                                }
+                              }
+                            }
+
+                            resource "github_branch_default" "this" {
+                              count      = local.managed && var.default_branch != "" && var.auto_init ? 1 : 0
+                              repository = github_repository.this[0].name
+                              branch     = var.default_branch
+                            }
+
+                            data "github_repository" "this" {
+                              count     = local.observed ? 1 : 0
+                              full_name = "${var.default_org}/${var.repo_name}"
+
+                              lifecycle {
+                                precondition {
+                                  # GitHub has no whoami lookup (unlike Gitea's data.gitea_user), so observing "my own
+                                  # repo" has no way to resolve an owner. Required here even though
+                                  # XScmConnection.org is optional.
+                                  condition     = var.default_org != ""
+                                  error_message = "mode: observed on GitHub needs org on the XScmConnection — there is no way to look up a repository under 'my own account' without one."
+                                }
+                              }
+                            }
+
+                            # ── Neutral outputs: the same five names whatever the host ───────────────
+                            output "repo_id" {
+                              value = local.managed ? tostring(github_repository.this[0].repo_id) : tostring(data.github_repository.this[0].repo_id)
+                            }
+                            output "clone_url" {
+                              value = local.managed ? github_repository.this[0].http_clone_url : data.github_repository.this[0].http_clone_url
+                            }
+                            output "ssh_url" {
+                              value = local.managed ? github_repository.this[0].ssh_clone_url : data.github_repository.this[0].ssh_clone_url
+                            }
+                            output "html_url" {
+                              value = local.managed ? github_repository.this[0].html_url : data.github_repository.this[0].html_url
+                            }
+                            output "full_name" {
+                              value = local.managed ? github_repository.this[0].full_name : data.github_repository.this[0].full_name
+                            }
+
+              # `retain` is Crossplane's job, not the module's: orphaning the Workspace leaves the
+              # repository alone, where a destroy would delete source code.
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.parameters.retain
+                toFieldPath: spec.deletionPolicy
+                transforms:
+                  # map keys are strings, so the boolean has to become one first.
+                  - type: convert
+                    convert:
+                      toType: string
+                  - type: map
+                    map:
+                      "true": Orphan
+                      "false": Delete
+
+              # ── XR fields → module variables ───────────────────────────────
+              # vars[] is index-addressed, so entries are APPEND-ONLY: inserting one in the middle
+              # silently moves every value after it. See docs/learn/02-opentofu-here.md. Both module
+              # variants above declare the exact same variable names at these indices, so the mapping
+              # holds whichever one gets selected.
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.parameters.mode
+                toFieldPath: spec.forProvider.vars[0].value
+
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.parameters.repoName
+                toFieldPath: spec.forProvider.vars[1].value
+
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.parameters.description
+                toFieldPath: spec.forProvider.vars[2].value
+
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.parameters.visibility
+                toFieldPath: spec.forProvider.vars[3].value
+
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.parameters.defaultBranch
+                toFieldPath: spec.forProvider.vars[4].value
+
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.parameters.autoInit
+                toFieldPath: spec.forProvider.vars[5].value
+                transforms:
+                  - type: convert
+                    convert:
+                      toType: string
+
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.parameters.hasIssues
+                toFieldPath: spec.forProvider.vars[6].value
+                transforms:
+                  - type: convert
+                    convert:
+                      toType: string
+
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.parameters.hasWiki
+                toFieldPath: spec.forProvider.vars[7].value
+                transforms:
+                  - type: convert
+                    convert:
+                      toType: string
+
+              # A list reaches HCL as one comma-separated string and is split() back inside the
+              # module — the same idiom gitea-team uses for team members.
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.parameters.topics
+                toFieldPath: spec.forProvider.vars[8].value
+                transforms:
+                  - type: string
+                    string:
+                      type: Join
+                      join:
+                        separator: ","
+
+              # ── Status write-back ──────────────────────────────────────────
+              # provider-opentofu publishes non-sensitive outputs under status.atProvider.outputs,
+              # and only after a successful apply — so their presence is the "provisioned" signal.
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.outputs.repo_id
+                toFieldPath: status.repoId
+                policy:
+                  fromFieldPath: Optional
+
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.outputs.clone_url
+                toFieldPath: status.cloneUrl
+                policy:
+                  fromFieldPath: Optional
+
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.outputs.ssh_url
+                toFieldPath: status.sshUrl
+                policy:
+                  fromFieldPath: Optional
+
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.outputs.html_url
+                toFieldPath: status.htmlUrl
+                policy:
+                  fromFieldPath: Optional
+
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.outputs.full_name
+                toFieldPath: status.fullName
+                policy:
+                  fromFieldPath: Optional
+
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.outputs.repo_id
+                toFieldPath: status.created
+                policy:
+                  fromFieldPath: Optional
+                transforms:
+                  - type: match
+                    match:
+                      patterns:
+                        - type: regexp
+                          regexp: ".+"
+                          result: true
+                      fallbackValue: false
+
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.outputs.repo_id
+                toFieldPath: status.ready
+                policy:
+                  fromFieldPath: Optional
+                transforms:
+                  - type: match
+                    match:
+                      patterns:
+                        - type: regexp
+                          regexp: ".+"
+                          result: true
+                      fallbackValue: false
+
+              # In `observed` mode the data source fails the apply when the repository is absent, so
+              # an output at all means it exists.
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.outputs.repo_id
+                toFieldPath: status.exists
+                policy:
+                  fromFieldPath: Optional
+                transforms:
+                  - type: match
+                    match:
+                      patterns:
+                        - type: regexp
+                          regexp: ".+"
+                          result: true
+                      fallbackValue: false

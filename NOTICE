@@ -1,7 +1,7 @@
 W'xOps Core
-Copyright 2026 Xeus Nguyen (W'xOps)
+Copyright 2026 Xeus Nguyen (W'xOps IDP)
 
-This product includes software developed by Xeus Nguyen as part of the W'xOps
+This product includes software developed by Xeus Nguyen as part of the W'xOps IDP
 platform project.
 
 Licensed under the Apache License, Version 2.0 (the "License"); you may not use
@@ -22,13 +22,15 @@ vendor or redistribute, the following third-party components. Each remains
 governed by its own license; nothing in this repository alters those terms.
 
   Crossplane                    Apache-2.0    https://github.com/crossplane/crossplane
-  provider-terraform            Apache-2.0    https://github.com/upbound/provider-terraform
+  provider-opentofu             Apache-2.0    https://github.com/upbound/provider-opentofu
+  OpenTofu                      MPL-2.0       https://github.com/opentofu/opentofu
+  provider-terraform (archived) Apache-2.0    https://github.com/upbound/provider-terraform
   provider-kubernetes           Apache-2.0    https://github.com/crossplane-contrib/provider-kubernetes
   provider-sql                  Apache-2.0    https://github.com/crossplane-contrib/provider-sql
   function-kcl                  Apache-2.0    https://github.com/crossplane-contrib/function-kcl
   function-patch-and-transform  Apache-2.0    https://github.com/crossplane-contrib/function-patch-and-transform
   function-extra-resources      Apache-2.0    https://github.com/crossplane-contrib/function-extra-resources
-  function-go-templating        Apache-2.0    https://github.com/crossplane-contrib/function-go-templating
+  function-go-templating        Apache-2.0    https://github.com/crossplane-contrib/function-go-templating (archived, unused)
   KCL                           Apache-2.0    https://github.com/kcl-lang/kcl
   CloudNativePG                 Apache-2.0    https://github.com/cloudnative-pg/cloudnative-pg
   cert-manager                  Apache-2.0    https://github.com/cert-manager/cert-manager
@@ -37,6 +39,7 @@ governed by its own license; nothing in this repository alters those terms.
   Traefik Proxy                 MIT           https://github.com/traefik/traefik
   Gitea                         MIT           https://github.com/go-gitea/gitea
   Gitea Terraform provider      MPL-2.0       https://gitea.com/gitea/terraform-provider-gitea
+  GitHub Terraform provider     MIT           https://github.com/integrations/terraform-provider-github
 
 Trademarks and attribution: the "W'xOps" name and marks, and the name "Xeus
 Nguyen", are not licensed for use by redistributors except as required for

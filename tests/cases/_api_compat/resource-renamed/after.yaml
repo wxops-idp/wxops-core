@@ -2,7 +2,7 @@
 #
 # A tidy-up rename of the composition-resource-name. Crossplane never sees a
 # rename: it deletes app-deployment and creates app-main-deployment, taking the
-# running Deployment down with it. ROADMAP.md "The rename hazard".
+# running Deployment down with it.
 apiVersion: kubernetes.crossplane.io/v1alpha2
 kind: Object
 metadata:

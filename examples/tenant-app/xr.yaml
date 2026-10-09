@@ -3,6 +3,14 @@ kind: XTenantApp
 metadata:
   name: rocket-team-payment-api
 spec:
+  # spec.crossplane is a sibling of spec.parameters, not a field inside it — track a channel
+  # (every release labels its Composition channel: stable; make install-dev applies channel:
+  # nightly). See development-docs/development/releasing.md#channels for the Manual-pin alternative.
+  # crossplane:
+  #   compositionRevisionSelector:
+  #     matchLabels:
+  #       channel: stable          # or nightly
+  #   compositionUpdatePolicy: Automatic
   parameters:
     appName: payment-api
     namespace: rocket-team-production
@@ -241,12 +249,3 @@ spec:
     # wired up separately (e.g. an ExternalSecret/PushSecret + XTenantDatabase
     # claim). Reference the resulting Secret(s) via secretsFrom above, or via
     # envFrom directly for any other Secret/ConfigMap.
-
-  # spec.crossplane is a sibling of spec.parameters, not a field inside it — track a channel
-  # (every release labels its Composition channel: stable; make install-dev applies channel:
-  # nightly). See docs/development/releasing.md#channels for the Manual-pin alternative.
-  # crossplane:
-  #   compositionRevisionSelector:
-  #     matchLabels:
-  #       channel: stable          # or nightly
-  #   compositionUpdatePolicy: Automatic

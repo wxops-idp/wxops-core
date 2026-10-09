@@ -6,6 +6,9 @@
 #   api      — the Kubernetes API version the XRD serves (platform.wxops.cloud/v1alpha1).
 #              This is the contract: dev XRs, prod XRs and the portal all bind to it.
 #              Edited by hand, and rarely.
+#   group    — the API group the package's kinds live in (platform | scm | auth), per ADR-002.
+#   path     — where the package directory lives, per RFC-007. `tests/lib/packages.py` is the one
+#              resolver; nothing derives a directory from a package name by string rules.
 #   package  — `current` is the release (release-YYYY-MM-DD[.N]) in which the package's
 #              content last changed: the OCI tag package/install/ pins. Written by
 #              `make release`, never by hand. Legacy vX.Y.Z values stay until the
@@ -26,49 +29,28 @@
 # Date-named OCI tags are not semver, so a Crossplane `dependsOn` version range
 # cannot target these packages; pin an exact tag or digest if one ever must.
 #
-# API version decision (ROADMAP.md Phase 0 §0.5, decided): all seven XRDs stay
+# API version decision (development-docs/_archives/ROADMAP.md Phase 0 §0.5, decided): every released XRD stays
 # on v1alpha1 through the portal's first integration. Every Phase 0 change
 # (status parity, monitoring, targetCluster, darlane status) was purely
 # additive, so nothing forced a bump. Promotion to v1beta1 at release readiness
-# (ROADMAP.md's OSS-release section) is a stability commitment over an identical
+# (development-docs/_archives/ROADMAP.md's OSS-release section) is a stability commitment over an identical
 # schema — per the rule above, not a schema change. The portal pins the API version, never a core
 # release. See docs/api-reference/status-contract.md for the status fields it binds to.
 
 packages:
 
-  gitea-user:
-    package:
-      current: release-2026-09-16
-    api:
-      served: [v1alpha1]
-      storage: v1alpha1
-    description: Manages a single Gitea user lifecycle (create / update / delete).
-
-  gitea-org:
-    package:
-      current: release-2026-09-16
-    api:
-      served: [v1alpha1]
-      storage: v1alpha1
-    description: Manages a Gitea organisation with visibility and metadata.
-
-  gitea-team:
-    package:
-      current: release-2026-09-16
-    api:
-      served: [v1alpha1]
-      storage: v1alpha1
-    description: Manages a team inside a Gitea organisation, including membership.
-
-  gitea-repository:
-    package:
-      current: release-2026-09-16
-    api:
-      served: [v1alpha1]
-      storage: v1alpha1
-    description: Manages a Gitea repository owned by an organisation.
+# gitea-user/-org/-team/-repository and the random-password utility are ARCHIVED as of this
+# release, not deleted: no cluster ran them (no live deployment existed to migrate), and every
+# active package now runs on OpenTofu, so keeping them served bought nothing. Dropping them
+# from this file is what makes them `breaking`/package-removed to tests/api_compat.py — see
+# tests/api-compat-allow.yaml. Source, tests, examples and docs all moved, not deleted: package
+# source to package/platform/archives/<name>/, and the rest to the sibling `_archives/` folder
+# in tests/cases/, examples/ and docs/api-reference/ (skipped by test discovery; see
+# tests/lib/render.py). provider-terraform went the same way, to providers/archive/.
 
   platform-database-clusters:
+    group: platform
+    path: package/platform/platform-database-clusters
     package:
       current: release-2026-09-16
     api:
@@ -77,6 +59,8 @@ packages:
     description: Platform-managed CloudNativePG cluster with pooler, Vault credential seeding, and shared-cluster labeling for dynamic tenant pool discovery.
 
   tenant-database:
+    group: platform
+    path: package/platform/tenant-database
     package:
       current: release-2026-09-16
     api:
@@ -85,6 +69,8 @@ packages:
     description: Tenant-facing PostgreSQL database with dynamic tier resolution (shared pool auto-assign / dedicated cluster composition), Vault-backed credentials, and ESO sync.
 
   tenant-app:
+    group: platform
+    path: package/platform/tenant-app
     package:
       current: release-2026-09-16
     api:
@@ -94,11 +80,39 @@ packages:
       Tenant application scaffold (Deployment, Service, Traefik IngressRoute, Darlane debug-twin) with cert-manager TLS auto-provisioning,
       A/B traffic splitting via TraefikService, fileSync emptyDir overlay, multi-source volumes (PVC/ConfigMap/Secret), and oauth2-proxy SSO via Traefik middlewares
 
-# Utility compositions — not yet published as standalone OCI packages.
-utilities:
+  # ── scm.wxops.cloud — Git hosting across Gitea, GitHub and (later) GitLab ──
+  # ADR-002 (API groups) and RFC-003 (the XScm* family). Vendor behaviour lives in each
+  # package's OpenTofu module, not in the composition.
 
-  random-password:
+  scm-connection:
+    group: scm
+    path: package/scm/connection
+    package:
+      current: unreleased
     api:
       served: [v1alpha1]
       storage: v1alpha1
-    description: Generates a random password via the Terraform random provider.
+    description: Registers one Git hosting service (vendor, base URL, org, token) and renders the credential every other scm resource reads.
+
+  scm-repository:
+    group: scm
+    path: package/scm/repository
+    package:
+      current: unreleased
+    api:
+      served: [v1alpha1]
+      storage: v1alpha1
+    description: Creates (managed) or reads (observed) a repository on Gitea or GitHub through one generic OpenTofu module.
+
+  scm-oauth-app:
+    group: scm
+    path: package/scm/oauth-app
+    package:
+      current: unreleased
+    api:
+      served: [v1alpha1]
+      storage: v1alpha1
+    description: Registers a host-side OAuth application (Gitea) or adopts an operator-registered one (GitHub), and publishes its credentials to the secret store.
+
+# Utility compositions — not yet published as standalone OCI packages.
+utilities:

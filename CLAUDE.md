@@ -4,13 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Architecture
 
-W'xOps Core is the control-plane "brain" of W'xOps, built on **Crossplane v2** combined with **provider-terraform** and **provider-kubernetes** — not on hand-written controllers. A prior `kubebuilder` Go controller was **rejected and removed**. Do not reintroduce a from-scratch Go controller.
+W'xOps Core is the control-plane "brain" of W'xOps, built on **Crossplane v2** combined with **provider-opentofu** and **provider-kubernetes** — not on hand-written controllers. `provider-terraform` is archived in `providers/archive/`, kept for the record only: the `gitea-*` packages it ran are themselves archived (see Packages below), never released, no cluster depends on them. Every active package runs on OpenTofu (`opentofu.upbound.io`), and `tests/invariants.py` enforces it. A prior `kubebuilder` Go controller was **rejected and removed**. Do not reintroduce a from-scratch Go controller.
 
 ### Two composition engines
 
 | Engine | Used by | When to use |
 |---|---|---|
-| `function-patch-and-transform` | `gitea-*`, `random-password` | Simple single-resource inline HCL `Workspace` |
+| `function-patch-and-transform` | `scm-*` (`gitea-*`, `random-password` archived) | Single composed resource: an inline-HCL `Workspace`, or one wrapped `Object`. The `scm-*` packages keep **all** vendor logic in HCL — no KCL, no direct API calls |
 | `function-kcl` | `platform-database-clusters`, `tenant-database`, `tenant-app` | Multi-resource, conditional branching, list comprehensions |
 
 `tenant-database` additionally uses `function-extra-resources` as a first pipeline step to discover shared clusters via label selector before the KCL step renders resources.
@@ -44,18 +44,22 @@ Documentation shows the full logical path (e.g. `tenants/{owner}/databases/{dbNa
 
 ## Packages
 
-Seven Crossplane Configuration packages plus one utility:
+Six Crossplane Configuration packages:
 
 | Package | Kind | Composition |
 |---|---|---|
-| `gitea-user` | `XGiteaUser` | patch-and-transform + inline HCL |
-| `gitea-org` | `XGiteaOrg` | patch-and-transform + inline HCL |
-| `gitea-team` | `XGiteaTeam` | patch-and-transform + inline HCL |
-| `gitea-repository` | `XGiteaRepository` | patch-and-transform + inline HCL |
 | `platform-database-clusters` | `XPlatformDatabaseCluster` | function-kcl |
 | `tenant-database` | `XTenantDatabase` | function-extra-resources + function-kcl |
 | `tenant-app` | `XTenantApp` | function-kcl |
-| `random-password` | `XRandomPassword` | utility, not published as OCI |
+| `scm-connection` | `XScmConnection` | patch-and-transform + ESO `ExternalSecret` (no Workspace) |
+| `scm-repository` | `XScmRepository` | patch-and-transform + inline HCL, one module for every vendor |
+| `scm-oauth-app` | `XScmOAuthApp` | patch-and-transform + inline HCL + ESO `PushSecret` |
+
+**Archived, not deleted** — `gitea-user`/`-org`/`-team`/`-repository` (`XGiteaUser`/`XGiteaOrg`/`XGiteaTeam`/`XGiteaRepository`, all
+patch-and-transform + inline HCL) and the `random-password` utility (`XRandomPassword`): no cluster ever ran them, every active
+package now runs on OpenTofu, and `scm-*` replaces what they did. Source lives on at `package/platform/archives/<name>/`, tests at
+`tests/cases/_archives/<name>/`, docs at `docs/api-reference/_archives/<name>.md` — none of it runs in `make test`/`build`/`release`.
+See `VERSIONS.yaml`'s comment above `packages:` and [RFC-003](development-docs/rfc/003-scm-connections-and-resources.md).
 
 Served XRD API versions, and the release each package last changed in, are tracked in
 `VERSIONS.yaml`. Releases are named by date (`release-YYYY-MM-DD`); compatibility is the API
@@ -63,37 +67,47 @@ version, not the release name — see [`release-notes/README.md`](release-notes/
 
 ## Directory layout
 
-- `package/<name>/` — `xrd.yaml`, `composition.yaml`, `crossplane.yaml`, `kustomization.yaml`, `README.md`
-- `package/install/` — production OCI registry-based install (`Configuration` resources, auto-bumped by CI)
+- `package/<group>/<name>/` — `xrd.yaml`, `composition.yaml`, `crossplane.yaml`, `kustomization.yaml`, `README.md`.
+  The group is the API group the package's kinds serve (`platform`, and `scm`/`auth` as they land) — see
+  [ADR-002](development-docs/adr/002-three-api-groups.md) and [RFC-007](development-docs/rfc/007-package-layout-by-api-group.md).
+  **`VERSIONS.yaml` is the only package list**: each entry carries `group` and `path`, and `tests/lib/packages.py`
+  is the one resolver. Adding a package is a `VERSIONS.yaml` entry plus an entry in `package/dev/kustomization.yaml`;
+  no Makefile, script, workflow or test list needs editing.
+- `package/install/<group>/` — production OCI registry-based install (`Configuration` resources, auto-bumped by CI)
 - `package/dev/` — development install (applies XRDs + Compositions directly)
 - `providers/` — shared provider/function installs and `ProviderConfig` (apply once per cluster)
 - `kcl/<name>/` — KCL composition source (`kcl.mod`, `main.k`)
 - `examples/<name>/` — minimal XR YAML to exercise each package
 - `tests/cases/<name>/` — test cases; `tests/lib/` shared harness (see [Testing](#testing))
-- `docs/` — seven sections behind one hub, `docs/README.md`, which also holds the
-  **development matrix** (every package, core idea and delivery mechanism, its state and next step).
-  Check the matrix and `docs/core-ideas/solution-matrix.md` before proposing work: they record what's
-  shipped, designed and rejected. The sections:
-  - `docs/learn/` — contributor onboarding for Crossplane/Terraform/KCL newcomers, each page against
-    a real file in this repo; prerequisite reading for `docs/development/`, not part of it
+- `docs/` — **generic documentation** for anyone who uses, operates, builds on or learns from the platform. Hub:
+  `docs/README.md`. Before proposing work, check the development matrix (`development-docs/README.md`), which
+  records what's shipped, designed and rejected, and `docs/core-ideas/solution-matrix.md`. The sections:
+  - `docs/learn/` — contributor onboarding for Crossplane/OpenTofu/KCL newcomers, each page against
+    a real file in this repo; prerequisite reading for `development-docs/development/`, not part of it
   - `docs/api-reference/` — the reconcile loop from a user's side (`README.md`), one page per Kind,
     `status-contract.md`
-  - `docs/core-ideas/` — `solution-matrix.md`, `darlane.md`, `guardian.md`,
+  - `docs/core-ideas/` — `solution-matrix.md` (the idea map), `darlane.md`, `guardian.md`,
     `multi-cluster{,-proposal,-connectivity,-scale}.md`, `observability.md`,
     `self-service-operations.md`, `knowledge-architecture.md`, `security-threat-model.md`
   - `docs/user-guide/` — `setup.md`, `app-onboarding.md`, `portal-integration.md`
-  - `docs/development/` — the development guide (`README.md`), `releasing.md`
-  - `docs/adr/` — one committed file per decision of lasting consequence (`TEMPLATE.md`, `README.md`
+- `development-docs/` — **everything about building, deciding and releasing**. Hub: `development-docs/README.md`,
+  which holds the development matrix and the *Where new docs go* table:
+  - `development-docs/development/` — the development guide (`README.md`), `releasing.md`
+  - `development-docs/adr/` — one committed file per decision of lasting consequence (`TEMPLATE.md`, `README.md`
     for the lifecycle); breaking or architectural changes get one, so the reasoning survives
-    independent of any single conversation — see [ADR-001](docs/adr/001-package-channel-label.md)
-  - `docs/rfc/` — one committed file per proposal, argued before it is built (`TEMPLATE.md`, `README.md`
-    for the lifecycle); community intake is the RFC issue template, the file is the tracked plan
+    independent of any single conversation — see [ADR-001](development-docs/adr/001-package-channel-label.md)
+  - `development-docs/rfc/` — one committed file per proposal, argued before it is built (`TEMPLATE.md`, `README.md`
+    for the lifecycle); community intake is the RFC issue template, the file is the tracked plan. **What's next** is
+    the RFC index's `Status` column and each RFC's own body, not a separate roadmap document.
+  - `development-docs/_archives/` — frozen, no-longer-live docs, kept for the record (e.g. `ROADMAP.md`, the planning
+    doc the RFC index replaced)
 
-  No other folders under `docs/`; the hub's *Where new docs go* table says which section a new doc
-  belongs in.
+  The rule for which home a doc belongs in: does it help someone *use* or *understand* the platform (`docs/`), or
+  does it help someone *change* it (`development-docs/`)? No other top-level folder holds documentation.
 - `release-notes/` — hand-written release notes; required when a change is `careful`/`breaking` (CI adds the package table and git-cliff output)
 
-When adding new work, place it in the matching directory. Do not create new top-level folders.
+When adding new work, place it in the matching directory. Do not create new top-level folders; the two documentation homes
+(`docs/` and `development-docs/`) are the only documentation folders.
 
 ## Commands
 
@@ -111,7 +125,7 @@ make kcl-check                         # verify sync without modifying
 
 # Build & publish
 make build                             # build all OCI packages locally
-make push REGISTRY=ghcr.io/wxops/wxops-core VERSION=release-2026-09-11  # build + push (CI does this on tag)
+make push REGISTRY=ghcr.io/wxops-idp/wxops-core VERSION=release-2026-09-11  # build + push (CI does this on tag)
 make validate                          # crossplane xpkg build (no push)
 
 # Lint & render
@@ -169,7 +183,7 @@ Start simple before reaching for advanced patterns.
 Every XRD must expose `status.created` and `status.ready`. The portal polls
 those; the native `type: Ready` condition is unreliable on Crossplane v2.3 with
 function-kcl v0.12.1, so readiness is derived from `ocds` instead. Compositions
-must never emit Kubernetes RBAC — see [`ROADMAP.md`](ROADMAP.md) *Decided and
+must never emit Kubernetes RBAC — see [`development-docs/_archives/ROADMAP.md`](development-docs/_archives/ROADMAP.md) *Decided and
 rejected*; the composition creates the ServiceAccount and publishes its name in
 status, and the GitOps repo binds a `Role` to it.
 
@@ -238,13 +252,14 @@ tests/cases/<package>/<case>/
 
 Anything needing an API server or a running provider: **provider RBAC gaps**,
 validity against the *actually installed* CRD version, and whether anything
-reconciles. Those need a cluster; a kind-based e2e tier is tracked in
-[`ROADMAP.md`](ROADMAP.md). A green `make test` means the compositions render
-what you expect and the API contract holds — not that it will work in-cluster.
+reconciles. Those need a cluster; a kind-based e2e tier was tracked in
+[`development-docs/_archives/ROADMAP.md`](development-docs/_archives/ROADMAP.md) (archived — not an open RFC yet).
+A green `make test` means the compositions render what you expect and the API contract holds — not that it will
+work in-cluster.
 
 ## Documentation Conventions
 
-Applies to prose paragraphs in `release-notes/`, `ROADMAP.md`, `README.md`, and `docs/` —
+Applies to prose paragraphs in `release-notes/`, `development-docs/`, `README.md`, and `docs/` —
 markdown renders paragraphs as continuous regardless of source line breaks,
 so this is purely about the raw file being comfortable to read in an editor
 or terminal, not about rendered output.
@@ -272,11 +287,12 @@ release commit. Gitea no longer publishes.
 | Component | Version |
 |---|---|
 | Crossplane | v2.3 |
-| provider-terraform | v1.1.5 |
+| provider-opentofu | v1.1.9 |
+| provider-terraform (archived, `providers/archive/`) | v1.1.5 |
 | provider-kubernetes | v1.2.1 |
 | provider-sql | v0.15.0 |
 | function-kcl | v0.12.1 |
 | function-extra-resources | v0.3.0 |
 | function-patch-and-transform | v0.10.7 |
-| function-go-templating | v0.12.2 |
+| function-go-templating (archived, unused) | v0.12.2 |
 | Gitea Terraform provider | ~> 0.7.0 |

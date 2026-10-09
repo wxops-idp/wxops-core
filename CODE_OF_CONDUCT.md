@@ -58,7 +58,7 @@ individual is officially representing the project in public spaces.
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
 reported via a private
-[GitHub Security Advisory](https://github.com/wxops/wxops-core/security/advisories/new) on this
+[GitHub Security Advisory](https://github.com/wxops-idp/wxops-core/security/advisories/new) on this
 repository — the same private channel used for security reports, which reaches the maintainer
 directly. All complaints will be reviewed and investigated promptly and fairly.
 

@@ -4,7 +4,7 @@ This document has two halves, at different maturities.
 
 | | Scope | Status |
 |---|---|---|
-| **[Part 1 — Emission](#part-1--emission-servicemonitor--podmonitor)** | How one `XTenantApp` exposes metrics on one cluster | ✅ **Implemented** in `package/tenant-app/` as `spec.parameters.monitoring` |
+| **[Part 1 — Emission](#part-1--emission-servicemonitor--podmonitor)** | How one `XTenantApp` exposes metrics on one cluster | ✅ **Implemented** in `package/platform/tenant-app/` as `spec.parameters.monitoring` |
 | **[Part 2 — Collection](#part-2--collection-architecture-single-cluster-fleet-multi-cluster)** | Where signals go once there is more than one cluster, and what an SRE agent needs to diagnose across a fleet | 📋 **Option space, nothing implemented** |
 
 > **Part 1 deviation from the design below:** the app Service port is still unnamed, so the emitted
@@ -153,7 +153,7 @@ Classified against the tiers
 
 | Change | File | Tier |
 |---|---|---|
-| Add `monitoring` optional object with defaults | `package/tenant-app/xrd.yaml` | `safe` |
+| Add `monitoring` optional object with defaults | `package/platform/tenant-app/xrd.yaml` | `safe` |
 | Add ServiceMonitor, conditional emit | `kcl/tenant-app/main.k` | `safe` |
 | Add PodMonitor, conditional emit | `kcl/tenant-app/main.k` | `safe` |
 | Grant `monitoring.coreos.com` to the provider | `providers/rbac-provider-kubernetes.yaml` | prerequisite — not a composition change |
@@ -682,7 +682,8 @@ never the default — but this deserves a real decision before anyone deploys it
 ## See also
 
 - [`tenant-app.md`](../api-reference/tenant-app.md) — the full `XTenantApp` schema
-- [`ROADMAP.md`](../../ROADMAP.md) — §0.7 for the work item, §Change taxonomy for the tiers
+- [`development-docs/_archives/ROADMAP.md`](../../development-docs/_archives/ROADMAP.md) — archived; the work item this describes
+- [`release-notes/README.md`](../../release-notes/README.md) — the `safe`/`careful`/`breaking` change-tier taxonomy
 - [`multi-cluster.md`](multi-cluster.md) — per-cluster observability endpoints, later
 - [`multi-cluster-connectivity.md`](multi-cluster-connectivity.md#observability-plane) — the
   observability plane in the four-plane architecture, and why the push topology follows from the

@@ -1,0 +1,16 @@
+# ARCHIVED — not used by any package. Kept for reference, not removed, and NOT applied by `make providers`
+# (which applies providers/*.yaml without recursing into this directory).
+#
+# No Composition references function-go-templating (the packages use function-patch-and-transform and
+# function-kcl; see kcl/README.md for why KCL was chosen). A cluster that already has this function
+# installed keeps it — nothing here uninstalls it. To use it again, move this file back to providers/ and
+# add the function to FUNCTIONS in tests/lib/render.py and the Makefile.
+#
+# Archived with this change: see providers/archive/README.md.
+apiVersion: pkg.crossplane.io/v1beta1
+kind: Function
+metadata:
+  name: function-go-templating
+spec:
+  package: xpkg.upbound.io/crossplane-contrib/function-go-templating:v0.12.2
+  packagePullPolicy: IfNotPresent

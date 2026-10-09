@@ -1,0 +1,12 @@
+# The `scm.wxops.cloud` category: Git hosting across Gitea, GitHub and (later) GitLab.
+#
+#   kubectl apply -k package/scm/     — install just this category from source
+#
+# Each entry is a DIRECTORY with its own kustomization.yaml, which is what keeps
+# Kustomize's root-only load restriction satisfied (see package/dev/kustomization.yaml).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - connection
+  - repository
+  - oauth-app

@@ -14,4 +14,23 @@
 # An entry without a reason is ignored. `make release` requires release notes
 # while any entry is in use and clears this list in the release commit — an
 # allowance covers one release, never a standing exemption.
-allow: []
+allow:
+  - package: gitea-user
+    rule: package-removed
+    path: gitea-user
+    reason: Archived, not deleted (package/platform/archives/gitea-user/) — no cluster has ever run this package (no live deployment existed to migrate); gitea-* is fully retired in favour of scm-connection/scm-repository/scm-oauth-app, all on provider-opentofu.
+
+  - package: gitea-org
+    rule: package-removed
+    path: gitea-org
+    reason: Archived, not deleted (package/platform/archives/gitea-org/) — no cluster has ever run this package (no live deployment existed to migrate); gitea-* is fully retired in favour of scm-connection/scm-repository/scm-oauth-app, all on provider-opentofu.
+
+  - package: gitea-team
+    rule: package-removed
+    path: gitea-team
+    reason: Archived, not deleted (package/platform/archives/gitea-team/) — no cluster has ever run this package (no live deployment existed to migrate); gitea-* is fully retired in favour of scm-connection/scm-repository/scm-oauth-app, all on provider-opentofu.
+
+  - package: gitea-repository
+    rule: package-removed
+    path: gitea-repository
+    reason: Archived, not deleted (package/platform/archives/gitea-repository/) — no cluster has ever run this package (no live deployment existed to migrate); gitea-* is fully retired in favour of scm-connection/scm-repository/scm-oauth-app, all on provider-opentofu.

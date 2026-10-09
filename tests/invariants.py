@@ -85,7 +85,7 @@ def _is_k8s_rbac(doc) -> bool:
       "deliberately not granted rbac.authorization.k8s.io, so these would fail "
       "`forbidden` — and granting it would make the provider a "
       "privilege-escalation vector. RBAC belongs in the GitOps repo. "
-      "See ROADMAP.md 'Decided and rejected'.")
+      "See development-docs/ROADMAP.md 'Decided and rejected'.")
 def no_rbac(docs, ctx):
     bad = []
     for d in _composed(docs):
@@ -95,6 +95,27 @@ def no_rbac(docs, ctx):
         if _is_k8s_rbac(d):
             bad.append(f"{_name(d)} is a {d['apiVersion']} {d['kind']}")
     return bad
+
+
+# Packages still on provider-terraform. RFC-003 retires them (Phase 4); delete this set, and
+# providers/archive/provider-terraform.yaml, together with them. Nothing else may be added to it.
+LEGACY_TERRAFORM_PACKAGES = {"gitea-user", "gitea-org", "gitea-team", "gitea-repository"}
+
+
+@rule("workspace-uses-opentofu",
+      "New compositions run inline HCL through provider-opentofu (opentofu.upbound.io), not "
+      "provider-terraform (tf.upbound.io): the terraform binary is BSL-licensed, and this "
+      "project's runtime stack is meant to stay open source. Only the gitea-* packages, which "
+      "RFC-003 retires, may still emit a tf.upbound.io Workspace. See "
+      "development-docs/rfc/002-migrate-terraform-to-opentofu.md.")
+def workspace_uses_opentofu(docs, ctx):
+    if ctx.get("package") in LEGACY_TERRAFORM_PACKAGES:
+        return []
+    return [
+        f"{_name(d)} is a {d['apiVersion']} {d['kind']}"
+        for d in _composed(docs)
+        if str(d.get("apiVersion", "")).startswith("tf.upbound.io/")
+    ]
 
 
 SENSITIVE_HINTS = ("password", "secret", "token", "credential", "privatekey")

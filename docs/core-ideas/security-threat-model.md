@@ -34,7 +34,7 @@ developer / SRE agent ──▶ Darlane pod (real secrets, real traffic)   ← B
 
 - **B1 — who may act**: human identity via Pinniped (Gitea OIDC); agent
   identity via dedicated SAs; RBAC authored only in GitOps
-  (`ROADMAP.md` §Decided and rejected; the seam in [tenant-app.md](../api-reference/tenant-app.md#developer-access-and-rbac)).
+  (`development-docs/_archives/ROADMAP.md` §Decided and rejected; the seam in [tenant-app.md](../api-reference/tenant-app.md#developer-access-and-rbac)).
 - **B2 — what may enter the system**: XRD schema validation at admission
   (B2a) and, for changes to the platform itself, the pr-validate gate — XRD
   conformance, golden render diff, invariants, xpkg build (B2b). The gate is
@@ -57,7 +57,7 @@ developer / SRE agent ──▶ Darlane pod (real secrets, real traffic)   ← B
 
 | Threat | Vector | Mitigation today | Residual |
 |---|---|---|---|
-| **Privilege escalation via the provider** | Composition emits RBAC; provider's broad grants defeat K8s escalation checks | Decision recorded in `ROADMAP.md` §Decided and rejected + grant commented with rationale + `no-rbac-emitted` invariant fails the PR mechanically | Provider ClusterRole is still wide *within* its groups; per-namespace scoping unexplored |
+| **Privilege escalation via the provider** | Composition emits RBAC; provider's broad grants defeat K8s escalation checks | Decision recorded in `development-docs/_archives/ROADMAP.md` §Decided and rejected + grant commented with rationale + `no-rbac-emitted` invariant fails the PR mechanically | Provider ClusterRole is still wide *within* its groups; per-namespace scoping unexplored |
 | **Malicious/buggy composition change** | PR altering rendered output subtly | Golden tests catch *any* output change; invariants catch classes (secrets-in-status, missing providerConfigRef, Vault path prefix); KCL-drift hook stops package≠source | Golden review discipline is human — a rubber-stamped `test-update` defeats it |
 | **Secret leakage via status** | Terraform outputs / composition writing sensitive values to world-readable XR status | `initial_password` marked sensitive (never patched); `no-secrets-in-status` invariant; connection creds only via Vault/ESO path | Invariant is name-heuristic; a poorly named secret field could slip |
 | **Supply chain — schema source** | Upstream CRDs-catalog changes what CI accepts | Catalog pinned by SHA in three places, bumped only by commit | Function/provider images pinned by tag, not digest; no image signing/verification yet |
@@ -70,7 +70,7 @@ developer / SRE agent ──▶ Darlane pod (real secrets, real traffic)   ← B
 ## The rules that hold it together (cross-references)
 
 1. **No custom controllers** (`CLAUDE.md` architecture rule; twice-validated per [multi-cluster-scale.md](multi-cluster-scale.md#gpu-pools--the-third-architecture-already-field-tested-here)) — smaller attack surface, everything renderable offline.
-2. **No RBAC from compositions** + **the SA-in-status seam** — `ROADMAP.md` §Decided and rejected; [tenant-app.md](../api-reference/tenant-app.md#developer-access-and-rbac).
+2. **No RBAC from compositions** + **the SA-in-status seam** — `development-docs/_archives/ROADMAP.md` §Decided and rejected; [tenant-app.md](../api-reference/tenant-app.md#developer-access-and-rbac).
 3. **One write path for fixes — the PR gate** ([self-service-operations.md](self-service-operations.md#the-suggest-patch-loop--why-l4-is-structurally-cheap-here)); agents get read-only + PR, never kubectl-write (L5 gated behind Guardian).
 4. **Payload/metadata corpus tiering** for any AI ([knowledge-architecture.md](knowledge-architecture.md#architecture-around-the-agent)).
 5. **Access control over obscurity** — gates are real (Pinniped, RBAC, permission-gated forge), not hidden URLs; the only obscurity kept (SSH port) is a free scan-reduction, not a control.

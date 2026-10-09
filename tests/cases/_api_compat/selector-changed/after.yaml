@@ -3,7 +3,6 @@
 # A label added to spec.selector.matchLabels as well as to the pod template.
 # Kubernetes rejects the in-place update, the Object enters a permanent
 # reconcile error, and the old Deployment keeps running so nobody notices.
-# ROADMAP.md "The immutable-field hazard".
 apiVersion: kubernetes.crossplane.io/v1alpha2
 kind: Object
 metadata:

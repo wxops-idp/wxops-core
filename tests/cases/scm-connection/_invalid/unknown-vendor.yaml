@@ -1,0 +1,13 @@
+# expect: parameters.vendor
+# expect: is not one of
+#
+# GitLab is designed in RFC-003 but not implemented in this release; accepting it here would create
+# a connection no module can serve.
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmConnection
+metadata:
+  name: gitlab-self-managed
+spec:
+  parameters:
+    vendor: gitlab
+    org: wxops-idp

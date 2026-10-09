@@ -12,7 +12,7 @@
 # runtimeconfig-provider-kubernetes.yaml + provider-kubernetes.yaml's
 # runtimeConfigRef) instead of the package-hash-derived default name — no
 # hash to track, and no group-wide grant that would also reach
-# provider-sql/provider-terraform's ServiceAccounts in crossplane-system.
+# provider-sql/provider-terraform/provider-opentofu's ServiceAccounts in crossplane-system.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -43,7 +43,7 @@ rules:
   #
   # The seam instead: a composition creates the ServiceAccount and publishes its name in the
   # XR status (see XTenantApp status.darlane.serviceAccountName); the GitOps repo defines the
-  # Role and binds it. This is why darlane.rbac was dropped — see ROADMAP.md
+  # Role and binds it. This is why darlane.rbac was dropped — see development-docs/_archives/ROADMAP.md
   # "Decided and rejected".
   # - apiGroups: ["rbac.authorization.k8s.io"]
   #   resources: ["roles", "rolebindings"]

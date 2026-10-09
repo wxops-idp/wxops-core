@@ -1,0 +1,76 @@
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmConnection
+metadata:
+  name: gitea-internal
+spec:
+  crossplane:
+    resourceRefs:
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: gitea-internal-5a3c653ea12f
+status:
+  conditions:
+    - reason: WatchCircuitClosed
+      status: 'True'
+      type: Responsive
+    - reason: ReconcileSuccess
+      status: 'True'
+      type: Synced
+    - message: 'Unready resources: credentials'
+      reason: Creating
+      status: 'False'
+      type: Ready
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: credentials
+  generateName: gitea-internal-
+  labels:
+    crossplane.io/composite: gitea-internal
+  name: gitea-internal-5a3c653ea12f
+  ownerReferences:
+    - apiVersion: scm.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XScmConnection
+      name: gitea-internal
+      uid: 63849233-b838-5f99-ba54-9391afc8b9e6
+spec:
+  forProvider:
+    manifest:
+      apiVersion: external-secrets.io/v1
+      kind: ExternalSecret
+      metadata:
+        name: scm-connection-gitea-internal
+        namespace: crossplane-system
+      spec:
+        data:
+          - remoteRef:
+              key: scm/gitea-internal/credentials
+              property: token
+            secretKey: token
+        refreshInterval: 1h
+        secretStoreRef:
+          kind: ClusterSecretStore
+          name: vault-platform
+        target:
+          creationPolicy: Owner
+          name: scm-connection-gitea-internal
+          template:
+            data:
+              credentials: 'vendor      = "gitea"
+
+                base_url    = "http://gitea-http.gitea.svc.cluster.local:3000"
+
+                default_org = "wxops-idp"
+
+                access      = "write"
+
+                token       = "{{ .token }}"
+
+                '
+            engineVersion: v2
+  providerConfigRef:
+    name: default

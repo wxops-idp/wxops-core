@@ -14,12 +14,12 @@ each against a real file in this repo.
 
 - Architecture, conventions and the reference stack → [`CLAUDE.md`](CLAUDE.md)
 - Test harness internals → [`tests/README.md`](tests/README.md)
-- What is planned, deferred and rejected → [`ROADMAP.md`](ROADMAP.md)
+- What is planned and what is next → [RFC index](development-docs/rfc/README.md); a rejection lives in the RFC or ADR it belongs to
 - Per-XRD API reference → [`docs/api-reference/`](docs/api-reference/README.md)
-- Every doc, and the development matrix → [`docs/README.md`](docs/README.md)
-- Hooks, make targets and releasing, in one place → [`docs/development/`](docs/development/README.md)
-- Recording *why* for a breaking or architectural decision → [`docs/adr/`](docs/adr/README.md)
-- Proposing a design before it is built → [`docs/rfc/`](docs/rfc/README.md)
+- The platform's own documentation → [`docs/README.md`](docs/README.md); the development matrix, decisions and process → [`development-docs/README.md`](development-docs/README.md)
+- Hooks, make targets and releasing, in one place → [`development-docs/development/`](development-docs/development/README.md)
+- Recording *why* for a breaking or architectural decision → [`development-docs/adr/`](development-docs/adr/README.md)
+- Proposing a design before it is built → [`development-docs/rfc/`](development-docs/rfc/README.md)
 
 ---
 
@@ -98,7 +98,7 @@ packages in `VERSIONS.yaml` and `package/install/` itself; a hand edit to either
 5. `make test-update` to accept, then `git diff tests/` once more.
 6. Add a case if you added a branch — see below.
 
-`make test-api-compat` classifies the change against the taxonomy in [`ROADMAP.md`](ROADMAP.md)
+`make test-api-compat` classifies the change against the taxonomy in [`release-notes/README.md`](release-notes/README.md)
 (`safe` / `careful` / `breaking`) for you. Sequence `careful` edits into their own commit so they
 can be reverted alone, and expect to explain them in release notes — `make release` requires notes
 for anything not `safe`. Renaming a composed resource, or changing an immutable field like a
@@ -112,17 +112,23 @@ hazard sections before doing either.
 Follow the working model in [`CLAUDE.md`](CLAUDE.md), then the test work below.
 The checklist:
 
-- [ ] `package/<name>/xrd.yaml` — schema-first, minimal, **with `status.created` and `status.ready`**
-- [ ] `package/<name>/composition.yaml`
-- [ ] `kcl/<name>/main.k` + `kcl.mod` if using function-kcl, then `make kcl-sync`
-- [ ] `package/<name>/crossplane.yaml`, `kustomization.yaml`, `README.md`
+A package lives at `package/<group>/<name>/`, where the group is the API group its kinds serve
+(`platform`, `scm`, `auth` — see [ADR-002](development-docs/adr/002-three-api-groups.md)).
+**`VERSIONS.yaml` is the only package list**, so there is no Makefile, workflow or test list to edit:
+
+- [ ] `VERSIONS.yaml` entry: `group`, `path`, `api.served`/`api.storage`, `description`, and
+      `package.current: unreleased`. No `package/install/` manifest — `make release` writes it on the first
+      release — then `make readme-sync`
+- [ ] `package/<group>/<name>/xrd.yaml` — schema-first, minimal, **with `status.created` and `status.ready`**
+- [ ] `package/<group>/<name>/composition.yaml`
+- [ ] `kcl/<name>/main.k` + `kcl.mod` if using function-kcl, then `make kcl-sync` (and add the name to
+      `KCL_PACKAGES` in [`.gitea/scripts/kcl-sync.py`](.gitea/scripts/kcl-sync.py))
+- [ ] `package/<group>/<name>/crossplane.yaml`, `kustomization.yaml` (just `xrd.yaml` + `composition.yaml`), `README.md`
+- [ ] `package/dev/kustomization.yaml` — add `../<group>/<name>`; nothing generates this file
 - [ ] `examples/<name>/xr.yaml`
-- [ ] `docs/<name>.md` + a row in [`docs/README.md`](docs/README.md)
+- [ ] `docs/api-reference/<name>.md` + a row in [`docs/api-reference/README.md`](docs/api-reference/README.md)
 - [ ] **`tests/cases/<name>/` — see below**
-- [ ] `PACKAGES` array in [`.gitea/scripts/validate-packages.sh`](.gitea/scripts/validate-packages.sh)
-- [ ] `PACKAGES` in the `Makefile`, and the matrix in [`.github/workflows/publish-packages.yaml`](.github/workflows/publish-packages.yaml)
-- [ ] If KCL: add the package to the `kcl-drift-check` hook's `files:` regex
-- [ ] `VERSIONS.yaml` entry with `current: unreleased` and no `package/install/` manifest — `make release` writes both on the first release — then `make readme-sync`
+- [ ] A commit scope in [`cliff.toml`](cliff.toml)
 - [ ] Any new API group the composition targets → `providers/rbac-provider-kubernetes.yaml`
 
 That last one has no offline test. provider-kubernetes runs with
@@ -249,20 +255,20 @@ offline:
 - ordering, retries, eventual consistency between composed resources
 
 Before a release, exercise the change on a real cluster. A kind-based e2e tier
-is tracked in [`ROADMAP.md`](ROADMAP.md).
+was tracked in [`development-docs/_archives/ROADMAP.md`](development-docs/_archives/ROADMAP.md) (archived — not an open RFC yet).
 
 ---
 
 ## Boundaries
 
-Some things are settled. Check [`ROADMAP.md`](ROADMAP.md) *Out of scope* and
+Some things are settled. Check [`development-docs/_archives/ROADMAP.md`](development-docs/_archives/ROADMAP.md) *Out of scope* and
 *Decided and rejected* before proposing them — the list exists so contributors
 do not spend a weekend on something that will be declined.
 
 The two most likely to catch you out:
 
 - **No hand-written controllers.** A `kubebuilder` Go controller was built,
-  rejected and removed. Crossplane v2 with provider-terraform and
+  rejected and removed. Crossplane v2 with provider-opentofu and
   provider-kubernetes is the architecture.
 - **Compositions never emit Kubernetes RBAC.** No `Role`, `ClusterRole`,
   `RoleBinding`, `ClusterRoleBinding` — provider-kubernetes is deliberately not

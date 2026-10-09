@@ -1,0 +1,11 @@
+# ARCHIVED — kept for the record, not applied by `make providers` (which does not descend into
+# providers/archive/). This is the engine the now-retired gitea-user/-org/-team/-repository
+# packages ran on (see package/platform/archives/); every active package runs on provider-opentofu.
+# If those packages are ever resurrected, this file and its ProviderConfig go with them.
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: provider-terraform
+spec:
+  package: xpkg.upbound.io/upbound/provider-terraform:v1.1.5
+  packagePullPolicy: IfNotPresent

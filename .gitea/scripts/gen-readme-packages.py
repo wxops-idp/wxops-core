@@ -17,6 +17,8 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(ROOT / "tests" / "lib"))
+import packages as P  # noqa: E402
 
 START = "<!-- packages-table-start -->"
 END = "<!-- packages-table-end -->"
@@ -26,12 +28,13 @@ def build_table() -> str:
     versions = yaml.safe_load((ROOT / "VERSIONS.yaml").read_text())
     rows = []
     for name, info in versions.get("packages", {}).items():
-        xrd = yaml.safe_load((ROOT / "package" / name / "xrd.yaml").read_text())
+        pkg_dir = P.rel_path(name)
+        xrd = yaml.safe_load((ROOT / pkg_dir / "xrd.yaml").read_text())
         kind = xrd["spec"]["names"]["kind"]
         api_versions = ", ".join(f"`{v}`" for v in info["api"]["served"])
         pkg_version = info["package"]["current"]
         rows.append(
-            f"| [`{name}`](package/{name}/) | `{kind}` | `platform.wxops.cloud`"
+            f"| [`{name}`]({pkg_dir}/) | `{kind}` | `{P.group(name)}.wxops.cloud`"
             f" | {api_versions} | `{pkg_version}` |"
         )
     return "\n".join([

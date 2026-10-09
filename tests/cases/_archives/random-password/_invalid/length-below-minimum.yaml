@@ -1,0 +1,12 @@
+# expect: length
+# expect: minimum
+#
+# The XRD floors the length at 8. A shorter value must be rejected at admission rather than
+# producing a weak password.
+apiVersion: platform.wxops.cloud/v1alpha1
+kind: XRandomPassword
+metadata:
+  name: too-short
+spec:
+  parameters:
+    length: 4

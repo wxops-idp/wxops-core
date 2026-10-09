@@ -11,7 +11,7 @@ assignees: ''
 A clear description of the goal, not just the symptom.
 
 **What have you tried?**
-Relevant XR, error message, or what the docs (`docs/`, `CONTRIBUTING.md`,
+Relevant XR, error message, or what the docs (`docs/`, `development-docs/`, `CONTRIBUTING.md`,
 `tests/README.md`) didn't cover.
 
 ```yaml

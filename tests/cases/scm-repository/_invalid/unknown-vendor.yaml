@@ -1,0 +1,17 @@
+# expect: parameters.vendor
+# expect: is not one of
+#
+# Only `gitea` and `github` exist. This is the field that picks which Terraform provider's module
+# runs — a typo must be rejected at the XRD, not fall through to whichever module the `match`
+# transform's fallbackValue happens to select.
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmRepository
+metadata:
+  name: bad-vendor
+spec:
+  parameters:
+    scmRef:
+      name: gitea-internal
+    vendor: bitbucket
+    mode: managed
+    repoName: api-service

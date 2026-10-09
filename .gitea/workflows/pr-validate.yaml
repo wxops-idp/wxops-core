@@ -98,6 +98,14 @@ jobs:
           sudo mv crossplane /usr/local/bin/crossplane
           crossplane version --client
 
+      # kcl-sync.py imports tests/lib/packages.py (the one package resolver, shared with the
+      # test suite) to find each package's path from VERSIONS.yaml, which needs PyYAML.
+      - name: Install Python deps
+        run: |
+          python3 -m venv .venv
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+          .venv/bin/pip install --quiet -r tests/requirements.txt
+
       # kcl/<pkg>/main.k is the single source of truth and is embedded into
       # composition.yaml by `make kcl-sync`. Only the Configuration directory is
       # packaged, so drift means the published package does not match the source

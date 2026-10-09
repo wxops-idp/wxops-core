@@ -14,9 +14,10 @@ tool adoption, an architectural boundary, a convention, a deliberate
 rejection. Use the RFC template instead when the open question is a design
 with an option space; an accepted RFC often produces an ADR as its residue.
 
-Revisiting an existing decision? ROADMAP.md "Decided and rejected" states
-the standing rule: the burden is to say WHAT CHANGED since the original
-decision — restating preference is not new information. Link the original.
+Revisiting an existing decision? Check development-docs/adr/README.md's index and the archived
+development-docs/_archives/ROADMAP.md "Decided and rejected" for the standing rule: the burden is
+to say WHAT CHANGED since the original decision — restating preference is not new information.
+Link the original.
 -->
 
 ## Decision to be made
@@ -54,8 +55,8 @@ a consequences section with no downsides wasn't finished.
 
 ---
 <!--
-Lifecycle: on acceptance, the decision is added to ROADMAP.md
-"Decided and rejected" with this issue linked as the permanent, immutable
+Lifecycle: on acceptance, the decision is committed as development-docs/adr/NNN-title.md
+(see development-docs/adr/README.md), with this issue linked as the permanent, immutable
 record. A later reversal is a NEW ADR issue that supersedes this one —
 this issue is never edited after acceptance.
 -->

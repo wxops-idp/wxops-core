@@ -113,7 +113,7 @@ occurrences** of:
 providerConfigRef = {name = "default"}
 ```
 
-`providers/providerconfig-terraform.yaml` has the same shape — a Kubernetes
+`providers/archive/providerconfig-terraform.yaml` has the same shape — a Kubernetes
 state backend with `in_cluster_config = true`.
 
 ### What specifically breaks at two clusters
@@ -996,7 +996,7 @@ the same thing as a *developer* identity for access to the pod.
 
 W'xOps Core deliberately emits **no RBAC at all** — no `Role`, no `RoleBinding`,
 no `subjects` — and provider-kubernetes is not granted permission to create any.
-See ROADMAP.md "Decided and rejected" for the reasoning.
+See development-docs/_archives/ROADMAP.md "Decided and rejected" for the reasoning.
 
 The authorisation surface still has to exist; it is just authored elsewhere. The
 composition creates the Darlane ServiceAccount and publishes its name in
@@ -1532,4 +1532,4 @@ preference, Arch 1 becomes much cheaper.
 - [`docs/core-ideas/darlane.md`](darlane.md) — the interactive workflows that constrain this design
 - [`docs/core-ideas/guardian.md`](guardian.md) — safety layer for Darlane sessions
 - [`docs/api-reference/tenant-app.md`](../api-reference/tenant-app.md) — `XTenantApp` API reference
-- [`providers/`](../../providers/) — current single-cluster `ProviderConfig` and RBAC
+- [`providers/`](../../providers) — current single-cluster `ProviderConfig` and RBAC

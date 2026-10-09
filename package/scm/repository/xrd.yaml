@@ -1,0 +1,144 @@
+apiVersion: apiextensions.crossplane.io/v2
+kind: CompositeResourceDefinition
+metadata:
+  name: xscmrepositories.scm.wxops.cloud
+spec:
+  group: scm.wxops.cloud
+  # Cluster-scoped, like every other Kind today. A namespaced `ScmRepository` twin is designed in
+  # RFC-003 but waits on namespaced Workspace support in provider-opentofu.
+  scope: Cluster
+  names:
+    kind: XScmRepository
+    plural: xscmrepositories
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - parameters
+              properties:
+                parameters:
+                  type: object
+                  required:
+                    - scmRef
+                    - vendor
+                    - repoName
+                  properties:
+                    scmRef:
+                      type: object
+                      description: |
+                        The XScmConnection this repository is created on. The connection carries the
+                        base URL, the org and the token — none of those appear here. There is no
+                        per-resource override: the connection is the single source for which org or
+                        user owns this repository. `vendor` is the one exception — see below.
+                      required:
+                        - name
+                      properties:
+                        name:
+                          type: string
+                    vendor:
+                      type: string
+                      description: |
+                        Must match the vendor on the `scmRef` connection — the composition rejects a mismatch
+                        with a clear error, rather than letting the Terraform provider for the WRONG vendor fail
+                        first with a confusing one. Repeated here, rather than read from the connection alone,
+                        because Crossplane has to pick between two Terraform provider configurations before the
+                        connection's Secret is rendered, and Terraform configures every provider a module
+                        declares, whether or not any resource with a non-zero count actually uses it — there is
+                        no way to make a provider conditional from inside the module. See
+                        development-docs/rfc/003-scm-connections-and-resources.md for how this was found.
+                      enum: ["gitea", "github"]
+                    mode:
+                      type: string
+                      description: |
+                        `managed` — Core creates and owns the repository.
+                        `observed` — Core only reads it, through a data source, and never writes or
+                        deletes it. In `observed` mode the creation fields below are not applied.
+                      enum: ["managed", "observed"]
+                      default: managed
+                    repoName:
+                      type: string
+                      description: Repository name. Immutable in practice — renaming creates a new repository.
+                      pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$'
+                    description:
+                      type: string
+                      default: ""
+                    visibility:
+                      type: string
+                      description: |
+                        `private` by default — deliberately the opposite of `XGiteaRepository`, whose
+                        default was public. `internal` exists on GitHub Enterprise and GitLab but not
+                        Gitea, so it is not offered.
+                      enum: ["private", "public"]
+                      default: private
+                    defaultBranch:
+                      type: string
+                      description: |
+                        On GitHub this needs the branch to exist, so it is applied only when
+                        `autoInit` is true.
+                      default: main
+                    autoInit:
+                      type: boolean
+                      description: Create an initial commit, so the default branch exists.
+                      default: true
+                    hasIssues:
+                      type: boolean
+                      default: true
+                    hasWiki:
+                      type: boolean
+                      default: false
+                    topics:
+                      type: array
+                      description: |
+                        Repository topics — the tag GitOps discovery selects on. **GitHub only**: the
+                        go-gitea/gitea provider has no topics attribute, so a non-empty list on a
+                        Gitea connection fails loudly rather than being silently dropped.
+                      items:
+                        type: string
+                      default: []
+                    retain:
+                      type: boolean
+                      description: |
+                        Keep the repository when the XR is deleted. True by default, so deleting an XR
+                        never deletes source code; it orphans the Workspace instead of destroying it.
+                      default: true
+            status:
+              type: object
+              properties:
+                created:
+                  type: boolean
+                  description: |
+                    True once the apply has completed and written state, derived from the presence of
+                    the `repo_id` output.
+
+                    Absent — not false — until that first successful apply, because the patch is
+                    skipped while its source path does not exist. Treat absent as false.
+                ready:
+                  type: boolean
+                  description: True when the repository exists. Equal to `created` by construction.
+                exists:
+                  type: boolean
+                  description: |
+                    True when the repository is present on the host. In `observed` mode this is the
+                    whole point of the resource; in `managed` mode it equals `created`.
+                repoId:
+                  type: string
+                  description: The host's own identifier for the repository.
+                cloneUrl:
+                  type: string
+                  description: HTTPS clone URL.
+                sshUrl:
+                  type: string
+                  description: SSH clone URL.
+                htmlUrl:
+                  type: string
+                  description: Browser URL.
+                fullName:
+                  type: string
+                  description: "`<org>/<repo>` as the host reports it."

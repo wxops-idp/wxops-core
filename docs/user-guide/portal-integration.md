@@ -110,7 +110,7 @@ attached ([self-service-operations.md](../core-ideas/self-service-operations.md#
 
 ## What the portal must NOT do
 
-- Grant or modify RBAC (rejected permanently — `ROADMAP.md` §Decided and rejected) —
+- Grant or modify RBAC (rejected permanently — `development-docs/_archives/ROADMAP.md` §Decided and rejected) —
   display binding targets, link the process.
 - Fan an XR out to multiple clusters itself by mutating one XR — multi-region
   is *N* XRs, one per cluster

@@ -1,8 +1,0 @@
-apiVersion: pkg.crossplane.io/v1
-kind: Configuration
-metadata:
-  name: wxops-core-tenant-database
-spec:
-  package: ghcr.io/wxops/wxops-core/tenant-database:release-2026-09-16
-  packagePullPolicy: IfNotPresent
-  revisionActivationPolicy: Automatic

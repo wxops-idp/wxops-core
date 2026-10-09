@@ -23,8 +23,9 @@ you've considered.
 Add any other context or examples about the feature request here.
 
 <!--
-Before submitting: a quick check of ROADMAP.md's "Out of scope" and "Decided
-and rejected" sections can save you writing up something that's already been
+Before submitting: a quick check of the RFC index's Status column and each RFC's own rejections,
+plus the archived development-docs/_archives/ROADMAP.md's "Out of scope" and "Decided and
+rejected" sections, can save you writing up something that's already been
 considered — but don't let that stop you from posting if you're not sure.
 
 Scope guide: this template is for focused, mostly-additive requests. If the

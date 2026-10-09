@@ -1,0 +1,9 @@
+apiVersion: platform.wxops.cloud/v1alpha1
+kind: XRandomPassword
+metadata:
+  name: example-password
+spec:
+  parameters:
+    length: 32
+    special: true
+    overrideSpecial: "!@#$%^&*"

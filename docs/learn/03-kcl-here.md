@@ -22,7 +22,7 @@
 `platform-database-clusters`, `tenant-database` and `tenant-app` need real logic: compose a
 `Pooler` only if pooling is on, a `ScheduledBackup` only if backups are configured, a variable-length
 list of Secrets for a variable-length list of managed roles. `function-patch-and-transform` (the
-Terraform packages' technique — [see here](02-terraform-here.md)) has no branching or looping;
+Terraform packages' technique — [see here](02-opentofu-here.md)) has no branching or looping;
 `function-kcl` does. That's the entire reason two techniques coexist in this repo — not a
 preference, a capability gap. Full reasoning: [`kcl/README.md`](../../kcl/README.md).
 

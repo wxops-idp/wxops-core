@@ -70,15 +70,22 @@ def functions_file() -> str:
 def _defaulted(xr_path: Path, package: str) -> Path:
     """Write a copy of the XR with XRD defaults applied, and return its path.
 
-    Falls back to the original file if the XRD cannot be read, so a package
-    without a usable schema still renders rather than failing opaquely.
+    A missing XRD is fatal: silently rendering the raw XR would skip the defaults
+    a cluster applies at admission, so the tests would exercise fallbacks instead
+    of real behaviour and nothing would say so. Any other schema problem still
+    falls back, but says it on stderr.
     """
+    import packages  # local to lib/
+    xrd = packages.path(package) / "xrd.yaml"
+    if not xrd.exists():
+        raise FileNotFoundError(f"no XRD at {xrd} for package {package}")
     try:
         import xrdschema  # local to lib/, imported lazily
         doc = yaml.safe_load(xr_path.read_text())
         _, schema = xrdschema.spec_schema(package)
         doc["spec"] = xrdschema.apply_defaults(schema, doc.get("spec") or {})
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 — reported, not swallowed
+        print(f"  warn  {package}: XRD defaults not applied ({exc})", file=sys.stderr)
         return xr_path
     fh = tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False)
     yaml.safe_dump(doc, fh, sort_keys=False)
@@ -88,7 +95,8 @@ def _defaulted(xr_path: Path, package: str) -> Path:
 
 def render(case_dir: Path, package: str) -> tuple[bool, str, str]:
     """Render one case. Returns (ok, normalised_yaml, stderr)."""
-    composition = ROOT / "package" / package / "composition.yaml"
+    import packages  # local to lib/
+    composition = packages.path(package) / "composition.yaml"
     if not composition.exists():
         return False, "", f"no composition at {composition}"
 
@@ -171,6 +179,11 @@ def discover() -> list[tuple[str, str, Path]]:
         return found
     for pkg_dir in sorted(CASES.iterdir()):
         if not pkg_dir.is_dir():
+            continue
+        # A leading underscore means "not a real package of cases" — `_api_compat`'s fixtures
+        # (no xr.yaml, so already skipped below) and `_archives`, which holds retired packages'
+        # cases for the record. Neither has a package/ directory for render() to find.
+        if pkg_dir.name.startswith("_"):
             continue
         for case_dir in sorted(pkg_dir.iterdir()):
             if case_dir.is_dir() and (case_dir / "xr.yaml").exists():

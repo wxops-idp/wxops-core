@@ -1,0 +1,36 @@
+# A repository on the connection above. `vendor` must match the connection's own — the composition
+# rejects a mismatch with a clear error, rather than letting the wrong Terraform provider fail first
+# with a confusing one. See XScmRepository.spec.parameters.vendor.
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmRepository
+metadata:
+  name: team-alpha-api-service
+  labels:
+    wxops.cloud/owner: team-alpha
+spec:
+  # spec.crossplane is a sibling of spec.parameters, not a field inside it — track a channel
+  # (every release labels its Composition channel: stable; make install-dev applies channel:
+  # nightly). See development-docs/development/releasing.md#channels for the Manual-pin alternative.
+  # crossplane:
+  #   compositionRevisionSelector:
+  #     matchLabels:
+  #       channel: stable          # or nightly
+  #   compositionUpdatePolicy: Automatic
+  parameters:
+    scmRef:
+      name: github-wxops-idp
+    vendor: github
+    mode: managed
+    repoName: api-service
+    description: Alpha squad API service
+    visibility: private
+    defaultBranch: main
+    autoInit: true
+    hasIssues: true
+    hasWiki: false
+    # topics is GitHub-only: the Gitea provider has no topics attribute, so a non-empty list on a
+    # Gitea connection fails loudly instead of being dropped.
+    topics:
+      - wxops-managed
+    # retain defaults to true — deleting this XR leaves the repository in place.
+    # retain: true

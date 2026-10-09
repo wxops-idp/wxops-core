@@ -7,7 +7,7 @@ A release is named release-YYYY-MM-DD (UTC; .2, .3 … for a second one that day
 write that decision into the tree before the tag is cut:
 
   VERSIONS.yaml      packages.<pkg>.package.current = the release it last changed in
-  package/install/   spec.package pinned to ghcr.io/wxops/wxops-core/<pkg>:<release>
+  package/install/   spec.package pinned to ghcr.io/wxops-idp/wxops-core/<pkg>:<release>
 
 CI then builds exactly the packages whose `current` equals the pushed tag. No
 job commits back to main: a bot rewriting install manifests after the tag is
@@ -35,10 +35,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT / "tests" / "lib"))
+import packages as P  # noqa: E402
 import releases as REL  # noqa: E402
 import yaml  # noqa: E402
 
-REGISTRY = "ghcr.io/wxops/wxops-core"
+REGISTRY = "ghcr.io/wxops-idp/wxops-core"
 VERSIONS = ROOT / "VERSIONS.yaml"
 INSTALL = ROOT / "package" / "install"
 NOTES = ROOT / "release-notes"
@@ -49,12 +50,17 @@ MANIFEST = """\
 apiVersion: pkg.crossplane.io/v1
 kind: Configuration
 metadata:
-  name: {pkg}
+  name: wxops-core-{pkg}
 spec:
   package: {image}
   packagePullPolicy: IfNotPresent
   revisionActivationPolicy: Automatic
 """
+
+
+def install_path(pkg: str) -> Path:
+    """Where this package's install Configuration lives: install/<group>/<pkg>.yaml."""
+    return INSTALL / P.group(pkg) / f"{pkg}.yaml"
 
 
 def packages() -> dict:
@@ -91,15 +97,25 @@ def changed(all_: bool = False) -> list[str]:
     prev = REL.previous_tag()
     out = []
     for pkg in packages():
-        if all_ or prev is None or REL.show(prev, f"package/{pkg}/xrd.yaml") is None:
+        # Compare file CONTENT, not paths: the baseline tag may predate RFC-007's
+        # move, and a package that only changed directory has not changed what it
+        # publishes. A path-based `git diff` would mark every package changed.
+        base_dir = None
+        if prev is not None:
+            base_dir = next((d for d in P.baseline_paths(pkg)
+                             if REL.show(prev, f"{d}/xrd.yaml") is not None), None)
+        if all_ or prev is None or base_dir is None:
             out.append(pkg)
             continue
-        proc = REL.git("diff", "--quiet", prev, "--", f"package/{pkg}/*.yaml",
-                       f":(exclude)package/{pkg}/kustomization.yaml")
-        if proc.returncode == 1:
+        cur_dir = P.path(pkg)
+        packaged = lambda name: name.endswith(".yaml") and name != "kustomization.yaml"
+        old_names = {p.rsplit("/", 1)[-1] for p in REL.ls(prev, base_dir)
+                     if packaged(p.rsplit("/", 1)[-1])}
+        new_names = {f.name for f in cur_dir.glob("*.yaml") if packaged(f.name)}
+        if old_names != new_names or any(
+                REL.show(prev, f"{base_dir}/{n}") != (cur_dir / n).read_text()
+                for n in sorted(new_names)):
             out.append(pkg)
-        elif proc.returncode != 0:
-            sys.exit(f"error: git diff failed for {pkg}: {proc.stderr.strip()}")
     return out
 
 
@@ -159,13 +175,23 @@ def set_current(text: str, pkg: str, value: str) -> str:
 
 
 def write_manifest(pkg: str, release: str) -> None:
-    path = INSTALL / f"{pkg}.yaml"
+    path = install_path(pkg)
     ref = image(pkg, release)
     if not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(MANIFEST.format(pkg=pkg, image=ref))
-        kust = INSTALL / "kustomization.yaml"
+        # Register the manifest in its group's kustomization, and the group in the
+        # top-level one, so a brand-new group installs without a hand edit.
+        kust = path.parent / "kustomization.yaml"
+        if not kust.exists():
+            kust.write_text("apiVersion: kustomize.config.k8s.io/v1beta1\n"
+                            "kind: Kustomization\nresources:\n")
         if f"- {pkg}.yaml" not in kust.read_text():
             kust.write_text(kust.read_text().rstrip("\n") + f"\n  - {pkg}.yaml\n")
+        top = INSTALL / "kustomization.yaml"
+        group_entry = f"- {P.group(pkg)}/"
+        if group_entry not in top.read_text():
+            top.write_text(top.read_text().rstrip("\n") + f"\n  {group_entry}\n")
         return
     text = path.read_text()
     text = re.sub(r"(?m)^(\s*package:\s*)\S+$", lambda m: m.group(1) + ref, text, count=1)
@@ -212,7 +238,7 @@ def check() -> int:
     problems, legacy = [], []
     for pkg, info in packages().items():
         cur = current(info)
-        path = INSTALL / f"{pkg}.yaml"
+        path = install_path(pkg)
         if cur == "unreleased":
             if path.exists():
                 problems.append(f"{pkg}: `current: unreleased` but {rel(path)} exists")
@@ -251,7 +277,7 @@ def check() -> int:
 # ── Summary ─────────────────────────────────────────────────────────────────
 
 def _kind(pkg: str) -> str:
-    xrd = ROOT / "package" / pkg / "xrd.yaml"
+    xrd = P.path(pkg) / "xrd.yaml"
     doc = yaml.safe_load(xrd.read_text()) if xrd.exists() else {}
     return ((doc.get("spec") or {}).get("names") or {}).get("kind", "?")
 

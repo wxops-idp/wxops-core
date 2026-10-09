@@ -27,6 +27,9 @@ import textwrap
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(ROOT / "tests" / "lib"))
+import packages as P  # noqa: E402
+
 KCL_PACKAGES = ["platform-database-clusters", "tenant-database", "tenant-app"]
 
 # The YAML block scalar marker as it appears in composition.yaml.
@@ -46,7 +49,7 @@ def build_indented_source(kcl_text: str) -> str:
 
 def sync_package(pkg: str, check_only: bool = False) -> bool:
     src_file = ROOT / "kcl" / pkg / "main.k"
-    comp_file = ROOT / "package" / pkg / "composition.yaml"
+    comp_file = P.path(pkg) / "composition.yaml"
 
     if not src_file.exists():
         print(f"  skip  {pkg}: kcl/{pkg}/main.k not found")

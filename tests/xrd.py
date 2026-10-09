@@ -33,10 +33,10 @@ import render as R  # noqa: E402
 import xrdschema as X  # noqa: E402
 import yaml  # noqa: E402
 
-PACKAGES = [
-    "gitea-user", "gitea-org", "gitea-team", "gitea-repository",
-    "platform-database-clusters", "tenant-database", "tenant-app",
-]
+import packages as P  # noqa: E402
+
+# Published packages, from VERSIONS.yaml — see tests/lib/packages.py.
+PACKAGES = P.names()
 
 
 def _xrs_for(package: str) -> list[tuple[str, Path]]:
@@ -72,8 +72,13 @@ def check_valid(package: str, failures: list[str]) -> int:
         doc = yaml.safe_load(path.read_text())
         if not isinstance(doc, dict) or "spec" not in doc:
             continue
-        errs = X.validate(schema, doc["spec"])
-        unknown = X.unknown_fields(schema, doc["spec"])
+        # Validate what a real API server would store, not what the fixture wrote: Kubernetes
+        # applies schema defaults BEFORE running `pattern`/`enum`/etc, so a default that itself
+        # violates its own field's pattern (as `scm-connection`'s `org: ""` once did against
+        # `^[A-Za-z0-9]...`) only surfaces here if defaults are applied first too.
+        spec = X.apply_defaults(schema, doc["spec"])
+        errs = X.validate(schema, spec)
+        unknown = X.unknown_fields(schema, spec)
         checked += 1
         if errs or unknown:
             print(f"    {R.RED}INVALID{R.RESET} {label}")
@@ -96,9 +101,9 @@ def check_invalid(package: str, failures: list[str]) -> int:
     checked = 0
     for path in sorted(inv_dir.glob("*.yaml")):
         doc = yaml.safe_load(path.read_text())
-        errs = X.validate(schema, (doc or {}).get("spec", {}))
-        errs += [f"unknown field {u}" for u in
-                 X.unknown_fields(schema, (doc or {}).get("spec", {}))]
+        spec = X.apply_defaults(schema, (doc or {}).get("spec", {}))
+        errs = X.validate(schema, spec)
+        errs += [f"unknown field {u}" for u in X.unknown_fields(schema, spec)]
         want = _expectations(path)
         checked += 1
         label = f"_invalid/{path.name}"

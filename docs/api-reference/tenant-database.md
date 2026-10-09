@@ -11,7 +11,7 @@ ESO sync.
 | **Plural** | `xtenantdatabases` |
 | **Scope** | `Cluster` |
 | **API versions** | `v1alpha1` (served, storage) |
-| **Package** | [`package/tenant-database/`](../../package/tenant-database/) — see [`VERSIONS.yaml`](../../VERSIONS.yaml) for the current package version |
+| **Package** | [`package/platform/tenant-database/`](../../package/platform/tenant-database) — see [`VERSIONS.yaml`](../../VERSIONS.yaml) for the current package version |
 | **Composition functions** | [`function-extra-resources`](https://github.com/crossplane-contrib/function-extra-resources) (shared cluster discovery) + [`function-kcl`](https://github.com/crossplane-contrib/function-kcl) — see [`kcl/tenant-database/main.k`](../../kcl/tenant-database/main.k) |
 
 ## `spec.parameters`
@@ -75,7 +75,7 @@ spec:
     compositionUpdatePolicy: Automatic
 ```
 
-Full mechanism, the `Manual`-pin alternative, and why: [Channels](../development/releasing.md#channels).
+Full mechanism, the `Manual`-pin alternative, and why: [Channels](../../development-docs/development/releasing.md#channels).
 
 ## `status`
 

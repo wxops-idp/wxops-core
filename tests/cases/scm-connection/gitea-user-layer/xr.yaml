@@ -1,0 +1,15 @@
+# org left unset: the user layer. Everything built on this connection resolves to the token's own
+# account instead of an org — the point is that this is a supported state, not a fallback. On Gitea
+# that resolution happens inside the module (a whoami lookup); here it's only visible as an empty
+# default_org in the rendered tfvars.
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmConnection
+metadata:
+  name: gitea-personal
+  labels:
+    wxops.cloud/owner: platform
+spec:
+  parameters:
+    vendor: gitea
+    baseUrl: http://gitea-http.gitea.svc.cluster.local:3000
+    access: write

@@ -32,7 +32,8 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def load(package: str, version: str | None = None) -> tuple[str, dict]:
     """Return (version_name, openAPIV3Schema) for a package's XRD."""
-    doc = yaml.safe_load((ROOT / "package" / package / "xrd.yaml").read_text())
+    import packages  # local to lib/
+    doc = yaml.safe_load((packages.path(package) / "xrd.yaml").read_text())
     return load_doc(doc, version, label=package)
 
 

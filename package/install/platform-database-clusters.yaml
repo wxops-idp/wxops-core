@@ -1,8 +1,0 @@
-apiVersion: pkg.crossplane.io/v1
-kind: Configuration
-metadata:
-  name: wxops-core-platform-database-clusters
-spec:
-  package: ghcr.io/wxops/wxops-core/platform-database-clusters:release-2026-09-16
-  packagePullPolicy: IfNotPresent
-  revisionActivationPolicy: Automatic

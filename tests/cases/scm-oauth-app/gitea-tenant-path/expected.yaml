@@ -1,0 +1,118 @@
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmOAuthApp
+metadata:
+  name: team-alpha-dex
+spec:
+  crossplane:
+    resourceRefs:
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: team-alpha-dex-cacf6dc09d87
+      - apiVersion: opentofu.upbound.io/v1beta1
+        kind: Workspace
+        name: team-alpha-dex-264f00a8e3ec
+status:
+  conditions:
+    - reason: WatchCircuitClosed
+      status: 'True'
+      type: Responsive
+    - reason: ReconcileSuccess
+      status: 'True'
+      type: Synced
+    - message: 'Unready resources: credentials-push, tf-workspace'
+      reason: Creating
+      status: 'False'
+      type: Ready
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: credentials-push
+  generateName: team-alpha-dex-
+  labels:
+    crossplane.io/composite: team-alpha-dex
+  name: team-alpha-dex-cacf6dc09d87
+  ownerReferences:
+    - apiVersion: scm.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XScmOAuthApp
+      name: team-alpha-dex
+      uid: a254bca0-3834-51bb-8cca-6b218fa2f924
+spec:
+  forProvider:
+    manifest:
+      apiVersion: external-secrets.io/v1alpha1
+      kind: PushSecret
+      metadata:
+        name: scm-oauth-app-team-alpha-dex
+        namespace: crossplane-system
+      spec:
+        data:
+          - match:
+              remoteRef:
+                remoteKey: team-alpha/oauth/dex/credentials
+        deletionPolicy: Delete
+        refreshInterval: 1h
+        secretStoreRefs:
+          - kind: ClusterSecretStore
+            name: vault-tenants
+        selector:
+          secret:
+            name: tf-scm-oauth-app-a254bca0-3834-51bb-8cca-6b218fa2f924
+  providerConfigRef:
+    name: default
+---
+apiVersion: opentofu.upbound.io/v1beta1
+kind: Workspace
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: tf-workspace
+  generateName: team-alpha-dex-
+  labels:
+    crossplane.io/composite: team-alpha-dex
+  name: team-alpha-dex-264f00a8e3ec
+  ownerReferences:
+    - apiVersion: scm.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XScmOAuthApp
+      name: team-alpha-dex
+      uid: a254bca0-3834-51bb-8cca-6b218fa2f924
+spec:
+  forProvider:
+    module: "terraform {\n  required_providers {\n    gitea = { source = \"go-gitea/gitea\", version = \"~> 0.8\" }\n  }\n}\n\n# \u2500\u2500 From the XScmConnection Secret (varFiles) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n# default_org is unused here but declared: the connection Secret always sets it, and an undeclared\n# variable in a -var-file is a warning this module should not emit.\nvariable \"vendor\" {\n  type = string\n  validation {\n    condition     = contains([\"gitea\", \"github\"], var.vendor)\n    error_message = \"vendor must be gitea or github (the XScmConnection decides it).\"\n  }\n}\nvariable \"base_url\" { type = string }\nvariable \"default_org\" { type = string }\nvariable \"access\" {\n  type = string\n  validation {\n    condition     = contains([\"write\", \"read\"], var.access)\n    error_message = \"\
+      access must be write or read.\"\n  }\n}\nvariable \"token\" {\n  type      = string\n  sensitive = true\n}\n\n# \u2500\u2500 From the XR \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nvariable \"mode\" {\n  type = string\n  validation {\n    condition     = contains([\"managed\", \"observed\"], var.mode)\n    error_message = \"mode must be managed or observed.\"\n  }\n}\nvariable \"app_name\" { type = string }\nvariable \"redirect_uris\" { type = string }\nvariable \"confidential\" { type = bool }\n\n# Bumping this replaces the application, so the host issues a new secret. A commit is the audit\n# trail; the previous value stays in the store's own version\
+      \ history.\nvariable \"rotation_generation\" { type = string }\n\n# \u2500\u2500 From the operator's Secret, in `observed` mode only (varFiles) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nvariable \"existing_client_id\" {\n  type    = string\n  default = \"\"\n}\nvariable \"existing_client_secret\" {\n  type      = string\n  sensitive = true\n  default   = \"\"\n}\n\nlocals {\n  managed       = var.mode == \"managed\"\n  gitea_managed = var.vendor == \"gitea\" && local.managed\n  redirect_list = var.redirect_uris == \"\" ? [] : [for u in split(\",\", var.redirect_uris) : trimspace(u)]\n}\n\nprovider \"gitea\" {\n  base_url = var.base_url != \"\" ? var.base_url : \"https://gitea.invalid\"\n  token    = var.token\n}\n\n# Rotation trigger. terraform_data is built in \u2014 no provider, no API call.\nresource \"terraform_data\" \"rotation\" {\n  input = var.rotation_generation\n}\n\n# The rules a schema cannot express, checked before anything is written. This resource\
+      \ always\n# exists, so its preconditions always run \u2014 a precondition on a count = 0 resource would not.\nresource \"terraform_data\" \"guard\" {\n  input = var.vendor\n\n  lifecycle {\n    precondition {\n      condition     = !local.managed || var.vendor == \"gitea\"\n      error_message = \"mode: managed is only available on Gitea. GitHub has no API to create an OAuth App, so register it by hand and use mode: observed with credentialsSecretRef.\"\n    }\n    precondition {\n      condition     = !local.managed || var.access == \"write\"\n      error_message = \"mode: managed needs a write connection; this XScmConnection is access: read.\"\n    }\n    precondition {\n      condition     = local.managed || (var.existing_client_id != \"\" && var.existing_client_secret != \"\")\n      error_message = \"mode: observed needs credentialsSecretRef to name a Secret whose `credentials` key sets existing_client_id and existing_client_secret in tfvars form.\"\n    }\n    precondition {\n\
+      \      condition     = !local.managed || length(local.redirect_list) > 0\n      error_message = \"redirectUris must list at least one URI to create an application.\"\n    }\n  }\n}\n\nresource \"gitea_oauth2_app\" \"this\" {\n  count = local.gitea_managed ? 1 : 0\n\n  name                = var.app_name\n  redirect_uris       = local.redirect_list\n  confidential_client = var.confidential\n\n  lifecycle {\n    replace_triggered_by = [terraform_data.rotation]\n  }\n}\n\n# \u2500\u2500 Outputs \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n# client_id is not secret and is read into the XR's status. client_secret is sensitive, so\n# provider-opentofu\
+      \ routes it to the Workspace's connection Secret and it never reaches status.\noutput \"client_id\" {\n  value = local.gitea_managed ? gitea_oauth2_app.this[0].client_id : var.existing_client_id\n}\n\noutput \"client_secret\" {\n  value     = local.gitea_managed ? gitea_oauth2_app.this[0].client_secret : var.existing_client_secret\n  sensitive = true\n}\n\noutput \"generation\" {\n  value = var.rotation_generation\n}\n"
+    source: Inline
+    varFiles:
+      - secretKeyRef:
+          key: credentials
+          name: scm-connection-gitea-internal
+          namespace: crossplane-system
+        source: SecretKey
+      - secretKeyRef:
+          key: credentials
+          name: scm-connection-gitea-internal
+          namespace: crossplane-system
+        source: SecretKey
+    vars:
+      - key: mode
+        value: managed
+      - key: app_name
+        value: dex
+      - key: redirect_uris
+        value: https://dex.example.com/callback
+      - key: confidential
+        value: 'true'
+      - key: rotation_generation
+        value: '1'
+  providerConfigRef:
+    name: default
+  writeConnectionSecretToRef:
+    name: tf-scm-oauth-app-a254bca0-3834-51bb-8cca-6b218fa2f924
+    namespace: crossplane-system
