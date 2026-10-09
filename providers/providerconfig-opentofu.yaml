@@ -1,0 +1,19 @@
+apiVersion: opentofu.upbound.io/v1beta1
+kind: ProviderConfig
+metadata:
+  name: default
+spec:
+  # provider-opentofu keeps no state of its own, so a remote backend is required: the Kubernetes backend
+  # persists state in a Secret that survives pod restarts. in_cluster_config uses the provider pod's own
+  # service account — no extra credentials needed.
+  #
+  # secret_suffix differs from providers/archive/providerconfig-terraform.yaml ("tfstate") on purpose, so OpenTofu never
+  # reads or writes a state Secret that Terraform wrote.
+  configuration: |
+    terraform {
+      backend "kubernetes" {
+        secret_suffix     = "tofu-state"
+        namespace         = "crossplane-system"
+        in_cluster_config = true
+      }
+    }

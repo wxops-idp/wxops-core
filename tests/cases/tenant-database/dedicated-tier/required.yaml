@@ -11,7 +11,7 @@
 # unrenderable offline unless the pool is supplied here.
 #
 # The label must match the `wxops.cloud/managed-by` selector in
-# package/tenant-database/composition.yaml. KCL reads shared/environment/
+# package/platform/tenant-database/composition.yaml. KCL reads shared/environment/
 # clusterName/namespace from status first and falls back to spec.parameters
 # (see _clusterShared / _clusterEnv in kcl/tenant-database/main.k), so a
 # spec-only fixture is sufficient and avoids restating status here.

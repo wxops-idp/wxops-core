@@ -18,7 +18,7 @@ Secret(s) they produce.
 | **Plural** | `xtenantapps` |
 | **Scope** | `Cluster` |
 | **API versions** | `v1alpha1` (served, storage) |
-| **Package** | [`package/tenant-app/`](../../package/tenant-app/) — see [`VERSIONS.yaml`](../../VERSIONS.yaml) for the current package version |
+| **Package** | [`package/platform/tenant-app/`](../../package/platform/tenant-app) — see [`VERSIONS.yaml`](../../VERSIONS.yaml) for the current package version |
 | **Composition function** | [`function-kcl`](https://github.com/crossplane-contrib/function-kcl) — see [`kcl/tenant-app/main.k`](../../kcl/tenant-app/main.k) |
 
 ## `spec.parameters`
@@ -413,7 +413,7 @@ spec:
     compositionUpdatePolicy: Automatic
 ```
 
-Full mechanism, the `Manual`-pin alternative, and why: [Channels](../development/releasing.md#channels).
+Full mechanism, the `Manual`-pin alternative, and why: [Channels](../../development-docs/development/releasing.md#channels).
 
 ## `status`
 

@@ -2,12 +2,16 @@
 
 End-to-end flow for taking a developer from "pick a flavor and template" to
 a running [`tenant-app`](../api-reference/tenant-app.md), tying together the templates
-catalog, [`gitea-repository`](../api-reference/gitea-repository.md), and `tenant-app`'s
+catalog, [`scm-repository`](../api-reference/scm-repository.md), and `tenant-app`'s
 `appFlavor`/`templateId`/`repository.url`/`secretsFrom` fields. The
 portal/scaffolder that drives this flow lives outside `wxops-core` — this
 doc describes the contract between it and the packages in this repo. Steps
-1–2, 4–7 are pure portal-backend logic (Gitea API + git operations); only
+1–2, 4–7 are pure portal-backend logic (the host's API + git operations); only
 steps 3 and 8 touch this repo's XRDs.
+
+> `XGiteaRepository` was this step's kind before `scm-repository` shipped. It is archived
+> (`docs/api-reference/_archives/gitea-repository.md`), not removed — kept for the record, not
+> used by any current flow.
 
 ## 1. User picks `appFlavor`
 
@@ -27,35 +31,36 @@ The portal resolves `templateId` to a path in the templates catalog repo —
 `templates/<templateId>/skeleton/` (see [Templates catalog](#templates-catalog)
 below).
 
-## 3. Create the application repository — `XGiteaRepository`
+## 3. Create the application repository — `XScmRepository`
 
-The portal creates an [`XGiteaRepository`](../api-reference/gitea-repository.md) claim:
+The portal creates an [`XScmRepository`](../api-reference/scm-repository.md) resource, naming
+the platform's [`XScmConnection`](../api-reference/scm-connection.md) — the connection carries
+the host and the org, so neither appears here:
 
 ```yaml
 spec:
   parameters:
+    scmRef:
+      name: <platform-scm-connection>
     repoName: <appName>
-    orgName: <tenant-org>
     autoInit: false   # scaffolder provides the first commit (step 6)
-    private: true
+    visibility: private
 ```
 
-Poll/wait for the connection secret's `html_url`/`clone_url` outputs — these
-become `tenant-app`'s `repository.url` (step 8) and the git push target
-(step 6).
+Poll/wait for `status.htmlUrl`/`status.cloneUrl` — these become `tenant-app`'s
+`repository.url` (step 8) and the git push target (step 6).
 
 > **Import existing repo**: skip steps 3–6 entirely. Set `repository.url`
-> directly to the existing repo's URL in the `tenant-app` claim (step 8).
-> No `XGiteaRepository` claim needed.
+> directly to the existing repo's URL in the `tenant-app` claim (step 8). No `XScmRepository`
+> resource needed — or set `mode: observed` on one to still track it through the API.
 
 ## 4. Fetch the template skeleton
 
 The portal fetches the tarball/tree of `templates/<templateId>/skeleton`
-at a ref from the catalog repo via the Gitea API (e.g.
-`GET /repos/{owner}/{repo}/archive/{ref}` or the contents/tree API scoped to
-that subpath) and extracts it locally. This is a plain subpath fetch — it
+at a ref from the catalog repo via the host's API (Gitea's `contents`/`archive` endpoints, or
+GitHub's/GitLab's equivalents) and extracts it locally. This is a plain subpath fetch — it
 works whether the catalog repo is a single monorepo with one subfolder per
-template, or separate per-template repos; Gitea doesn't need to know
+template, or separate per-template repos; the host doesn't need to know
 anything about "templates."
 
 ## 5. Render placeholders
@@ -67,9 +72,8 @@ whatever convention the skeleton's `template.yaml` declares.
 ## 6. Commit + push the initial commit
 
 The portal `git init`s the rendered tree and pushes it to the repo created
-in step 3 (`clone_url`), using the same Gitea credentials as
-`gitea-repository`'s `credentialsSecretRef`. This becomes the repo's initial
-commit on `defaultBranch`.
+in step 3 (`status.cloneUrl`), using the same host credential the `XScmConnection` holds. This
+becomes the repo's initial commit on `defaultBranch`.
 
 ## 7. CI builds the image
 
@@ -117,7 +121,7 @@ the subfolder name.
 |---|---|---|
 | 1 | Pick `appFlavor` (filters template choices) | metadata only |
 | 2 | Pick `templateId` | external (templates catalog) |
-| 3 | Create new app repo | [`gitea-repository`](../api-reference/gitea-repository.md) (skip if importing an existing repo) |
+| 3 | Create new app repo | [`scm-repository`](../api-reference/scm-repository.md) (skip if importing an existing repo) |
 | 4 | Fetch template skeleton (tarball/tree) | external (portal) |
 | 5 | Render placeholders | external (portal) |
 | 6 | Commit + push initial commit | external (portal) |

@@ -5,14 +5,10 @@
 #   kubectl apply -k package/install/
 #
 # Pins are written by `make release` (.gitea/scripts/release-state.py), never by
-# hand: each package points at the release it last changed in, on ghcr.io/wxops.
+# hand: each package points at the release it last changed in, on ghcr.io/wxops-idp.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - gitea-user.yaml
-  - gitea-org.yaml
-  - gitea-team.yaml
-  - gitea-repository.yaml
-  - platform-database-clusters.yaml
-  - tenant-database.yaml
-  - tenant-app.yaml
+  # One directory per API group (ADR-002). `make release` adds a new group here
+  # and the manifest inside it — see .gitea/scripts/release-state.py.
+  - platform/

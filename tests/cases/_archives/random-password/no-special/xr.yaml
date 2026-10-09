@@ -1,0 +1,8 @@
+apiVersion: platform.wxops.cloud/v1alpha1
+kind: XRandomPassword
+metadata:
+  name: example-password-plain
+spec:
+  parameters:
+    length: 16
+    special: false

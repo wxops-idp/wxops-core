@@ -1,0 +1,118 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: xrandompasswords.platform.wxops.cloud
+  labels:
+    crossplane.io/xrd: xrandompasswords.platform.wxops.cloud
+spec:
+  compositeTypeRef:
+    apiVersion: platform.wxops.cloud/v1alpha1
+    kind: XRandomPassword
+
+  mode: Pipeline
+  pipeline:
+    - step: patch-and-transform
+      functionRef:
+        name: function-patch-and-transform
+      input:
+        apiVersion: pt.fn.crossplane.io/v1beta1
+        kind: Resources
+        resources:
+          - name: tf-workspace
+            base:
+              apiVersion: opentofu.upbound.io/v1beta1
+              kind: Workspace
+              spec:
+                providerConfigRef:
+                  name: default
+                forProvider:
+                  # Inline keeps the module self-contained for this POC.
+                  # Switch source to Remote (Git/registry) for production.
+                  source: Inline
+                  module: |
+                    terraform {
+                      required_providers {
+                        random = {
+                          source  = "hashicorp/random"
+                          version = "~> 3.6"
+                        }
+                      }
+                    }
+
+                    variable "length" {
+                      type    = number
+                      default = 32
+                    }
+
+                    variable "special" {
+                      type    = bool
+                      default = true
+                    }
+
+                    variable "override_special" {
+                      type    = string
+                      default = "!@#$%^&*"
+                    }
+
+                    resource "random_password" "this" {
+                      length           = var.length
+                      special          = var.special
+                      override_special = var.override_special
+                    }
+
+                    # Sensitive output → provider-opentofu surfaces it as a
+                    # connection detail, not as a plain state value.
+                    output "password" {
+                      value     = random_password.this.result
+                      sensitive = true
+                    }
+                  vars:
+                    - key: length
+                      value: "32"
+                    - key: special
+                      value: "true"
+                    - key: override_special
+                      value: "!@#$%^&*"
+                # Intermediate secret; name is patched from the XR UID below.
+                writeConnectionSecretToRef:
+                  namespace: crossplane-system
+                  name: placeholder
+
+            patches:
+              # Stamp a unique name on the intermediate connection secret.
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.uid
+                toFieldPath: spec.writeConnectionSecretToRef.name
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: "tf-random-password-%s"
+
+              # Forward the three input parameters as OpenTofu vars.
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.parameters.length
+                toFieldPath: spec.forProvider.vars[0].value
+                transforms:
+                  - type: convert
+                    convert:
+                      toType: string
+
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.parameters.special
+                toFieldPath: spec.forProvider.vars[1].value
+                transforms:
+                  - type: convert
+                    convert:
+                      toType: string
+
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.parameters.overrideSpecial
+                toFieldPath: spec.forProvider.vars[2].value
+
+            # Lift the Workspace's `password` connection detail up to the XR
+            # so Crossplane can write it into the caller's Secret.
+            connectionDetails:
+              - name: password
+                type: FromConnectionSecretKey
+                fromConnectionSecretKey: password

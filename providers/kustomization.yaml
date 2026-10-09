@@ -1,0 +1,38 @@
+# Shared Crossplane providers, functions and their configuration — one command per cluster:
+#
+#   kubectl apply -k providers/
+#
+# This file is the all-at-once view, for a GitOps engine: Argo CD and Flux retry, so they settle on their
+# own. For a human on a cold cluster, order matters — a ProviderConfig cannot be created before its
+# provider's CRDs are served, and kustomize cannot wait, so `kubectl apply -k` here would fail on exactly
+# those objects. Two targets do it in order instead:
+#
+#     make providers         # function-*, provider-*, runtimeconfig-*, rbac-*  → then waits for Healthy
+#     make provider-configs  # providerconfig-*                                → after their CRDs appear
+#
+# The split is by file name, and `make providers` fails if a resource listed below matches neither
+# phase — so adding a manifest here cannot silently skip installation.
+#
+# Not listed, on purpose:
+#   archive/   — retired or legacy manifests (see archive/README.md); apply by hand if you still need them.
+#   policies/  — Kyverno policies, which need Kyverno installed first (see policies/ and RFC-005).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  # ── Functions (composition pipeline steps) ────────────────────────────────
+  - function-patch-and-transform.yaml   # single-resource Workspaces (gitea-*, random-password)
+  - function-kcl.yaml                   # multi-resource compositions (platform-database-clusters, tenant-*)
+  - function-extra-resources.yaml       # discovery of existing XRs (tenant-database)
+
+  # ── Providers ─────────────────────────────────────────────────────────────
+  - provider-kubernetes.yaml            # Kubernetes objects, ESO PushSecret/ExternalSecret, CNPG, Dex (via Object)
+  - provider-sql.yaml                   # PostgreSQL roles and databases (tenant-database, platform-database-clusters)
+  - provider-opentofu.yaml              # inline HCL Workspaces (OpenTofu); see RFC-002
+
+  # ── Runtime configuration and RBAC for the providers ─────────────────────
+  - runtimeconfig-provider-kubernetes.yaml   # fixed ServiceAccount name for provider-kubernetes
+  - rbac-provider-kubernetes.yaml            # reviewed static grants for the third-party kinds Core composes
+
+  # ── ProviderConfigs (after the providers they configure) ─────────────────
+  - providerconfig-kubernetes.yaml      # provider-kubernetes: InjectedIdentity, in-cluster
+  - providerconfig-opentofu.yaml        # provider-opentofu: Kubernetes state backend, secret_suffix tofu-state

@@ -10,7 +10,7 @@ and optional shared-cluster labeling for dynamic tenant pool discovery.
 | **Plural** | `xplatformdatabaseclusters` |
 | **Scope** | `Cluster` |
 | **API versions** | `v1alpha1` (served, storage) |
-| **Package** | [`package/platform-database-clusters/`](../../package/platform-database-clusters/) — see [`VERSIONS.yaml`](../../VERSIONS.yaml) for the current package version |
+| **Package** | [`package/platform/platform-database-clusters/`](../../package/platform/platform-database-clusters) — see [`VERSIONS.yaml`](../../VERSIONS.yaml) for the current package version |
 | **Composition function** | [`function-kcl`](https://github.com/crossplane-contrib/function-kcl) — see [`kcl/platform-database-clusters/main.k`](../../kcl/platform-database-clusters/main.k) |
 
 ## `spec.parameters`
@@ -179,7 +179,7 @@ spec:
     compositionUpdatePolicy: Automatic
 ```
 
-Full mechanism, the `Manual`-pin alternative, and why: [Channels](../development/releasing.md#channels).
+Full mechanism, the `Manual`-pin alternative, and why: [Channels](../../development-docs/development/releasing.md#channels).
 
 ## `status`
 

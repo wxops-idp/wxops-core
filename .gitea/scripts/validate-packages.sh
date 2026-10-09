@@ -10,8 +10,9 @@
 
 set -euo pipefail
 
-PACKAGES=(gitea-user gitea-org gitea-team gitea-repository platform-database-clusters tenant-database tenant-app)
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# name=dir pairs from VERSIONS.yaml — the one resolver (see tests/lib/packages.py).
+mapfile -t PAIRS < <(python3 "$ROOT_DIR/tests/lib/packages.py" pairs)
 TMPDIR="$(mktemp -d)"
 FAILED=()
 
@@ -23,11 +24,12 @@ if ! command -v crossplane &>/dev/null; then
   exit 1
 fi
 
-echo "crossplane xpkg build — validating ${#PACKAGES[@]} packages"
+echo "crossplane xpkg build — validating ${#PAIRS[@]} packages"
 echo ""
 
-for pkg in "${PACKAGES[@]}"; do
-  pkg_dir="$ROOT_DIR/package/$pkg"
+for pair in "${PAIRS[@]}"; do
+  pkg="${pair%%=*}"
+  pkg_dir="$ROOT_DIR/${pair#*=}"
   out="$TMPDIR/$pkg.xpkg"
 
   printf "  %-24s" "$pkg"

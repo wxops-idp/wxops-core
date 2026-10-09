@@ -25,7 +25,7 @@ Three checks per package, each against the baseline tag:
             deleted in-cluster, and a changed immutable field (Deployment
             selector, PVC storageClassName) strands the XR with no self-heal
 
-Every finding carries a tier from ROADMAP.md's change taxonomy:
+Every finding carries a tier from release-notes/README.md's change taxonomy:
 
   breaking — fails, unless allowed in tests/api-compat-allow.yaml
   careful  — passes, recorded; `make release` requires release notes for it
@@ -47,6 +47,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
+import packages as P  # noqa: E402
 import releases as REL  # noqa: E402
 import render as R  # noqa: E402
 import xrdschema as X  # noqa: E402
@@ -62,7 +63,7 @@ RAISED_IS_NARROWER = ("minimum", "exclusiveMinimum", "minLength", "minItems", "m
 LOWERED_IS_NARROWER = ("maximum", "exclusiveMaximum", "maxLength", "maxItems", "maxProperties")
 
 # Fields Kubernetes rejects in-place updates to. A composition that changes one
-# leaves the Object in a permanent reconcile error — see ROADMAP.md
+# leaves the Object in a permanent reconcile error — see development-docs/ROADMAP.md
 # "The immutable-field hazard".
 IMMUTABLE = {
     "Deployment": ("spec.selector",),
@@ -349,11 +350,21 @@ def golden(package: str, baseline: str) -> list[Finding]:
 # ── Driver ──────────────────────────────────────────────────────────────────
 
 def check_package(package: str, baseline: str) -> list[Finding]:
-    old_text = REL.show(baseline, f"package/{package}/xrd.yaml")
-    new_path = R.ROOT / "package" / package / "xrd.yaml"
+    # The baseline tag may predate RFC-007's move, so look for the XRD at every
+    # layout this package has had. Without the fallback a moved package reads as
+    # `package-added` and the gate silently stops comparing anything.
+    old_text = next(
+        (t for t in (REL.show(baseline, f"{d}/xrd.yaml") for d in P.baseline_paths(package))
+         if t is not None), None)
+    # A package dropped from VERSIONS.yaml entirely (archived, not deleted — RFC-003 §Removing
+    # the old kinds) has no current path at all; that is itself the removal, not a crash.
+    try:
+        new_path = P.path(package) / "xrd.yaml"
+    except KeyError:
+        new_path = None
     if old_text is None:
         return [Finding("safe", "package-added", package, f"not present at {baseline}")]
-    if not new_path.exists():
+    if new_path is None or not new_path.exists():
         return [Finding("breaking", "package-removed", package,
                         "every XR of this kind loses its definition")]
     old_doc = yaml.safe_load(old_text)

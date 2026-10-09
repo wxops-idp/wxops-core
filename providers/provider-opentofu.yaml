@@ -1,0 +1,10 @@
+# OpenTofu engine for inline-HCL Workspaces (Apache-2.0 provider, MPL-2.0 `tofu` binary).
+# New compositions use opentofu.upbound.io/v1beta1 Workspaces — see development-docs/rfc/002-migrate-terraform-to-opentofu.md.
+# provider-terraform (providers/archive/provider-terraform.yaml) stays installed only until the gitea-* packages are removed.
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: provider-opentofu
+spec:
+  package: xpkg.upbound.io/upbound/provider-opentofu:v1.1.9
+  packagePullPolicy: IfNotPresent

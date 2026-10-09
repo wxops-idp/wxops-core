@@ -136,9 +136,10 @@ repos:
       - id: kcl-drift-check
         name: kcl source in sync with compositions
         language: python
+        additional_dependencies: [pyyaml]
         entry: python3 .gitea/scripts/kcl-sync.py --check
         pass_filenames: false
-        files: ^(kcl/|package/(platform-database-clusters|tenant-database|tenant-app)/composition\.yaml)
+        files: ^(kcl/|package/.*/composition\.yaml)
 
   # ── Package pins ─────────────────────────────────────────────────────────────
   # VERSIONS.yaml `current` and package/install/*.yaml are written together by
@@ -167,7 +168,7 @@ repos:
         additional_dependencies: [pyyaml]
         entry: python3 .gitea/scripts/gen-readme-packages.py --check
         pass_filenames: false
-        files: ^(VERSIONS\.yaml|README\.md|package/[^/]+/xrd\.yaml)$
+        files: ^(VERSIONS\.yaml|README\.md|package/.*/xrd\.yaml)$
 
   # ── Test suite ───────────────────────────────────────────────────────────────
   # See tests/README.md. Split by cost:
@@ -182,7 +183,7 @@ repos:
         additional_dependencies: [pyyaml, jsonschema]
         entry: python3 tests/xrd.py
         pass_filenames: false
-        files: ^(package/[^/]+/xrd\.yaml|examples/|tests/cases/)
+        files: ^(package/.*/xrd\.yaml|examples/|tests/cases/)
 
       - id: test-invariants
         name: composition invariants and field contracts
@@ -190,7 +191,7 @@ repos:
         additional_dependencies: [pyyaml]
         entry: python3 tests/invariants.py
         pass_filenames: false
-        files: ^(tests/|kcl/|package/[^/]+/composition\.yaml)
+        files: ^(tests/|kcl/|package/.*/composition\.yaml)
 
       # Diffs against the last release tag through git — no Docker, well under
       # a second. Fails on a breaking change to an already-released XRD.
@@ -200,7 +201,7 @@ repos:
         additional_dependencies: [pyyaml, jsonschema]
         entry: python3 tests/api_compat.py
         pass_filenames: false
-        files: ^(package/[^/]+/xrd\.yaml|tests/)
+        files: ^(package/.*/xrd\.yaml|tests/)
 
       - id: test-golden
         name: golden render tests (slow — push only)

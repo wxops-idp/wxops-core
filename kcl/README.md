@@ -59,7 +59,7 @@ make kcl-check    # fail if composition.yaml has drifted from kcl/{pkg}/main.k
              source: |
                # contents of kcl/{pkg}/main.k go here (kept in sync via kcl-sync)
    ```
-   If the KCL code reads extra resources (e.g. `tenant-database` discovers shared clusters), add a `function-extra-resources` step **before** the `function-kcl` step — the fetched resources appear in `option("params").extraResources` inside KCL. See `package/tenant-database/composition.yaml` for an example.
+   If the KCL code reads extra resources (e.g. `tenant-database` discovers shared clusters), add a `function-extra-resources` step **before** the `function-kcl` step — the fetched resources appear in `option("params").extraResources` inside KCL. See `package/platform/tenant-database/composition.yaml` for an example.
 4. **Run `make kcl-sync`** to embed the source, then `make kcl-check` (or `pre-commit run --all-files`) to confirm it's in sync.
 5. **Validate** with `make render` against an example XR in `examples/{pkg}/xr.yaml`, and `make build` to confirm the package still packages cleanly.
 
@@ -77,7 +77,7 @@ The inline-embedding approach above (kcl-sync) works well for independent per-pa
 
 ```yaml
 spec:
-  source: "oci://ghcr.io/wxops/kcl-platform-database-clusters:v0.2.0"
+  source: "oci://ghcr.io/wxops-idp/kcl-platform-database-clusters:v0.2.0"
 ```
 
 The function pulls the OCI artifact at reconcile time (or from its local cache) and runs it. The artifact is a standard KCL module packaged with `kcl mod push`.
@@ -114,7 +114,7 @@ version = "0.2.0"
 edition = "v0.10.0"
 
 [dependencies]
-wxops_lib = { oci = "oci://ghcr.io/wxops/kcl-lib", tag = "v0.1.0" }
+wxops_lib = { oci = "oci://ghcr.io/wxops-idp/kcl-lib", tag = "v0.1.0" }
 ```
 
 `kcl/platform-database-clusters/main.k` after migration:

@@ -2,9 +2,9 @@
 
 One page, cross-package: every field a portal (or any external consumer) can
 read from an XR's `status` right now, as of the Phase 0 API-freeze batch, shipped as `v0.4.0` (see
-[`ROADMAP.md`](../../ROADMAP.md#shipped)). Each package's own doc has
+[`development-docs/_archives/ROADMAP.md`](../../development-docs/_archives/ROADMAP.md#shipped)). Each package's own doc has
 the full field-by-field detail with rationale; this page exists so a portal
-engineer doesn't have to open all seven to answer "what can I poll?"
+engineer doesn't have to open every one to answer "what can I poll?"
 
 ## The one rule that applies everywhere
 
@@ -21,7 +21,7 @@ identical across packages — only the extra fields differ.
 **All seven XRDs serve `v1alpha1` only.** This is a decision, not an
 oversight — recorded in [`VERSIONS.yaml`](../../VERSIONS.yaml). Every Phase 0
 change is additive, so nothing forced a bump; promotion to `v1beta1` is
-deferred to [release readiness](../../ROADMAP.md#release-readiness), the natural point to make a
+deferred to [release readiness](../../development-docs/_archives/ROADMAP.md#release-readiness), the natural point to make a
 stability commitment. **The portal should expect to pin `v1alpha1` for its first
 integration** — that is accepted, not a temporary gap to work around.
 
@@ -29,12 +29,15 @@ integration** — that is accepted, not a temporary gap to work around.
 
 | Package | Kind | `created` | `ready` | Extra fields | Contract note |
 |---|---|---|---|---|---|
-| [`gitea-user`](gitea-user.md#status) | `XGiteaUser` | bool, **absent** until first apply | bool, **absent** until first apply | `userId`, `username` | Absent ≠ `false` — this package's only deviation from the rest. Treat absent as not-ready. |
-| [`gitea-org`](gitea-org.md#status) | `XGiteaOrg` | bool, absent-until-apply | bool, absent-until-apply | `orgId`, `orgName` | Same absent-not-false caveat. |
-| [`gitea-team`](gitea-team.md#status) | `XGiteaTeam` | bool, absent-until-apply | bool, absent-until-apply | `teamId`, `teamName` | Same absent-not-false caveat. |
-| [`gitea-repository`](gitea-repository.md#status) | `XGiteaRepository` | bool, absent-until-apply | bool, absent-until-apply | `repoId`, `cloneUrl`, `sshUrl`, `htmlUrl` | Same absent-not-false caveat. |
+| [`gitea-user`](_archives/gitea-user.md#status) (archived) | `XGiteaUser` | bool, **absent** until first apply | bool, **absent** until first apply | `userId`, `username` | Absent ≠ `false` — this package's only deviation from the rest. Treat absent as not-ready. |
+| [`gitea-org`](_archives/gitea-org.md#status) (archived) | `XGiteaOrg` | bool, absent-until-apply | bool, absent-until-apply | `orgId`, `orgName` | Same absent-not-false caveat. |
+| [`gitea-team`](_archives/gitea-team.md#status) (archived) | `XGiteaTeam` | bool, absent-until-apply | bool, absent-until-apply | `teamId`, `teamName` | Same absent-not-false caveat. |
+| [`gitea-repository`](_archives/gitea-repository.md#status) (archived) | `XGiteaRepository` | bool, absent-until-apply | bool, absent-until-apply | `repoId`, `cloneUrl`, `sshUrl`, `htmlUrl` | Same absent-not-false caveat. |
 | [`platform-database-clusters`](platform-database-clusters.md#status) | `XPlatformDatabaseCluster` | bool, explicit `false` | bool, explicit `false` | `clusterName`, `namespace`, `shared`, `environment` | `ready` excludes Vault seeding and scheduled backups on purpose — neither stops a running cluster serving. |
 | [`tenant-database`](tenant-database.md#status) | `XTenantDatabase` | bool, explicit `false` | bool, explicit `false` | `clusterRef`, `clusterNamespace`, `tier`, `dbName` | `ready` excludes the Vault credential push — a lagging push doesn't stop the app connecting. |
+| [`scm-connection`](scm-connection.md#status) | `XScmConnection` | bool, absent-until-synced | bool, absent-until-synced | `secretName` | Same absent-not-false caveat. `ready` means the credential Secret exists — never that the token works against the host. |
+| [`scm-repository`](scm-repository.md#status) | `XScmRepository` | bool, absent-until-apply | bool, absent-until-apply | `exists`, `repoId`, `cloneUrl`, `sshUrl`, `htmlUrl`, `fullName` | Same absent-not-false caveat. In `observed` mode `exists` is the field that matters. |
+| [`scm-oauth-app`](scm-oauth-app.md#status) | `XScmOAuthApp` | bool, absent-until-apply | bool, absent-until-apply | `clientId`, `vaultKey`, `generation` | Same absent-not-false caveat. The client secret is never in status — it goes to the store and to a Secret. |
 | [`tenant-app`](tenant-app.md#status) | `XTenantApp` | bool, explicit `false` | bool, explicit `false`, **workload-scoped** | `dependenciesReady`, `darlane.*`, `url`, `namespace`, `image` | See the split below — `ready` alone is not the full health picture for this package. |
 
 The **absent-vs-`false`** split is real and package-group-wide: the four
@@ -92,7 +95,7 @@ status:
                                                # creationTimestamp to compute one
     serviceAccountName: payment-api-darlane   # the RBAC binding target, not a grant —
                                                # this repo's compositions never emit
-                                               # RBAC; see ROADMAP.md "Decided and
+                                               # RBAC; see development-docs/_archives/ROADMAP.md "Decided and
                                                # rejected"
 ```
 
@@ -143,6 +146,6 @@ lands, at which point it becomes the field that selects a target cluster per XR.
 
 ## See also
 
-- [`ROADMAP.md`](../../ROADMAP.md#shipped) — the work that produced this contract, shipped as `v0.4.0`
+- [`development-docs/_archives/ROADMAP.md`](../../development-docs/_archives/ROADMAP.md#shipped) — the work that produced this contract, shipped as `v0.4.0`
 - [`CONTRIBUTING.md`](../../CONTRIBUTING.md) — the checklist a new package owes, including status parity
 - [`tests/README.md`](../../tests/README.md) — how these contracts are tested offline

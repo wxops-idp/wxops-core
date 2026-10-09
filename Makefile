@@ -1,4 +1,4 @@
-REGISTRY ?= ghcr.io/wxops/wxops-core
+REGISTRY ?= ghcr.io/wxops-idp/wxops-core
 
 # datreeio CRDs-catalog ref used for third-party schema lookups. PINNED on
 # purpose: tracking `main` would let upstream change what CI accepts with no
@@ -6,16 +6,31 @@ REGISTRY ?= ghcr.io/wxops/wxops-core
 # reference stack in CLAUDE.md. Keep in sync with CATALOG_REF in tests/structural.py.
 CRDS_CATALOG_REF ?= 52b0261318acc7dd0b66e032759b1f218216b980
 
-PACKAGES := gitea-user gitea-org gitea-team gitea-repository platform-database-clusters tenant-database tenant-app
+# How long `make providers` / `make provider-configs` wait for packages to install and their APIs to
+# appear. Pulling several provider images on a cold cluster is the slow part.
+WAIT_TIMEOUT ?= 300s
+
+# The two install phases, split by file name. `provider-*` does not match `providerconfig-*` —
+# the hyphen is what separates them. providers/archive/ and providers/policies/ are excluded on
+# purpose: archived manifests are not applied, and the Kyverno policies need Kyverno first.
+PROVIDER_MANIFESTS := $(wildcard providers/function-*.yaml providers/provider-*.yaml \
+                                 providers/runtimeconfig-*.yaml providers/rbac-*.yaml)
+PROVIDERCONFIG_MANIFESTS := $(wildcard providers/providerconfig-*.yaml)
+
+# Package names and directories both come from VERSIONS.yaml via tests/lib/packages.py —
+# the one resolver (ADR-002 groups, RFC-007 layout). Adding a package is a VERSIONS.yaml edit.
+PACKAGES := $(shell python3 tests/lib/packages.py list)
+PACKAGE_PAIRS := $(shell python3 tests/lib/packages.py pairs)
 
 # ── Package build & publish ──────────────────────────────────────────────────
 
 .PHONY: build
 build: ## Build all Crossplane OCI packages locally (.xpkg files)
-	@for pkg in $(PACKAGES); do \
-		echo "→ building package/$$pkg"; \
+	@for pair in $(PACKAGE_PAIRS); do \
+		pkg=$${pair%%=*}; dir=$${pair#*=}; \
+		echo "→ building $$dir"; \
 		crossplane xpkg build \
-			-f package/$$pkg \
+			-f $$dir \
 			-o $$pkg.xpkg \
 			--ignore kustomization.yaml; \
 	done
@@ -79,7 +94,8 @@ render: ## Render example XRs against compositions (offline dry-run)
 	@fns="$$(mktemp)"; err="$$(mktemp)"; \
 	for f in $(FUNCTIONS); do echo "---"; cat "$$f"; done > "$$fns"; \
 	failed=""; \
-	for pkg in $(PACKAGES); do \
+	for pair in $(PACKAGE_PAIRS); do \
+		pkg=$${pair%%=*}; dir=$${pair#*=}; \
 		echo "→ rendering examples/$$pkg/xr.yaml"; \
 		req=""; \
 		if [ -f "examples/$$pkg/required-resources.yaml" ]; then \
@@ -87,7 +103,7 @@ render: ## Render example XRs against compositions (offline dry-run)
 		fi; \
 		if ! crossplane composition render \
 				examples/$$pkg/xr.yaml \
-				package/$$pkg/composition.yaml \
+				$$dir/composition.yaml \
 				"$$fns" $$req 2>"$$err"; then \
 			sed 's/^/    /' "$$err" >&2; \
 			failed="$$failed $$pkg"; \
@@ -142,8 +158,38 @@ test-deps: ## Install the test suite's Python dependencies
 # ── Cluster install ───────────────────────────────────────────────────────────
 
 .PHONY: providers
-providers: ## Install shared providers and functions (run once per cluster)
-	kubectl apply -f providers/
+providers: ## Install shared providers and functions, then wait for them to be healthy
+	@# Phase 1 of two. A ProviderConfig cannot be created before its provider's CRDs are served, so
+	@# the two are separate targets rather than one apply that half-fails. Sets are split by file
+	@# name: provider-*/function-*/runtimeconfig-*/rbac-* here, providerconfig-* in the next target.
+	@for f in $$(grep -oE '^[[:space:]]+- [a-z0-9.-]+\.yaml' providers/kustomization.yaml | awk '{print $$2}'); do \
+		case "$$f" in \
+			function-*|provider-*|runtimeconfig-*|rbac-*|providerconfig-*) ;; \
+			*) echo "error: providers/$$f matches no phase — make providers applies" >&2; \
+			   echo "       function-*/provider-*/runtimeconfig-*/rbac-*, make provider-configs applies providerconfig-*" >&2; \
+			   exit 1;; \
+		esac; \
+	done
+	@echo "→ installing providers and functions"
+	kubectl apply $(addprefix -f ,$(PROVIDER_MANIFESTS))
+	@echo "→ waiting for packages to install and become healthy (WAIT_TIMEOUT=$(WAIT_TIMEOUT))"
+	@kubectl wait --for=condition=Installed provider.pkg.crossplane.io --all --timeout=$(WAIT_TIMEOUT)
+	@kubectl wait --for=condition=Healthy provider.pkg.crossplane.io --all --timeout=$(WAIT_TIMEOUT)
+	@kubectl wait --for=condition=Healthy function.pkg.crossplane.io --all --timeout=$(WAIT_TIMEOUT)
+	@echo ""
+	@echo "✓ providers healthy — now run: make provider-configs"
+
+.PHONY: provider-configs
+provider-configs: ## Apply the ProviderConfigs (run after make providers)
+	@# Phase 2. Waits for each provider's ProviderConfig API to be served, then applies. The CRD
+	@# names are derived from the manifests themselves, so a new provider needs no edit here.
+	@echo "→ waiting for the ProviderConfig APIs to be served"
+	@for group in $$(grep -h '^apiVersion:' $(PROVIDERCONFIG_MANIFESTS) | cut -d' ' -f2 | cut -d/ -f1 | sort -u); do \
+		echo "    providerconfigs.$$group"; \
+		kubectl wait --for=condition=Established "crd/providerconfigs.$$group" --timeout=$(WAIT_TIMEOUT) >/dev/null; \
+	done
+	@echo "→ applying ProviderConfigs"
+	kubectl apply $(addprefix -f ,$(PROVIDERCONFIG_MANIFESTS))
 
 .PHONY: install
 install: ## Install all packages from registry (production)
@@ -197,7 +243,7 @@ release-check: ## Fail if VERSIONS.yaml and package/install/ disagree
 release: ## Prepare a release commit + tag (no push) — VERSION=release-YYYY-MM-DD[.N] (default: today, UTC) | ALL=1 rebuilds every package
 	@which git-cliff > /dev/null || (echo "git-cliff not installed — see https://git-cliff.org/docs/installation" && exit 1)
 	@echo ""
-	@echo "  ROADMAP.md, README.md, docs/, and release-notes/ get staged and"
+	@echo "  README.md, docs/, development-docs/ and release-notes/ get staged and"
 	@echo "  committed together with CHANGELOG.md below — go update whatever's"
 	@echo "  drifted before this runs, or right now in another terminal, since"
 	@echo "  nothing else in the tree may be dirty (see the check below)."
@@ -206,9 +252,9 @@ release: ## Prepare a release commit + tag (no push) — VERSION=release-YYYY-MM
 	all=""; [ -z "$(ALL)" ] || all="--all"; \
 	echo "$$ver" | grep -qE '^release-[0-9]{4}-[0-9]{2}-[0-9]{2}(\.[0-9]+)?$$' \
 		|| { echo "error: '$$ver' is not a release name (expected release-YYYY-MM-DD[.N])" >&2; exit 1; }; \
-	dirty=$$(git status --porcelain -- . ':!ROADMAP.md' ':!README.md' ':!docs' ':!release-notes' ':!CHANGELOG.md'); \
+	dirty=$$(git status --porcelain -- . ':!README.md' ':!docs' ':!development-docs' ':!release-notes' ':!CHANGELOG.md'); \
 	[ -z "$$dirty" ] \
-		|| { echo "error: working tree has uncommitted changes outside ROADMAP.md/README.md/docs/release-notes/CHANGELOG.md — commit or stash before releasing:" >&2; echo "$$dirty" >&2; exit 1; }; \
+		|| { echo "error: working tree has uncommitted changes outside README.md/docs/development-docs/release-notes/CHANGELOG.md — commit or stash before releasing:" >&2; echo "$$dirty" >&2; exit 1; }; \
 	git rev-parse -q --verify "refs/tags/$$ver" >/dev/null \
 		&& { echo "error: tag $$ver already exists" >&2; exit 1; }; \
 	echo "→ classifying changes and pinning packages for $$ver"; \
@@ -216,7 +262,7 @@ release: ## Prepare a release commit + tag (no push) — VERSION=release-YYYY-MM
 	python3 .gitea/scripts/gen-readme-packages.py; \
 	echo "→ writing CHANGELOG.md for $$ver"; \
 	git-cliff --tag "$$ver" -o CHANGELOG.md; \
-	git add CHANGELOG.md ROADMAP.md README.md docs/ release-notes/ \
+	git add CHANGELOG.md README.md docs/ development-docs/ release-notes/ \
 		VERSIONS.yaml package/install/ tests/api-compat-allow.yaml; \
 	if git diff --cached --quiet; then \
 		echo "→ nothing to commit for $$ver — no package pins, notes or docs changed"; \

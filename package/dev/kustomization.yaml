@@ -5,7 +5,8 @@
 #   kubectl apply -k package/dev/
 #   kubectl delete -k package/dev/ --ignore-not-found
 #
-# Each entry below points to a DIRECTORY that has its own kustomization.yaml
+# Each entry below points to a DIRECTORY (grouped by API group, per ADR-002/RFC-007)
+# that has its own kustomization.yaml
 # listing only xrd.yaml + composition.yaml. Kustomize treats each as a
 # sub-root, which satisfies LoadRestrictionsRootOnly without needing any flag.
 # (Referencing individual files across directory boundaries is what triggers
@@ -13,17 +14,16 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - ../gitea-user
-  - ../gitea-org
-  - ../gitea-team
-  - ../gitea-repository
-  - ../platform-database-clusters
-  - ../tenant-database
-  - ../tenant-app
+  - ../platform/platform-database-clusters
+  - ../platform/tenant-database
+  - ../platform/tenant-app
+  - ../scm/connection
+  - ../scm/repository
+  - ../scm/oauth-app
 
 # Every package/<pkg>/composition.yaml ships channel: stable (the release default). Overriding it
 # here means everything applied via `make install-dev` is unambiguously channel: nightly, so an XR
-# that selects on this label (see docs/development/releasing.md#channels) never confuses a dev
+# that selects on this label (see development-docs/development/releasing.md#channels) never confuses a dev
 # install for a release. Also lands on the CompositeResourceDefinition objects — harmless, XRDs
 # don't consume this label, it's just Kustomize applying one transformer to every resource.
 labels:
