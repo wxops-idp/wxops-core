@@ -1,14 +1,11 @@
 # XScmRepository
 
-Creates a repository on Gitea or GitHub, or observes one that already exists, through one of two
-Terraform provider modules — picked by `vendor` below, which must agree with the
-[`XScmConnection`](scm-connection.md) this resource names. `vendor` is repeated here rather than read
-only from the connection because Crossplane has to choose which provider's module to run before the
-connection's Secret is even rendered, and Terraform has no way to make a provider conditional from
-inside a module — see [RFC-003](../../development-docs/rfc/003-scm-connections-and-resources.md) for
-how that was found. A mismatch between this field and the connection's own `vendor` fails loudly, at
-the module's `variable "vendor"` validation, rather than letting the wrong provider fail first with a
-confusing credentials error.
+Creates a repository on Gitea or GitHub, or observes one that already exists, through one of two Terraform provider modules — picked by `vendor` below, which
+must agree with the [`XScmConnection`](scm-connection.md) this resource names. `vendor` is repeated here rather than read only from the connection because
+Crossplane has to choose which provider's module to run before the connection's Secret is even rendered, and Terraform has no way to make a provider conditional
+from inside a module — see [RFC-003](../../development-docs/rfc/003-scm-connections-and-resources.md) for how that was found. A mismatch between this field and
+the connection's own `vendor` fails loudly, at the module's `variable "vendor"` validation, rather than letting the wrong provider fail first with a confusing
+credentials error.
 
 | | |
 |---|---|
@@ -38,20 +35,17 @@ confusing credentials error.
 
 ### What `observed` mode does, and does not, do
 
-`observed` reads the repository and never writes it, so a tenant can point at a repository that
-already exists — on an external host, or on a connection Core does not manage — and still get its
-identifiers in `status`. If the repository is absent the apply fails, and the XR stays not-ready with
-the host's own message, rather than the repository being created silently.
+`observed` reads the repository and never writes it, so a tenant can point at a repository that already exists — on an external host, or on a connection Core
+does not manage — and still get its identifiers in `status`. If the repository is absent the apply fails, and the XR stays not-ready with the host's own
+message, rather than the repository being created silently.
 
-The creation fields (`description`, `visibility`, `defaultBranch`, `autoInit`, `hasIssues`,
-`hasWiki`, `topics`) are **not applied** in `observed` mode. They are not rejected either: they carry
-XRD defaults, so a schema cannot tell "left unset" from "set to the default". Setting them on an
-observed repository therefore has no effect.
+The creation fields (`description`, `visibility`, `defaultBranch`, `autoInit`, `hasIssues`, `hasWiki`, `topics`) are **not applied** in `observed` mode. They
+are not rejected either: they carry XRD defaults, so a schema cannot tell "left unset" from "set to the default". Setting them on an observed repository
+therefore has no effect.
 
 ### Where the vendors differ
 
-Every difference is absorbed inside the module, which declares both providers and gates each block
-on the vendor, so the API stays the same shape:
+Every difference is absorbed inside the module, which declares both providers and gates each block on the vendor, so the API stays the same shape:
 
 | Concern | Gitea (`go-gitea/gitea`) | GitHub (`integrations/github`) |
 |---|---|---|

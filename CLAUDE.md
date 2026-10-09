@@ -79,20 +79,22 @@ version, not the release name — see [`release-notes/README.md`](release-notes/
 - `kcl/<name>/` — KCL composition source (`kcl.mod`, `main.k`)
 - `examples/<name>/` — minimal XR YAML to exercise each package
 - `tests/cases/<name>/` — test cases; `tests/lib/` shared harness (see [Testing](#testing))
-- `docs/` — **generic documentation** for anyone who uses, operates, builds on or learns from the platform. Hub:
-  `docs/README.md`. Before proposing work, check the development matrix (`development-docs/README.md`), which
-  records what's shipped, designed and rejected, and `docs/core-ideas/solution-matrix.md`. The sections:
+- `docs/` — **generic documentation** for anyone who uses, operates or builds on the platform — usage, delivery, and
+  guideline material, not where the platform is headed. Hub: `docs/README.md`. The sections:
   - `docs/learn/` — contributor onboarding for Crossplane/OpenTofu/KCL newcomers, each page against
     a real file in this repo; prerequisite reading for `development-docs/development/`, not part of it
   - `docs/api-reference/` — the reconcile loop from a user's side (`README.md`), one page per Kind,
     `status-contract.md`
-  - `docs/core-ideas/` — `solution-matrix.md` (the idea map), `darlane.md`, `guardian.md`,
+  - `docs/user-guide/` — `setup.md`, `app-onboarding.md`, `portal-integration.md`
+- `development-docs/` — **everything about building, deciding, releasing and where Core is headed**. Hub:
+  `development-docs/README.md`, which holds the development matrix and the *Where new docs go* table. Before
+  proposing work, check the matrix, which records what's shipped, designed and rejected, and
+  `development-docs/core-ideas/solution-matrix.md`:
+  - `development-docs/development/` — the development guide (`README.md`), `releasing.md`
+  - `development-docs/core-ideas/` — design, proposal and research docs about the platform's own future —
+    `solution-matrix.md` (the idea map), `darlane.md`, `guardian.md`,
     `multi-cluster{,-proposal,-connectivity,-scale}.md`, `observability.md`,
     `self-service-operations.md`, `knowledge-architecture.md`, `security-threat-model.md`
-  - `docs/user-guide/` — `setup.md`, `app-onboarding.md`, `portal-integration.md`
-- `development-docs/` — **everything about building, deciding and releasing**. Hub: `development-docs/README.md`,
-  which holds the development matrix and the *Where new docs go* table:
-  - `development-docs/development/` — the development guide (`README.md`), `releasing.md`
   - `development-docs/adr/` — one committed file per decision of lasting consequence (`TEMPLATE.md`, `README.md`
     for the lifecycle); breaking or architectural changes get one, so the reasoning survives
     independent of any single conversation — see [ADR-001](development-docs/adr/001-package-channel-label.md)
@@ -102,8 +104,9 @@ version, not the release name — see [`release-notes/README.md`](release-notes/
   - `development-docs/_archives/` — frozen, no-longer-live docs, kept for the record (e.g. `ROADMAP.md`, the planning
     doc the RFC index replaced)
 
-  The rule for which home a doc belongs in: does it help someone *use* or *understand* the platform (`docs/`), or
-  does it help someone *change* it (`development-docs/`)? No other top-level folder holds documentation.
+  The rule for which home a doc belongs in: does it help someone *use, operate or deliver on* the platform as it is
+  today (`docs/`), or does it help someone *build, decide or plan* what it becomes (`development-docs/`)? No other
+  top-level folder holds documentation.
 - `release-notes/` — hand-written release notes; required when a change is `careful`/`breaking` (CI adds the package table and git-cliff output)
 
 When adding new work, place it in the matching directory. Do not create new top-level folders; the two documentation homes

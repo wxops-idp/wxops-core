@@ -5,7 +5,7 @@ objects via `provider-opentofu`, `provider-terraform`, `provider-kubernetes`, an
 its own — most of what a "vulnerability" means here is a composition that can be made to produce
 something it shouldn't (an RBAC grant, a credential leak, a privilege escalation via a composed
 resource), or a supply-chain issue in a published package. See
-[`docs/core-ideas/security-threat-model.md`](docs/core-ideas/security-threat-model.md) for the full
+[`development-docs/core-ideas/security-threat-model.md`](development-docs/core-ideas/security-threat-model.md) for the full
 threat model, trust boundaries, and known gaps — this file is only the reporting process.
 
 ## Supported versions

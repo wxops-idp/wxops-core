@@ -5,24 +5,22 @@
 Accepted
 
 > [!NOTE]
-> Its prerequisite, RFC-003 Phase 1, has shipped (`scm-connection`, `scm-repository`, `scm-oauth-app`) — `XDexConnector` can now point
-> at a real `XScmConnection` and `XOIDCClient` at a real `XScmOAuthApp`. Implementation work starts after this release; flips to
-> *In progress* once it does.
+> Its prerequisite, RFC-003 Phase 1, has shipped (`scm-connection`, `scm-repository`, `scm-oauth-app`) — `XDexConnector` can now point at a real
+> `XScmConnection` and `XOIDCClient` at a real `XScmOAuthApp`. Implementation work starts after this release; flips to *In progress* once it does.
 
 ## Summary
 
-Adopt [Dex](https://dexidp.io) as the platform's OpenID Connect issuer and manage its **configuration entirely through Core**, with no
-operator and no call to Dex's API. Two new resources, `XDexConnector` (an upstream Git vendor) and `XOIDCClient` (an application that
-logs in through Dex), each convert their parameters into one record in OpenBao. A single platform-owned External Secrets `ExternalSecret`
-gathers every record, renders Dex's `config.yaml` into a Secret, Dex mounts it, and Reloader restarts Dex when it changes. The Portal
-authenticates its users through Dex as the first client; OAuth2 Proxy is the second consumer of the same contract. Dex itself stays platform
-infrastructure installed through GitOps. The claims Dex issues are the input to the authorization model in
-[RFC-005](005-git-mapped-authorization.md).
+Adopt [Dex](https://dexidp.io) as the platform's OpenID Connect issuer and manage its **configuration entirely through Core**, with no operator and no call to
+Dex's API. Two new resources, `XDexConnector` (an upstream Git vendor) and `XOIDCClient` (an application that logs in through Dex), each convert their
+parameters into one record in OpenBao. A single platform-owned External Secrets `ExternalSecret` gathers every record, renders Dex's `config.yaml` into a
+Secret, Dex mounts it, and Reloader restarts Dex when it changes. The Portal authenticates its users through Dex as the first client; OAuth2 Proxy is the second
+consumer of the same contract. Dex itself stays platform infrastructure installed through GitOps. The claims Dex issues are the input to the authorization model
+in [RFC-005](005-git-mapped-authorization.md).
 
 ## Motivation
 
-The Portal is a separate repository that will sit in front of every Core API ([`portal-integration.md`](../../docs/user-guide/portal-integration.md)),
-and nothing today answers who a user is. Three gaps:
+The Portal is a separate repository that will sit in front of every Core API ([`portal-integration.md`](../../docs/user-guide/portal-integration.md)), and
+nothing today answers who a user is. Three gaps:
 
 1. **No single login.** People already have identities at their Git vendor. Without an issuer between the vendor and each application,
    every application integrates with each vendor separately or is left unauthenticated.
@@ -45,12 +43,11 @@ and nothing today answers who a user is. Three gaps:
 
 ### Why configuration, not an operator or Dex's API
 
-Dex reads its connectors and its static clients from one config file. Managing them through Dex's gRPC API or its Kubernetes storage
-objects would tie Core to Dex internals — an API that cannot manage connectors at all (a dynamic connector API has only been proposed
-upstream, [dexidp/dex#1472](https://github.com/dexidp/dex/issues/1472)), or a storage format Dex may change — and would need either a
-controller or a stack of hand-derived objects. Managing the **config file** uses the one interface Dex documents as its configuration
-contract, works with any Dex storage backend, and treats connectors and clients identically. The price is that a change restarts Dex.
-That price is accepted (see Drawbacks) and bounded (see Rollout safety).
+Dex reads its connectors and its static clients from one config file. Managing them through Dex's gRPC API or its Kubernetes storage objects would tie Core to
+Dex internals — an API that cannot manage connectors at all (a dynamic connector API has only been proposed upstream,
+[dexidp/dex#1472](https://github.com/dexidp/dex/issues/1472)), or a storage format Dex may change — and would need either a controller or a stack of
+hand-derived objects. Managing the **config file** uses the one interface Dex documents as its configuration contract, works with any Dex storage backend, and
+treats connectors and clients identically. The price is that a change restarts Dex. That price is accepted (see Drawbacks) and bounded (see Rollout safety).
 
 ### The flow
 
@@ -67,27 +64,26 @@ flowchart LR
     B -->|"ExternalSecret<br/>(client_id, client_secret)"| C["Portal / OAuth2 Proxy"]
 ```
 
-The UI never talks to OpenBao or ESO. It writes an XR — through Git or the API, per
-[open decision 3](../_archives/ROADMAP.md#open-decisions) — and Core does the conversion. A commit carries a declaration, never a secret value,
-and `status` carries only the OpenBao path.
+The UI never talks to OpenBao or ESO. It writes an XR — through Git or the API, per [open decision 3](../_archives/ROADMAP.md#open-decisions) — and Core does
+the conversion. A commit carries a declaration, never a secret value, and `status` carries only the OpenBao path.
 
 ### Records in OpenBao
 
-One record per resource, all under the platform store, and `remoteKey` omits the KV mount prefix per the
-[Vault path convention](../../CLAUDE.md#vault-path-convention):
+One record per resource, all under the platform store, and `remoteKey` omits the KV mount prefix per the [Vault path
+convention](../../CLAUDE.md#vault-path-convention):
 
 | Resource | `remoteKey` | Full logical path |
 |---|---|---|
 | Connector | `dex/connectors/{connectorId}` | `platform/dex/connectors/{connectorId}` |
 | Client | `dex/clients/{clientId}` | `platform/dex/clients/{clientId}` |
 
-A **client record** holds `client_id`, `client_secret`, `name`, `redirect_uris` (JSON array), `public`, `owner` and `generation`. A
-**connector record** holds `type`, `id`, `name`, `client_id`, `client_secret` (the vendor OAuth application's credentials), and `config`,
-a JSON object of the connector's non-secret settings. The same record serves two readers: the aggregator reads all fields, and a consuming
-application's own `ExternalSecret` reads just `client_id` and `client_secret`.
+A **client record** holds `client_id`, `client_secret`, `name`, `redirect_uris` (JSON array), `public`, `owner` and `generation`. A **connector record** holds
+`type`, `id`, `name`, `client_id`, `client_secret` (the vendor OAuth application's credentials), and `config`, a JSON object of the connector's non-secret
+settings. The same record serves two readers: the aggregator reads all fields, and a consuming application's own `ExternalSecret` reads just `client_id` and
+`client_secret`.
 
-External Secrets Operator documents OpenBao as supported through its Vault provider (tested upstream with ESO v0.16.1 and OpenBao v2.2.0),
-so the store definition changes and nothing else does. All records are in the platform store in this RFC by design — see *Tenant clients*.
+External Secrets Operator documents OpenBao as supported through its Vault provider (tested upstream with ESO v0.16.1 and OpenBao v2.2.0), so the store
+definition changes and nothing else does. All records are in the platform store in this RFC by design — see *Tenant clients*.
 
 ### API surface
 
@@ -138,15 +134,14 @@ status:
   vault: {path: platform/dex/clients/wxops-portal}
 ```
 
-Both expose `status.created` and `status.ready` per the [status contract](../../docs/api-reference/status-contract.md). **What `ready` means here is
-narrower than it sounds:** the record is written to OpenBao. Whether Dex has *loaded* it is a property of the aggregator and Dex, not of
-the XR, and Core cannot observe it. That is a stated limitation, not an oversight.
+Both expose `status.created` and `status.ready` per the [status contract](../../docs/api-reference/status-contract.md). **What `ready` means here is narrower
+than it sounds:** the record is written to OpenBao. Whether Dex has *loaded* it is a property of the aggregator and Dex, not of the XR, and Core cannot observe
+it. That is a stated limitation, not an oversight.
 
-The vendor OAuth application behind a connector is an [`XScmOAuthApp`](003-scm-connections-and-resources.md), and a connector may point at
-it with `oauthAppRef` (and at the host with `scmRef`). **The two stay independent:** a connector without those references still works from
-`credentialsSecretRef` and explicit `type`/`baseUrl`, so Dex does not require SCM, and SCM does not require Dex. The referenced form
-exists so the two can be integrated — one OAuth app record in OpenBao serving both an SCM resource and a Dex connector — and is built
-after RFC-003's Phase 1.
+The vendor OAuth application behind a connector is an [`XScmOAuthApp`](003-scm-connections-and-resources.md), and a connector may point at it with `oauthAppRef`
+(and at the host with `scmRef`). **The two stay independent:** a connector without those references still works from `credentialsSecretRef` and explicit
+`type`/`baseUrl`, so Dex does not require SCM, and SCM does not require Dex. The referenced form exists so the two can be integrated — one OAuth app record in
+OpenBao serving both an SCM resource and a Dex connector — and is built after RFC-003's Phase 1.
 
 ### Compositions
 
@@ -158,14 +153,14 @@ Each is a `function-kcl` composition, per the repo's rule for multi-resource com
 - **`XDexConnector`** — a `PushSecret` sourcing `credentialsSecretRef`, with a template that merges in the connector's non-secret
   configuration.
 
-Neither adds a Crossplane provider or any RBAC: `provider-kubernetes` already holds the grant for `externalsecrets`, `pushsecrets` and
-`passwords` in `providers/rbac-provider-kubernetes.yaml`, and the compositions still emit no RBAC.
+Neither adds a Crossplane provider or any RBAC: `provider-kubernetes` already holds the grant for `externalsecrets`, `pushsecrets` and `passwords` in
+`providers/rbac-provider-kubernetes.yaml`, and the compositions still emit no RBAC.
 
 ### The aggregator
 
-One `ExternalSecret`, platform-owned, in GitOps beside Dex — deliberately not a Core resource, since Dex is infrastructure Core does not own.
-It is shipped as `providers/dex-config.yaml`. It collects every record under `dex/connectors/` and `dex/clients/` and renders Dex's file. The
-shape (not the final syntax — how `dataFrom.find` and `rewrite` behave on OpenBao KV v2 is the spike's first question):
+One `ExternalSecret`, platform-owned, in GitOps beside Dex — deliberately not a Core resource, since Dex is infrastructure Core does not own. It is shipped as
+`providers/dex-config.yaml`. It collects every record under `dex/connectors/` and `dex/clients/` and renders Dex's file. The shape (not the final syntax — how
+`dataFrom.find` and `rewrite` behave on OpenBao KV v2 is the spike's first question):
 
 ```yaml
 # illustrative shape
@@ -188,31 +183,27 @@ spec:
     - find: {path: dex/clients/,    name: {regexp: ".*"}}
 ```
 
-Dex's fixed settings — issuer, storage, web listener, token expiry — are part of this template, reviewed in Git like everything else.
-Each change to a record changes the rendered Secret at the next `refreshInterval`, so Dex restarts at most once per interval however many
-records changed.
+Dex's fixed settings — issuer, storage, web listener, token expiry — are part of this template, reviewed in Git like everything else. Each change to a record
+changes the rendered Secret at the next `refreshInterval`, so Dex restarts at most once per interval however many records changed.
 
 ### Reloader
 
-Stakater's [Reloader](https://github.com/stakater/Reloader), an open-source controller, restarts a workload when a Secret or ConfigMap it
-uses changes. The annotation naming `dex-config` goes on Dex's Deployment in the Helm values, once. Consumers (Portal, OAuth2 Proxy) carry
-the annotation for the Secret their own `ExternalSecret` produces. This is the only add-on beyond what the stack has; it is not an
-operator for Dex and holds no Dex-specific logic.
+Stakater's [Reloader](https://github.com/stakater/Reloader), an open-source controller, restarts a workload when a Secret or ConfigMap it uses changes. The
+annotation naming `dex-config` goes on Dex's Deployment in the Helm values, once. Consumers (Portal, OAuth2 Proxy) carry the annotation for the Secret their own
+`ExternalSecret` produces. This is the only add-on beyond what the stack has; it is not an operator for Dex and holds no Dex-specific logic.
 
 ### Secrets and rotation in OpenBao
 
-**OpenBao does not rotate a KV secret by itself.** It is the store of record: versioned KV v2 (every rotation is a new version, so the
-history answers *when did this change*), per-path ACLs, and an audit log. Rotation is *driven* by ESO — the client's Password generator
-produces a new value on each `refreshInterval` of the `PushSecret`, which `rotation.interval` sets, and `generation` forces one on demand.
-Both are visible in Git, as a value or a commit.
+**OpenBao does not rotate a KV secret by itself.** It is the store of record: versioned KV v2 (every rotation is a new version, so the history answers *when did
+this change*), per-path ACLs, and an audit log. Rotation is *driven* by ESO — the client's Password generator produces a new value on each `refreshInterval` of
+the `PushSecret`, which `rotation.interval` sets, and `generation` forces one on demand. Both are visible in Git, as a value or a commit.
 
-A rotation flows: new record in OpenBao → the aggregator renders a new config → Reloader restarts Dex; in parallel the consumer's
-`ExternalSecret` refreshes and Reloader restarts the consumer. A Dex client has exactly one secret, so between those two changes landing,
-logins for that client can fail. Matching refresh intervals keep that window to minutes, and rotation is meant for quiet hours; a real
-overlap would need dual-secret support Dex does not offer.
+A rotation flows: new record in OpenBao → the aggregator renders a new config → Reloader restarts Dex; in parallel the consumer's `ExternalSecret` refreshes and
+Reloader restarts the consumer. A Dex client has exactly one secret, so between those two changes landing, logins for that client can fail. Matching refresh
+intervals keep that window to minutes, and rotation is meant for quiet hours; a real overlap would need dual-secret support Dex does not offer.
 
-One behaviour to verify: an ESO generator produces a new value each time it is evaluated, so the spike must show that a controller restart
-or an unrelated edit to the `PushSecret` does not rotate a secret nobody asked to rotate.
+One behaviour to verify: an ESO generator produces a new value each time it is evaluated, so the spike must show that a controller restart or an unrelated edit
+to the `PushSecret` does not rotate a secret nobody asked to rotate.
 
 ### Rollout safety
 
@@ -229,8 +220,8 @@ The design's failure mode is one entry breaking everyone's login, so it is defen
 
 ### Identity for the Portal
 
-The Portal logs users in with the authorization-code flow against Dex, using the `portal` client. The contract the Portal and the
-authorization layer rely on is the claims in the ID token:
+The Portal logs users in with the authorization-code flow against Dex, using the `portal` client. The contract the Portal and the authorization layer rely on is
+the claims in the ID token:
 
 | Claim | Source | Note |
 |---|---|---|
@@ -247,18 +238,17 @@ Two properties matter to RFC-005 and are stated now:
 
 ### Tenant clients
 
-Tenant-owned clients are **out of the next release**. A tenant's OAuth2 Proxy client needs its secret readable by the tenant's namespace, but
-the aggregator must find every client under one prefix. Putting tenant records in the platform store makes the platform store readable by
-whatever `ExternalSecret` a tenant can create in a namespace that store allows; putting them in the tenant store means the aggregator crosses a
-store boundary the scoping exists to hold. Neither is settled, and both are RFC-005's territory, so Phase 4 waits on the answer (open
-question 3).
+Tenant-owned clients are **out of the next release**. A tenant's OAuth2 Proxy client needs its secret readable by the tenant's namespace, but the aggregator
+must find every client under one prefix. Putting tenant records in the platform store makes the platform store readable by whatever `ExternalSecret` a tenant
+can create in a namespace that store allows; putting them in the tenant store means the aggregator crosses a store boundary the scoping exists to hold. Neither
+is settled, and both are RFC-005's territory, so Phase 4 waits on the answer (open question 3).
 
 ### Compatibility and change tier
 
-Two new packages, `dex-connector` and `oidc-client`, each `current: unreleased` in `VERSIONS.yaml`; adding a package is `safe`. Each needs
-its own `docs/api-reference/` page, an example, a `package/<name>/README.md`, and test cases. `providers/dex-config.yaml` is new and applied
-with `make providers`. Reloader and Dex are added to the reference stack and `NOTICE` when this lands. They depend on `function-kcl` and the
-ESO CRDs already in the stack, and on Dex and Reloader being present at runtime, which a composition cannot check.
+Two new packages, `dex-connector` and `oidc-client`, each `current: unreleased` in `VERSIONS.yaml`; adding a package is `safe`. Each needs its own
+`docs/api-reference/` page, an example, a `package/<name>/README.md`, and test cases. `providers/dex-config.yaml` is new and applied with `make providers`.
+Reloader and Dex are added to the reference stack and `NOTICE` when this lands. They depend on `function-kcl` and the ESO CRDs already in the stack, and on Dex
+and Reloader being present at runtime, which a composition cannot check.
 
 ### Testing
 
@@ -268,9 +258,9 @@ ESO CRDs already in the stack, and on Dex and Reloader being present at runtime,
   `owner` other than `platform`
 - invariants: `remoteKey` carries no KV mount prefix; no secret value in any XR field or status; the compositions emit no RBAC
 
-Offline tests prove the records Core writes. They do **not** prove that the aggregator template renders a valid Dex config, or that Dex
-accepts it — reimplementing the template in a test would prove the reimplementation, not ESO. That needs a cluster with ESO, OpenBao and
-Dex, which is the kind-based e2e tier and, for the next release, a manual acceptance run.
+Offline tests prove the records Core writes. They do **not** prove that the aggregator template renders a valid Dex config, or that Dex accepts it —
+reimplementing the template in a test would prove the reimplementation, not ESO. That needs a cluster with ESO, OpenBao and Dex, which is the kind-based e2e
+tier and, for the next release, a manual acceptance run.
 
 ## Drawbacks
 
@@ -324,8 +314,8 @@ The next release covers Phases 0–2.
 - [ ] **Release deliverables** for Phases 1–2: the two packages with tests, `docs/api-reference/` pages and examples, `VERSIONS.yaml`
   entries, the README packages table, the `CLAUDE.md` package list and reference stack, and `NOTICE`.
 
-On acceptance, ADRs for: Dex configured through Core-rendered config rather than an operator or Dex's API, OpenBao as the record with ESO as
-the rotation driver, and Reloader as the restart mechanism.
+On acceptance, ADRs for: Dex configured through Core-rendered config rather than an operator or Dex's API, OpenBao as the record with ESO as the rotation
+driver, and Reloader as the restart mechanism.
 
 ## Open Questions
 
@@ -337,7 +327,7 @@ the rotation driver, and Reloader as the restart mechanism.
 4. **Restart tolerance.** Is one rolling restart per refresh interval acceptable for the expected rate of change? If a high-churn future is
    likely, the earlier CRD design is the fallback for clients only.
 5. **API server trust.** Should the Kubernetes API server accept Dex-issued tokens directly (structured authentication, as
-   [`multi-cluster-proposal.md`](../../docs/core-ideas/multi-cluster-proposal.md) describes), or only the Portal? That decides how much of RFC-005 can
+   [`multi-cluster-proposal.md`](../core-ideas/multi-cluster-proposal.md) describes), or only the Portal? That decides how much of RFC-005 can
    lean on Kubernetes's own user info. How Dex relates to Pinniped is part of the same question and is not decided here.
 6. **Who registers clients?** Any tenant able to create an `XOIDCClient` can ask for arbitrary redirect URIs. Restricting that is an
    authorization question for RFC-005, not this one; until tenant clients ship, only `owner: platform` is accepted.

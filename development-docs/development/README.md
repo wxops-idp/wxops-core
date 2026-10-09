@@ -1,7 +1,7 @@
 # Development Guide
 
-> How to change W'xOps Core safely. The canonical detail stays next to the code it describes. This
-> page puts it in order and holds the hooks and make targets in one place.
+> How to change W'xOps Core safely. The canonical detail stays next to the code it describes. This page puts it in order and holds the hooks and make targets in
+> one place.
 
 **Table of Contents**
 - [Development Guide](#development-guide)
@@ -43,8 +43,7 @@ flowchart LR
     TEST -->|"green"| PR --> MAIN --> REL
 ```
 
-The step-by-step version, including what a new package owes the test suite, is in
-[`CONTRIBUTING.md`](../../CONTRIBUTING.md#the-loop).
+The step-by-step version, including what a new package owes the test suite, is in [`CONTRIBUTING.md`](../../CONTRIBUTING.md#the-loop).
 
 ## Rules that bite
 
@@ -81,8 +80,7 @@ pre-commit install --hook-type pre-push --hook-type commit-msg
 pre-commit run --all-files      # every commit-stage hook, without committing
 ```
 
-CI runs the same gates on every pull request. Pre-commit can be bypassed with `--no-verify`; CI
-cannot.
+CI runs the same gates on every pull request. Pre-commit can be bypassed with `--no-verify`; CI cannot.
 
 ## Make targets
 

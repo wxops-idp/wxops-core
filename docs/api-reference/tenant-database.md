@@ -1,8 +1,7 @@
 # XTenantDatabase
 
-Tenant-facing PostgreSQL database with dynamic tier resolution (shared pool
-auto-assign / dedicated cluster composition), Vault-backed credentials, and
-ESO sync.
+Tenant-facing PostgreSQL database with dynamic tier resolution (shared pool auto-assign / dedicated cluster composition), Vault-backed credentials, and ESO
+sync.
 
 | | |
 |---|---|
@@ -20,7 +19,7 @@ ESO sync.
 
 | Field | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `cluster` | `string` | | `"default"` | Name of the provider-kubernetes `ProviderConfig` to apply composed resources through. Not to be confused with `clusterRef` below, which names a *CNPG* cluster — this is the Kubernetes cluster the resources land on. `"default"` is the local hub, so leaving this unset is behaviour-neutral. See [multi-cluster.md](../core-ideas/multi-cluster.md). |
+| `cluster` | `string` | | `"default"` | Name of the provider-kubernetes `ProviderConfig` to apply composed resources through. Not to be confused with `clusterRef` below, which names a *CNPG* cluster — this is the Kubernetes cluster the resources land on. `"default"` is the local hub, so leaving this unset is behaviour-neutral. See [multi-cluster.md](../../development-docs/core-ideas/multi-cluster.md). |
 | `tier` | `string` (`shared`, `dedicated`) | | `"shared"` | **`shared`** — auto-assign to the least-loaded `XPlatformDatabaseCluster` labeled `shared: true` and matching this database's `environment`. The composition discovers shared clusters at render time via `function-extra-resources`, counts existing tenant databases per cluster, and picks the one with the fewest tenants. Prevents `dbName` collisions per cluster. The assignment is **sticky** — once resolved, subsequent reconciles reuse the same cluster. **`dedicated`** — compose a new `XPlatformDatabaseCluster` as a child resource (1 cluster = 1 database, fully isolated). Size the child cluster via `dedicatedCluster`. Ignored if `clusterRef`/`clusterNamespace` are set explicitly. |
 | `environment` | `string` (`dev`, `staging`, `prod`) | | `"dev"` | Pool isolation: for `tier: shared`, the pool is filtered to clusters matching this environment. For `tier: dedicated`, passed through to the child cluster's `environment` field. |
 | `dedicatedCluster` | `object` | | `{}` | Cluster sizing parameters when `tier` is `dedicated`. Ignored for `tier: shared` or when `clusterRef` is set explicitly. |
@@ -42,28 +41,21 @@ ESO sync.
 | `databaseReclaimPolicy` | `string` (`delete`, `retain`) | | `"retain"` | CNPG `Database.spec.databaseReclaimPolicy`. `"retain"` (default) protects this tenant's database from XR/claim deletion: the database and its owning role both survive XR deletion and must be cleaned up manually if the tenant is decommissioned. Set to `"delete"` to have CNPG drop the database on XR deletion (which also allows the owning role to be dropped) — a `ClusterUsage` (`tenant-role-db-usage`) orders this so the role's `DROP ROLE` runs only after the database's `DROP DATABASE` has completed, avoiding the `2BP01` parallel-deletion race. Also controls the connection-creds Secret and its ExternalSecret/Password-generator: `"retain"` orphans them on XR deletion (existing password preserved); `"delete"` removes them (recreation generates a new password). A second `ClusterUsage` (`tenant-conn-role-usage`) orders connection-creds Secret deletion after `DROP ROLE` completes — otherwise provider-sql's `Observe()` deadlocks. |
 | `vaultSecretStoreName` | `string` | | `"vault-cluster-store"` | Name of the ESO `ClusterSecretStore` used by the `PushSecret` that writes connection creds to Vault at `tenants/{owner}/databases/{dbName}/connection-creds`. The store is scoped to the `tenants/` KV mount, so the KCL code uses `{owner}/databases/{dbName}/connection-creds` as the `remoteKey` (same pattern as `platform-database-clusters` omitting `platform/`). Consuming that Vault entry into an app namespace is a tenant/GitOps concern — see [`tenant-app`](tenant-app.md)'s `secretsFrom.database` toggle. |
 
-> **Password rotation** is intentionally not implemented: `provider-sql`'s `Role` reconciler only sets the role's password at `Create()` time and never re-applies changes on an existing role, so any rotation must also converge Postgres itself — a platform-level concern (e.g. Vault Database Secrets Engine dynamic/rotated roles), tracked separately in the backlog.
+> **Password rotation** is intentionally not implemented: `provider-sql`'s `Role` reconciler only sets the role's password at `Create()` time and never
+> re-applies changes on an existing role, so any rotation must also converge Postgres itself — a platform-level concern (e.g. Vault Database Secrets Engine
+> dynamic/rotated roles), tracked separately in the backlog.
 
-> **Changing `databaseReclaimPolicy` on a live XR**: switching from `retain`
-> to `delete` and then deleting the XR will clean up the Kubernetes resources
-> (Database, Role, Secrets, PushSecret) but **will not remove the Vault
-> entry**. The PushSecret's `deletionPolicy` is updated to `Delete`, but
-> ESO only honours that for entries it created under a `Delete` policy — the
-> original entry was written under `retain` (`deletionPolicy: None`), so ESO
-> does not consider it owned for deletion. The stale Vault entry must be
-> cleaned up manually:
-> ```bash
-> vault kv metadata delete tenants/{owner}/databases/{dbName}/connection-creds
-> ```
-> This only affects the `retain → delete` transition. XRs created with
-> `delete` from the start have full lifecycle cleanup (create → delete →
-> Vault entry removed).
+> **Changing `databaseReclaimPolicy` on a live XR**: switching from `retain` to `delete` and then deleting the XR will clean up the Kubernetes resources
+> (Database, Role, Secrets, PushSecret) but **will not remove the Vault entry**. The PushSecret's `deletionPolicy` is updated to `Delete`, but ESO only honours
+> that for entries it created under a `Delete` policy — the original entry was written under `retain` (`deletionPolicy: None`), so ESO does not consider it
+> owned for deletion. The stale Vault entry must be cleaned up manually: ```bash vault kv metadata delete tenants/{owner}/databases/{dbName}/connection-creds
+> ``` This only affects the `retain → delete` transition. XRs created with `delete` from the start have full lifecycle cleanup (create → delete → Vault entry
+> removed).
 
 ## Channels
 
-Every release labels its Composition `channel: stable`; `make install-dev` overrides it to
-`channel: nightly` via Kustomize. Track a channel with `spec.crossplane`, a sibling of
-`spec.parameters`, not a field inside it:
+Every release labels its Composition `channel: stable`; `make install-dev` overrides it to `channel: nightly` via Kustomize. Track a channel with
+`spec.crossplane`, a sibling of `spec.parameters`, not a field inside it:
 
 ```yaml
 spec:
@@ -90,23 +82,19 @@ Full mechanism, the `Manual`-pin alternative, and why: [Channels](../../developm
 
 ## Required discovery labels
 
-`XTenantDatabase` uses `function-extra-resources` to discover both shared
-clusters and peer databases. Each resource type requires a specific label in
-its manifest for the selectors to find it:
+`XTenantDatabase` uses `function-extra-resources` to discover both shared clusters and peer databases. Each resource type requires a specific label in its
+manifest for the selectors to find it:
 
 | Resource | Required label | Purpose |
 |---|---|---|
 | `XPlatformDatabaseCluster` | `wxops.cloud/managed-by: platform-database-clusters` | Discovered as candidate for `tier: shared` pool |
 | `XTenantDatabase` | `wxops.cloud/tenant-database: "true"` | Discovered for per-cluster tenant counting and `dbName` collision detection |
 
-Both labels **must be in the XR manifest** — they cannot be set by the
-composition. Crossplane's composite reconciler writes `status` from dxr
-updates but ignores `metadata.labels`, so discovery labels must be applied
-by the user or GitOps.
+Both labels **must be in the XR manifest** — they cannot be set by the composition. Crossplane's composite reconciler writes `status` from dxr updates but
+ignores `metadata.labels`, so discovery labels must be applied by the user or GitOps.
 
-Without the `XTenantDatabase` label, the composition still works for a
-single database but **cannot detect collisions or balance load** across
-clusters for subsequent databases.
+Without the `XTenantDatabase` label, the composition still works for a single database but **cannot detect collisions or balance load** across clusters for
+subsequent databases.
 
 ## Examples
 

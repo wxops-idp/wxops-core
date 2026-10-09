@@ -36,7 +36,7 @@ spec:
                         this unset is behaviour-neutral.
 
                         Set it to target a spoke cluster once a ProviderConfig for
-                        that spoke exists. See docs/core-ideas/multi-cluster.md.
+                        that spoke exists. See development-docs/core-ideas/multi-cluster.md.
                     tier:
                       type: string
                       default: "shared"

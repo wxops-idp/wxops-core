@@ -1,11 +1,9 @@
 # API Reference — what you declare, what Core reconciles
 
-> Every W'xOps Core API is a Crossplane composite resource (XR) at `v1alpha1`, and every Kind is
-> cluster-scoped. Kinds are split across API groups by trust boundary — `platform.wxops.cloud` for
-> workloads and data, `scm.wxops.cloud` for Git hosting (see
-> [ADR-002](../../development-docs/adr/002-three-api-groups.md)). This page explains what the
-> reconcile loop does for you and lists every Kind. Each Kind's own page has the full
-> `spec.parameters` and `status` reference.
+> Every W'xOps Core API is a Crossplane composite resource (XR) at `v1alpha1`, and every Kind is cluster-scoped. Kinds are split across API groups by trust
+> boundary — `platform.wxops.cloud` for workloads and data, `scm.wxops.cloud` for Git hosting (see
+> [ADR-002](../../development-docs/adr/002-three-api-groups.md)). This page explains what the reconcile loop does for you and lists every Kind. Each Kind's own
+> page has the full `spec.parameters` and `status` reference.
 
 **Table of Contents**
 - [The reconcile loop, from your side](#the-reconcile-loop-from-your-side)
@@ -18,8 +16,8 @@
 
 ## The reconcile loop, from your side
 
-You never create the Deployment, the CloudNativePG cluster or the Terraform run yourself. You declare
-one XR, and Crossplane does the rest, **continuously, not once**:
+You never create the Deployment, the CloudNativePG cluster or the Terraform run yourself. You declare one XR, and Crossplane does the rest, **continuously, not
+once**:
 1. It validates the XR against the Kind's schema and fills in defaults.
 2. It runs the Composition's function pipeline to decide which resources should exist.
 3. Providers make the world match those resources.
@@ -66,8 +64,7 @@ kubectl explain xtenantapps.spec.parameters --recursive # the whole tree
 
 ## Reading status
 
-Every published Kind exposes the same two fields, so a consumer can use the same polling logic for all
-of them:
+Every published Kind exposes the same two fields, so a consumer can use the same polling logic for all of them:
 
 | Field | Meaning |
 |---|---|
@@ -98,8 +95,8 @@ All of it is on one page: [status contract](status-contract.md).
 | [`XScmRepository`](scm-repository.md) | `scm-repository` | `scmRef`, `mode`, `org`, `repoName`, `visibility`, `defaultBranch`, `topics`, `retain` | An OpenTofu `Workspace` that creates (`managed`) or reads (`observed`) the repository on whichever host the connection names | `exists`, `repoId`, `cloneUrl`, `sshUrl`, `htmlUrl`, `fullName` |
 | [`XScmOAuthApp`](scm-oauth-app.md) | `scm-oauth-app` | `scmRef`, `mode`, `appName`, `redirectUris`, `confidential`, `rotation`, `vaultKey` | An OpenTofu `Workspace` for the host-side application, and a `PushSecret` mirroring its credentials to the secret store | `clientId`, `vaultKey`, `generation` |
 
-Each composed resource appears only when its parameters ask for it. The *Composed resources* list at
-the top of each `kcl/<package>/main.k` records the exact condition for every one.
+Each composed resource appears only when its parameters ask for it. The *Composed resources* list at the top of each `kcl/<package>/main.k` records the exact
+condition for every one.
 
 ## Schema, examples and versions
 

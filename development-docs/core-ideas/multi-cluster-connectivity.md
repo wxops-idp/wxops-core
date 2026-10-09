@@ -1,15 +1,12 @@
 # Hub→Spoke API Connectivity — securing the join, for new and existing clusters
 
-> **Status: options analysis, nothing implemented.** The other three multi-cluster documents answer
-> *which architecture* ([multi-cluster.md](multi-cluster.md) surveys, [multi-cluster-proposal.md](multi-cluster-proposal.md)
-> prescribes) and *how far it stretches* ([multi-cluster-scale.md](multi-cluster-scale.md)). This one answers a
-> narrower question they only touch in passing: **when the hub opens a connection to a spoke's
-> `kube-apiserver`, what exactly makes that connection safe — and how does the answer change when the
-> spoke is a cluster you did not create?**
+> **Status: options analysis, nothing implemented.** The other three multi-cluster documents answer *which architecture* ([multi-cluster.md](multi-cluster.md)
+> surveys, [multi-cluster-proposal.md](multi-cluster-proposal.md) prescribes) and *how far it stretches* ([multi-cluster-scale.md](multi-cluster-scale.md)).
+> This one answers a narrower question they only touch in passing: **when the hub opens a connection to a spoke's `kube-apiserver`, what exactly makes that
+> connection safe — and how does the answer change when the spoke is a cluster you did not create?**
 >
-> That last clause is the reason this document exists separately. The proposal assumes CAPI-provisioned
-> spokes and inherits apiserver flag control from that assumption. Every real fleet eventually absorbs a
-> cluster it did not provision, and at that moment the proposal's machine-identity answer is unavailable.
+> That last clause is the reason this document exists separately. The proposal assumes CAPI-provisioned spokes and inherits apiserver flag control from that
+> assumption. Every real fleet eventually absorbs a cluster it did not provision, and at that moment the proposal's machine-identity answer is unavailable.
 
 ---
 
@@ -34,8 +31,8 @@
 
 ## What "secure" actually decomposes into
 
-"Secure the hub→spoke connection" is five separate properties wearing one coat. They fail
-independently, and a design can be excellent at one while silently absent on another.
+"Secure the hub→spoke connection" is five separate properties wearing one coat. They fail independently, and a design can be excellent at one while silently
+absent on another.
 
 | | Property | The question it answers | Fails as |
 |---|---|---|---|
@@ -47,35 +44,26 @@ independently, and a design can be excellent at one while silently absent on ano
 
 Two observations that shape the rest of this document.
 
-**Most published designs argue P1 and P4 and go quiet on P5.** The industry conversation about
-multi-cluster auth is overwhelmingly about eliminating standing tokens — which is P4 — and
-short-lived credentials genuinely are better. But a short-lived credential that still maps to one
-shared `wxops:hub-controllers` identity gives a spoke audit log that cannot distinguish Crossplane
-reconciling a `tenant-app` from ArgoCD syncing an Application from an operator debugging by hand.
-For W'xOps that matters more than usual, because [`guardian.md`](guardian.md)'s entire audit
-premise and [`self-service-operations.md`](self-service-operations.md)'s diagnosis story both
-assume the platform can say *who did what, where*.
+**Most published designs argue P1 and P4 and go quiet on P5.** The industry conversation about multi-cluster auth is overwhelmingly about eliminating standing
+tokens — which is P4 — and short-lived credentials genuinely are better. But a short-lived credential that still maps to one shared `wxops:hub-controllers`
+identity gives a spoke audit log that cannot distinguish Crossplane reconciling a `tenant-app` from ArgoCD syncing an Application from an operator debugging by
+hand. For W'xOps that matters more than usual, because [`guardian.md`](guardian.md)'s entire audit premise and
+[`self-service-operations.md`](self-service-operations.md)'s diagnosis story both assume the platform can say *who did what, where*.
 
-**P2 is where W'xOps is unusually well positioned, and it is free.** The spoke-side ClusterRole is
-not a design exercise —
-[`providers/rbac-provider-kubernetes.yaml`](../../providers/rbac-provider-kubernetes.yaml) already
-enumerates exactly the API groups compositions emit, because the single-cluster deployment needed
-the same list. Copying that file to a spoke produces a correctly scoped grant on the first try,
-including its deliberate omission of `rbac.authorization.k8s.io`. That omission is mechanically
-protected by the `no-rbac-emitted` invariant in `tests/invariants.py`, so the property "the hub
-cannot mint privilege on any spoke" is enforced by the merge gate rather than by reviewer memory —
-see [`security-threat-model.md`](security-threat-model.md) B3. Very little of a multi-cluster
-security posture is normally this cheap; this part is, and it should be claimed rather than
-redesigned.
+**P2 is where W'xOps is unusually well positioned, and it is free.** The spoke-side ClusterRole is not a design exercise —
+[`providers/rbac-provider-kubernetes.yaml`](../../providers/rbac-provider-kubernetes.yaml) already enumerates exactly the API groups compositions emit, because
+the single-cluster deployment needed the same list. Copying that file to a spoke produces a correctly scoped grant on the first try, including its deliberate
+omission of `rbac.authorization.k8s.io`. That omission is mechanically protected by the `no-rbac-emitted` invariant in `tests/invariants.py`, so the property
+"the hub cannot mint privilege on any spoke" is enforced by the merge gate rather than by reviewer memory — see
+[`security-threat-model.md`](security-threat-model.md) B3. Very little of a multi-cluster security posture is normally this cheap; this part is, and it should
+be claimed rather than redesigned.
 
 ---
 
 ## The three trust paths (the thing most designs miss)
 
-A hub does not have *a* connection to a spoke. In the architecture the proposal selects, it has up
-to three, established by different components, using different credential mechanisms, and hardened
-independently. Securing one and not the others buys nothing — the attacker uses whichever is
-weakest.
+A hub does not have *a* connection to a spoke. In the architecture the proposal selects, it has up to three, established by different components, using
+different credential mechanisms, and hardened independently. Securing one and not the others buys nothing — the attacker uses whichever is weakest.
 
 ```
                           ┌──────────────── HUB ────────────────┐
@@ -103,21 +91,17 @@ weakest.
 
 ### The constraint that stops you sharing one mechanism across ① and ②
 
-The natural instinct is one credential mechanism for the whole hub. The CRDs do not permit it, and
-the difference is worth stating precisely because it is easy to design past.
+The natural instinct is one credential mechanism for the whole hub. The CRDs do not permit it, and the difference is worth stating precisely because it is easy
+to design past.
 
-**ArgoCD's cluster Secret** takes `bearerToken` as inline static text — there is no
-`bearerTokenFile` — which is why a rotating, per-audience projected token cannot be expressed
-there, and why `execProviderConfig` is required even in designs with no broker at all. That
-analysis is already written up in [multi-cluster.md
-§A2](multi-cluster.md#why-an-exec-plugin-is-needed-even-without-a-broker).
+**ArgoCD's cluster Secret** takes `bearerToken` as inline static text — there is no `bearerTokenFile` — which is why a rotating, per-audience projected token
+cannot be expressed there, and why `execProviderConfig` is required even in designs with no broker at all. That analysis is already written up in
+[multi-cluster.md §A2](multi-cluster.md#why-an-exec-plugin-is-needed-even-without-a-broker).
 
-**provider-kubernetes has no equivalent escape hatch.** Its `ProviderConfig.spec.identity.type` is
-a closed enum — `GoogleApplicationCredentials`, `AzureServicePrincipalCredentials`,
-`AzureWorkloadIdentityCredentials`, `AWSWebIdentityCredentials`, `UpboundTokens`,
-`NebiusServiceAccountCredentials` — with **no generic exec or command type**. The CRD describes
-`identity` as supplementing the kubeconfig, "for example by configuring a bearer token source such
-as OAuth", while `credentials` supplies the kubeconfig itself (endpoint and CA).
+**provider-kubernetes has no equivalent escape hatch.** Its `ProviderConfig.spec.identity.type` is a closed enum — `GoogleApplicationCredentials`,
+`AzureServicePrincipalCredentials`, `AzureWorkloadIdentityCredentials`, `AWSWebIdentityCredentials`, `UpboundTokens`, `NebiusServiceAccountCredentials` — with
+**no generic exec or command type**. The CRD describes `identity` as supplementing the kubeconfig, "for example by configuring a bearer token source such as
+OAuth", while `credentials` supplies the kubeconfig itself (endpoint and CA).
 
 Two consequences:
 
@@ -134,36 +118,31 @@ Two consequences:
 
 ### One more W'xOps-specific control on path ①
 
-Since v0.4.0 the target cluster is `spec.parameters.cluster`, threaded to `providerConfigRef` at
-30 sites. That makes the **`ProviderConfig` name a security boundary**: a typo does not fail
-closed, it silently resolves to a different `ProviderConfig` or lands tenant resources on the hub.
-Validating `cluster` at the XRD boundary — an `enum` of known clusters, or a
-`x-kubernetes-validations` CEL rule — is therefore an access control, not an ergonomics nicety,
-and belongs in the same review as the credential work.
+Since v0.4.0 the target cluster is `spec.parameters.cluster`, threaded to `providerConfigRef` at 30 sites. That makes the **`ProviderConfig` name a security
+boundary**: a typo does not fail closed, it silently resolves to a different `ProviderConfig` or lands tenant resources on the hub. Validating `cluster` at the
+XRD boundary — an `enum` of known clusters, or a `x-kubernetes-validations` CEL rule — is therefore an access control, not an ergonomics nicety, and belongs in
+the same review as the credential work.
 
 ---
 
 ## How Argo CD and Crossplane combine — natively, across four planes
 
-"Argo CD or Crossplane?" is the same category error as "CAPI or Crossplane", and worth dismantling
-once because the answer is the architecture. They are not alternatives:
+"Argo CD or Crossplane?" is the same category error as "CAPI or Crossplane", and worth dismantling once because the answer is the architecture. They are not
+alternatives:
 
 - **Crossplane is the tenant-facing API.** It turns a request — one XR — into resources, with
   per-tenant parameters, and reports back through XR status.
 - **Argo CD is the platform delivery engine.** It turns Git into cluster state, identically on every
   cluster, with drift detection and history.
 
-The boundary that keeps them from overlapping is a single rule: **if it is identical on every
-cluster, it belongs to Argo CD; if it is parameterised per tenant, it belongs to Crossplane.**
-Traefik, cert-manager, ESO, CNPG's *operator* and the Crossplane packages themselves are Argo CD's.
-A tenant's `Deployment`, `IngressRoute`, `Certificate`, `ExternalSecret` and CNPG `Cluster` are
-Crossplane's.
+The boundary that keeps them from overlapping is a single rule: **if it is identical on every cluster, it belongs to Argo CD; if it is parameterised per tenant,
+it belongs to Crossplane.** Traefik, cert-manager, ESO, CNPG's *operator* and the Crossplane packages themselves are Argo CD's. A tenant's `Deployment`,
+`IngressRoute`, `Certificate`, `ExternalSecret` and CNPG `Cluster` are Crossplane's.
 
 ### The loop that makes it native rather than glued
 
-The combination is not two tools pointed at the same clusters. Each produces the input the other
-consumes, which closes into a single self-extending loop — and it is the reason cluster registration
-needs no third-party glue:
+The combination is not two tools pointed at the same clusters. Each produces the input the other consumes, which closes into a single self-extending loop — and
+it is the reason cluster registration needs no third-party glue:
 
 ```mermaid
 flowchart LR
@@ -192,11 +171,9 @@ flowchart LR
     class SEC emph
 ```
 
-Step 2 is the hinge. Because a composition emits the Argo CD cluster Secret, **registration is a
-reconciled resource rather than an operator action** — which is what turns "never run
-`argocd cluster add`" from a rule people must remember into something the system cannot easily do
-wrong. Step 3 then means adding a cluster requires no change to any `ApplicationSet`: the generator
-discovers it.
+Step 2 is the hinge. Because a composition emits the Argo CD cluster Secret, **registration is a reconciled resource rather than an operator action** — which is
+what turns "never run `argocd cluster add`" from a rule people must remember into something the system cannot easily do wrong. Step 3 then means adding a
+cluster requires no change to any `ApplicationSet`: the generator discovers it.
 
 ### The four planes
 
@@ -207,29 +184,23 @@ discovers it.
 | **Data** | Where does tenant state live, and what crosses a region? | Delivers the CNPG operator | Composes `XTenantDatabase` → CNPG `Cluster`/`Database`, Vault paths via ESO | ✅ single-cluster; region dimension undecided |
 | **Observability** | Did it actually work? | Delivers kube-prometheus-stack, Loki agents | Emits `ServiceMonitor`/`PodMonitor`; publishes `status.created`/`ready` | ✅ per-cluster (v0.4.0); ❌ no fleet aggregation |
 
-**Identity is not a fifth plane — it cuts across all four**, and it is what the rest of this
-document specifies. P1–P5 apply to the control plane's two trust paths, to the network plane's
-tunnel, and to the human path into any of them.
+**Identity is not a fifth plane — it cuts across all four**, and it is what the rest of this document specifies. P1–P5 apply to the control plane's two trust
+paths, to the network plane's tunnel, and to the human path into any of them.
 
-> **Terminology reconciliation — read this before cross-referencing.**
-> [`multi-cluster.md`](multi-cluster.md#the-distinction-that-decides-everything) uses a three-layer
-> model, and the words do **not** map one-to-one onto the planes above:
+> **Terminology reconciliation — read this before cross-referencing.** [`multi-cluster.md`](multi-cluster.md#the-distinction-that-decides-everything) uses a
+> three-layer model, and the words do **not** map one-to-one onto the planes above:
 >
-> | Here | There | Relationship |
-> |---|---|---|
-> | Control plane | **Layer 1 — control plane** | Same thing |
-> | Identity (cross-cutting) | **Layer 2 — identity** | Same thing, promoted to cross-cutting |
-> | Network plane | *(no equivalent)* | New — covers hub→spoke reachability (P3) and user→app GSLB |
-> | Data plane | **⚠ NOT Layer 3** | Layer 3 there means *cross-cluster pod-to-pod service mesh*, which stays deferred. "Data plane" here means where tenant state lives and what crosses a region boundary. |
+> | Here | There | Relationship | |---|---|---| | Control plane | **Layer 1 — control plane** | Same thing | | Identity (cross-cutting) | **Layer 2 — identity**
+> | Same thing, promoted to cross-cutting | | Network plane | *(no equivalent)* | New — covers hub→spoke reachability (P3) and user→app GSLB | | Data plane |
+> **⚠ NOT Layer 3** | Layer 3 there means *cross-cluster pod-to-pod service mesh*, which stays deferred. "Data plane" here means where tenant state lives and
+> what crosses a region boundary. |
 >
-> When in doubt, cite the layer numbers for connectivity arguments and the plane names for
-> architecture presentation.
+> When in doubt, cite the layer numbers for connectivity arguments and the plane names for architecture presentation.
 
 ### Control plane
 
-Two independent delivery paths reach the same spoke — trust paths ① and ② from
-[above](#the-three-trust-paths-the-thing-most-designs-miss), which is exactly why both must be
-hardened:
+Two independent delivery paths reach the same spoke — trust paths ① and ② from [above](#the-three-trust-paths-the-thing-most-designs-miss), which is exactly why
+both must be hardened:
 
 ```mermaid
 flowchart TB
@@ -258,15 +229,14 @@ flowchart TB
     STEN -.->|"ocds"| XP
 ```
 
-The dotted **path B** is a genuinely open decision — *Portal → Git vs. Portal → API*, tracked in
-`development-docs/_archives/ROADMAP.md`'s open-decisions table. Both work with this architecture; path A gives immediate
-status, path B gives a Git audit trail for tenant intent. Nothing in this document depends on which
+The dotted **path B** is a genuinely open decision — *Portal → Git vs. Portal → API*, tracked in `development-docs/_archives/ROADMAP.md`'s open-decisions table.
+Both work with this architecture; path A gives immediate status, path B gives a Git audit trail for tenant intent. Nothing in this document depends on which
 wins.
 
 ### Network plane
 
-Two directions that are easy to conflate. Management traffic runs hub→spoke and is what this
-document secures; user traffic runs north-south into a region and never touches the hub:
+Two directions that are easy to conflate. Management traffic runs hub→spoke and is what this document secures; user traffic runs north-south into a region and
+never touches the hub:
 
 ```mermaid
 flowchart TB
@@ -296,15 +266,13 @@ flowchart TB
     API -.->|"reconciles"| APP
 ```
 
-The arrow into `API` shows traffic direction *after* the tunnel exists; the tunnel itself is
-established by the spoke dialling **outbound**, which is what keeps 6443 unexposed. That property
-is the strongest thing this shape buys — and it is P3 only. The hub still presents a credential
-through the tunnel, and the spoke still authenticates and authorises it.
+The arrow into `API` shows traffic direction *after* the tunnel exists; the tunnel itself is established by the spoke dialling **outbound**, which is what keeps
+6443 unexposed. That property is the strongest thing this shape buys — and it is P3 only. The hub still presents a credential through the tunnel, and the spoke
+still authenticates and authorises it.
 
 ### Data plane
 
-The default is **region-pinned**: an app talks to a database in its own region, and nothing crosses
-a region boundary unless a tier explicitly opts in.
+The default is **region-pinned**: an app talks to a database in its own region, and nothing crosses a region boundary unless a tier explicitly opts in.
 
 ```mermaid
 flowchart TB
@@ -327,15 +295,13 @@ flowchart TB
     D2 --> V
 ```
 
-Two rules this diagram encodes. **One XR targets one cluster** — running in two regions is two XRs,
-never composition-side fan-out. And **the Vault path has no cluster segment today**, which is the
-open decision that must be settled before a second spoke writes a colliding `remoteKey`.
+Two rules this diagram encodes. **One XR targets one cluster** — running in two regions is two XRs, never composition-side fan-out. And **the Vault path has no
+cluster segment today**, which is the open decision that must be settled before a second spoke writes a colliding `remoteKey`.
 
 ### Observability plane
 
-Everything reports **up**. Nothing on the hub queries down into a spoke on a user's critical path —
-the same rule the edge-fleet guidance states, and the reason a hub outage degrades visibility rather
-than availability:
+Everything reports **up**. Nothing on the hub queries down into a spoke on a user's critical path — the same rule the edge-fleet guidance states, and the reason
+a hub outage degrades visibility rather than availability:
 
 ```mermaid
 flowchart BT
@@ -361,20 +327,19 @@ flowchart BT
     LOKI --> PORTAL
 ```
 
-The left branch is the one already working: `Object` status flows to `status.ready` regardless of
-which cluster the resource landed on, so **the portal's polling contract survives multi-cluster
-unchanged** — the single largest thing v0.4.0 bought for this architecture. The right branch is
-unbuilt and is a platform-infrastructure decision, not a package change.
+The left branch is the one already working: `Object` status flows to `status.ready` regardless of which cluster the resource landed on, so **the portal's
+polling contract survives multi-cluster unchanged** — the single largest thing v0.4.0 bought for this architecture. The right branch is unbuilt and is a
+platform-infrastructure decision, not a package change.
 
-For these same components viewed through the P1–P5 security lens rather than the architecture lens,
-see [Where ArgoCD, Pinniped and CAPI actually combine](#where-argocd-pinniped-and-capi-actually-combine).
+For these same components viewed through the P1–P5 security lens rather than the architecture lens, see [Where ArgoCD, Pinniped and CAPI actually
+combine](#where-argocd-pinniped-and-capi-actually-combine).
 
 ---
 
 ## The fork that decides everything: who controls the apiserver
 
-Every machine-identity option below reduces to one question, and it is not "cloud or on-prem" or
-"new or old" — it is **can you set `--authentication-config` on that apiserver?**
+Every machine-identity option below reduces to one question, and it is not "cloud or on-prem" or "new or old" — it is **can you set `--authentication-config` on
+that apiserver?**
 
 | Spoke kind | Apiserver flags? | Machine-path answer | Standing secret on hub? |
 |---|---|---|---|
@@ -383,22 +348,20 @@ Every machine-identity option below reduces to one question, and it is not "clou
 | **Existing, managed** (EKS/GKE/AKS) | ❌ never | Cloud workload identity, or managed OIDC association, or Pinniped Concierge | Depends — see E1/E2 |
 | **Existing, opaque** (someone else's cluster, no admin) | ❌ | Scoped SA token, made dynamic via Vault | Yes, one, short-lived |
 
-Note the second row: an existing self-managed cluster is *not* automatically a brownfield problem.
-If you can edit the static pod manifest or the k3s server flags and restart the control plane, it
-becomes a Path N cluster with a maintenance window attached. The genuinely constrained case is
-managed and opaque clusters.
+Note the second row: an existing self-managed cluster is *not* automatically a brownfield problem. If you can edit the static pod manifest or the k3s server
+flags and restart the control plane, it becomes a Path N cluster with a maintenance window attached. The genuinely constrained case is managed and opaque
+clusters.
 
 ---
 
 ## Path N — new clusters, provisioned by CAPI
 
-This is the proposal's path, stated here as an enrollment procedure rather than an architecture,
-because the ordering has a trap in it.
+This is the proposal's path, stated here as an enrollment procedure rather than an architecture, because the ordering has a trap in it.
 
 ### The apiserver side, baked in at provision time
 
-CAPI's control over `KubeadmControlPlane` means the trust relationship is declared before the
-cluster first boots, so there is never a window in which the spoke exists without it:
+CAPI's control over `KubeadmControlPlane` means the trust relationship is declared before the cluster first boots, so there is never a window in which the spoke
+exists without it:
 
 ```yaml
 apiVersion: controlplane.cluster.x-k8s.io/v1beta1
@@ -444,8 +407,8 @@ Three details carry most of the security value:
 - **`groups` is a constant, not a claim passthrough.** The spoke decides what group the hub lands in;
   the hub does not get to assert it.
 
-Then bind `wxops:hub-controllers` to the scoped ClusterRole — the copy of
-`rbac-provider-kubernetes.yaml` — via `ClusterResourceSet`, which is where P2 gets satisfied.
+Then bind `wxops:hub-controllers` to the scoped ClusterRole — the copy of `rbac-provider-kubernetes.yaml` — via `ClusterResourceSet`, which is where P2 gets
+satisfied.
 
 ### Enrollment order, and the chicken-and-egg
 
@@ -461,36 +424,28 @@ Then bind `wxops:hub-controllers` to the scoped ClusterRole — the copy of
 7. First XR with cluster: <spoke> applied — end to end
 ```
 
-**Step 1 is the real work item and it is easy to under-scope.** Structured authn requires the
-spoke to fetch the hub's OIDC discovery document and JWKS. On a private hub those two endpoints
-must be published or mirrored somewhere every spoke can reach, which is a small piece of
-public-facing infrastructure with its own availability and rotation story. It is also a hard
-dependency at spoke *boot*, not just at first sync — a spoke that cannot reach the JWKS cannot
+**Step 1 is the real work item and it is easy to under-scope.** Structured authn requires the spoke to fetch the hub's OIDC discovery document and JWKS. On a
+private hub those two endpoints must be published or mirrored somewhere every spoke can reach, which is a small piece of public-facing infrastructure with its
+own availability and rotation story. It is also a hard dependency at spoke *boot*, not just at first sync — a spoke that cannot reach the JWKS cannot
 authenticate the hub at all.
 
-**Steps 3 and 4 are the chicken-and-egg.** The `ClusterRoleBinding` that makes the hub's identity
-useful must reach the spoke *before* the hub can authenticate to it. `ClusterResourceSet` resolves
-this cleanly because CAPI applies it with the bootstrap kubeconfig, not the hub's scoped identity
-— which is also a precise restatement of why trust path ③ cannot be eliminated on this path, only
-contained.
+**Steps 3 and 4 are the chicken-and-egg.** The `ClusterRoleBinding` that makes the hub's identity useful must reach the spoke *before* the hub can authenticate
+to it. `ClusterResourceSet` resolves this cleanly because CAPI applies it with the bootstrap kubeconfig, not the hub's scoped identity — which is also a precise
+restatement of why trust path ③ cannot be eliminated on this path, only contained.
 
 ---
 
 ## Path E — existing clusters
 
-Ordered by preference. E1 is genuinely good, E2 is good with caveats, E3 is a stopgap that can be
-made respectable.
+Ordered by preference. E1 is genuinely good, E2 is good with caveats, E3 is a stopgap that can be made respectable.
 
 ### E1 — managed spokes: cloud workload identity (the best brownfield answer)
 
-This is the finding that most changes the picture for existing clusters, and it is not mentioned
-in the other multi-cluster documents.
+This is the finding that most changes the picture for existing clusters, and it is not mentioned in the other multi-cluster documents.
 
-`provider-kubernetes`'s `ProviderConfig.spec.identity` accepts `AWSWebIdentityCredentials`,
-`GoogleApplicationCredentials`, and `AzureWorkloadIdentityCredentials` — supplementing a
-kubeconfig that carries only the endpoint and CA. So for a managed spoke, trust path ① has a
-**built-in, no-standing-credential mechanism that requires no broker, no custom binary, and no
-apiserver access**:
+`provider-kubernetes`'s `ProviderConfig.spec.identity` accepts `AWSWebIdentityCredentials`, `GoogleApplicationCredentials`, and
+`AzureWorkloadIdentityCredentials` — supplementing a kubeconfig that carries only the endpoint and CA. So for a managed spoke, trust path ① has a **built-in,
+no-standing-credential mechanism that requires no broker, no custom binary, and no apiserver access**:
 
 ```
 ProviderConfig (spoke-prod-eks)
@@ -504,12 +459,10 @@ ProviderConfig (spoke-prod-eks)
                       scoped ClusterRole on the spoke
 ```
 
-The credential is minted per call by the cloud provider, the root of trust is the cloud IAM system
-rather than anything the hub stores, and authorization still lands on the same scoped ClusterRole
-— so P1, P2 and P4 are all satisfied without W'xOps operating any of the machinery. This is
-[multi-cluster.md §A2](multi-cluster.md#option-a2--push-with-brokered-just-in-time-credentials)'s
-broker implementation **(c)** — the one it rates ✅ — arriving for free on path ① because the
-provider implements it natively.
+The credential is minted per call by the cloud provider, the root of trust is the cloud IAM system rather than anything the hub stores, and authorization still
+lands on the same scoped ClusterRole — so P1, P2 and P4 are all satisfied without W'xOps operating any of the machinery. This is [multi-cluster.md
+§A2](multi-cluster.md#option-a2--push-with-brokered-just-in-time-credentials)'s broker implementation **(c)** — the one it rates ✅ — arriving for free on path ①
+because the provider implements it natively.
 
 Caveats worth carrying:
 
@@ -523,8 +476,7 @@ Caveats worth carrying:
 
 ### E2 — managed OIDC association: structured-authn-shaped, without the flags
 
-Where the cloud lets you register an external OIDC issuer, you can get close to Path N's shape on
-a cluster you cannot flag.
+Where the cloud lets you register an external OIDC issuer, you can get close to Path N's shape on a cluster you cannot flag.
 
 | Platform | Mechanism | Reality check |
 |---|---|---|
@@ -533,52 +485,38 @@ a cluster you cannot flag.
 | **AKS** | Entra ID integration | Arbitrary third-party OIDC issuers are not the supported path; expect to use Entra, i.e. fall back to E1. |
 | **Anything else** | **Pinniped Concierge** `JWTAuthenticator` | The portable substitute. This is Concierge's actual reason to exist, and the one place in this document where Pinniped is the right answer for machines. |
 
-That last row deserves emphasis because it inverts the proposal's stance without contradicting it.
-The proposal narrows Pinniped to the human path — correctly, **for CAPI spokes**, where structured
-authn already provides everything Concierge would. On an opaque or managed spoke that reasoning
-simply does not apply, and Concierge becomes the machine-path answer too. The proposal already
-anticipates this ("the design degrades gracefully; nothing to pre-build"); this document is where
-the degraded mode gets its specification.
+That last row deserves emphasis because it inverts the proposal's stance without contradicting it. The proposal narrows Pinniped to the human path — correctly,
+**for CAPI spokes**, where structured authn already provides everything Concierge would. On an opaque or managed spoke that reasoning simply does not apply, and
+Concierge becomes the machine-path answer too. The proposal already anticipates this ("the design degrades gracefully; nothing to pre-build"); this document is
+where the degraded mode gets its specification.
 
-The cost, unchanged from
-[multi-cluster.md](multi-cluster.md#pinnipeds-supported-cicd-flow-and-what-it-costs): the
-`cli_password` flow needs an IdP supporting password grant, which **Gitea cannot provide** — the
-same OAuth 2.0 limitation that makes Pinniped exclude `GitHubIdentityProvider`. Adding a
-password-grant-capable IdentityProvider to the *same* `FederationDomain` is the documented fix,
-not a second Pinniped deployment.
+The cost, unchanged from [multi-cluster.md](multi-cluster.md#pinnipeds-supported-cicd-flow-and-what-it-costs): the `cli_password` flow needs an IdP supporting
+password grant, which **Gitea cannot provide** — the same OAuth 2.0 limitation that makes Pinniped exclude `GitHubIdentityProvider`. Adding a
+password-grant-capable IdentityProvider to the *same* `FederationDomain` is the documented fix, not a second Pinniped deployment.
 
-**Dex closes this gap concretely.** Dex supports the resource-owner password grant when configured
-with `oauth2.grantTypes: ["password"]` plus a `passwordConnector` (and `enablePasswordDB` with
-static or gRPC-managed users). So a stack running Dex in front of Gitea already has the missing
-piece: Gitea keeps the `authorization_code` human path, Dex supplies the password-grant machine
-path, and both register against one `FederationDomain` as distinct Kubernetes groups. Two caveats
-worth carrying — Dex's own documentation discourages password grant for production
-service-to-service auth, and the credential is still standing, so this is E2's fallback for
-*managed* spokes rather than a reason to prefer it over [E1](#e1--managed-spokes-cloud-workload-identity-the-best-brownfield-answer)
-or [Path N](#path-n--new-clusters-provisioned-by-capi).
+**Dex closes this gap concretely.** Dex supports the resource-owner password grant when configured with `oauth2.grantTypes: ["password"]` plus a
+`passwordConnector` (and `enablePasswordDB` with static or gRPC-managed users). So a stack running Dex in front of Gitea already has the missing piece: Gitea
+keeps the `authorization_code` human path, Dex supplies the password-grant machine path, and both register against one `FederationDomain` as distinct Kubernetes
+groups. Two caveats worth carrying — Dex's own documentation discourages password grant for production service-to-service auth, and the credential is still
+standing, so this is E2's fallback for *managed* spokes rather than a reason to prefer it over
+[E1](#e1--managed-spokes-cloud-workload-identity-the-best-brownfield-answer) or [Path N](#path-n--new-clusters-provisioned-by-capi).
 
 ### E3 — scoped ServiceAccount tokens, made dynamic (the honest stopgap)
 
-When none of the above is available — someone else's cluster, admin access limited to "here is a
-kubeconfig" — the answer is a scoped ServiceAccount, and the goal shifts from eliminating the
-standing credential to **bounding it**.
+When none of the above is available — someone else's cluster, admin access limited to "here is a kubeconfig" — the answer is a scoped ServiceAccount, and the
+goal shifts from eliminating the standing credential to **bounding it**.
 
-Plain long-lived SA tokens are the thing every other option exists to avoid. But Vault's
-Kubernetes secrets engine turns them into dynamic secrets: it generates SA tokens (and optionally
-the ServiceAccount, Role and RoleBinding) against a configured role, with `token_default_ttl` /
-`token_max_ttl`, and revokes them automatically when the Vault lease expires. Objects Vault
-created are deleted on expiry.
+Plain long-lived SA tokens are the thing every other option exists to avoid. But Vault's Kubernetes secrets engine turns them into dynamic secrets: it generates
+SA tokens (and optionally the ServiceAccount, Role and RoleBinding) against a configured role, with `token_default_ttl` / `token_max_ttl`, and revokes them
+automatically when the Vault lease expires. Objects Vault created are deleted on expiry.
 
-That is a genuinely different security posture from a static token — P4 becomes "minutes", P5
-becomes "revoke the lease" — and W'xOps already runs Vault as the platform secret store with ESO
-materialising Secrets, so the operational surface is one new secrets engine rather than a new
-system. The residual is real and should be stated plainly: Vault now holds a credential that can
-mint spoke access, so the blast radius moves to Vault, and Vault must be at least as well
+That is a genuinely different security posture from a static token — P4 becomes "minutes", P5 becomes "revoke the lease" — and W'xOps already runs Vault as the
+platform secret store with ESO materialising Secrets, so the operational surface is one new secrets engine rather than a new system. The residual is real and
+should be stated plainly: Vault now holds a credential that can mint spoke access, so the blast radius moves to Vault, and Vault must be at least as well
 protected as the fleet it fronts.
 
-**Do not skip the scoping** because the token is short-lived. A 10-minute `cluster-admin` is still
-`cluster-admin` for 10 minutes — the same point made about brokered credentials in
-[multi-cluster.md §Mandatory hardening](multi-cluster.md#mandatory-hardening) item 9.
+**Do not skip the scoping** because the token is short-lived. A 10-minute `cluster-admin` is still `cluster-admin` for 10 minutes — the same point made about
+brokered credentials in [multi-cluster.md §Mandatory hardening](multi-cluster.md#mandatory-hardening) item 9.
 
 ### Summary — brownfield decision table
 
@@ -590,18 +528,16 @@ protected as the fleet it fronts.
 | Self-managed, control-plane change possible | Retrofit structured authn → **Path N** | `execProviderConfig` | None |
 | Untrusted network, no inbound path | — switch delivery model entirely: OCM `ManifestWork` or Git-pull ([Arch 1](multi-cluster.md#reference-architecture-1--git-centric)) | — | None |
 
-That last row is the escape hatch worth remembering: **for a spoke where none of P1–P5 can be
-satisfied acceptably, the answer is not a better credential — it is to stop pushing.** A
-pull-based delivery model removes the hub→spoke connection instead of securing it, which is why
-OCM stays the planned second step rather than a rejected option.
+That last row is the escape hatch worth remembering: **for a spoke where none of P1–P5 can be satisfied acceptably, the answer is not a better credential — it
+is to stop pushing.** A pull-based delivery model removes the hub→spoke connection instead of securing it, which is why OCM stays the planned second step rather
+than a rejected option.
 
 ---
 
 ## Packaging the join — provision and enroll are different problems
 
-Everything above describes *what* must be true for a spoke to be safely reachable. A separate
-question is *what runs those steps*, and it is where the CAPI-versus-Crossplane debate usually goes
-wrong.
+Everything above describes *what* must be true for a spoke to be safely reachable. A separate question is *what runs those steps*, and it is where the
+CAPI-versus-Crossplane debate usually goes wrong.
 
 The useful decomposition is that joining a cluster has two halves with very different properties:
 
@@ -613,11 +549,9 @@ The useful decomposition is that joining a cluster has two halves with very diff
 | Failure mode | Cluster is broken | Cluster is fine but invisible |
 | Natural owner | CAPI, or the cloud, or Terraform | **A composition** |
 
-**Enroll is the half worth packaging first, and it is genuinely well-suited to a Crossplane
-composition.** Its steps are the same regardless of how the cluster came to exist, which is exactly
-the property that makes an abstraction pay: one XR handles a cluster you just provisioned and a
-cluster that has been running for two years, with the provisioning step simply absent in the second
-case. Concretely, an enrollment composition emits:
+**Enroll is the half worth packaging first, and it is genuinely well-suited to a Crossplane composition.** Its steps are the same regardless of how the cluster
+came to exist, which is exactly the property that makes an abstraction pay: one XR handles a cluster you just provisioned and a cluster that has been running
+for two years, with the provisioning step simply absent in the second case. Concretely, an enrollment composition emits:
 
 | Emitted | Serves | Notes |
 |---|---|---|
@@ -627,22 +561,17 @@ case. Concretely, an enrollment composition emits:
 | `ProviderConfig` named for the cluster | P1 on path ① | Closes the loop with `spec.parameters.cluster`, already threaded since v0.4.0 |
 | Identity config (spoke `AuthenticationConfiguration`, or Concierge `JWTAuthenticator`) | P1 | The Path N / Path E fork lives here as a conditional branch |
 
-That list is a strong argument, and it is worth stating plainly: **the enrollment package removes
-the main way this design gets compromised in practice, which is a human performing steps 1–5 by
-hand and quietly taking the convenient shortcut on one of them.**
+That list is a strong argument, and it is worth stating plainly: **the enrollment package removes the main way this design gets compromised in practice, which
+is a human performing steps 1–5 by hand and quietly taking the convenient shortcut on one of them.**
 
-> **The RBAC caveat is not a technicality.** `development-docs/_archives/ROADMAP.md` §Decided and rejected forbids compositions
-> from emitting RBAC, and the `no-rbac-emitted` invariant enforces it. An enrollment composition
-> emitting a spoke `ClusterRole` either needs that invariant scoped to tenant-facing packages only,
-> or the grant must be delivered by `ClusterResourceSet`/GitOps instead. **Decide this before
-> writing the package, not during review** — the rejection's reasoning (provider-kubernetes holding
-> RBAC write is a privilege-escalation vector) applies with *more* force across a cluster boundary,
-> not less.
+> **The RBAC caveat is not a technicality.** `development-docs/_archives/ROADMAP.md` §Decided and rejected forbids compositions from emitting RBAC, and the
+> `no-rbac-emitted` invariant enforces it. An enrollment composition emitting a spoke `ClusterRole` either needs that invariant scoped to tenant-facing packages
+> only, or the grant must be delivered by `ClusterResourceSet`/GitOps instead. **Decide this before writing the package, not during review** — the rejection's
+> reasoning (provider-kubernetes holding RBAC write is a privilege-escalation vector) applies with *more* force across a cluster boundary, not less.
 
 ### The category error worth avoiding
 
-Comparing "CAPI vs OCM vs Crossplane Compositions" as three options for the same job produces
-confident conclusions from a false premise. They are not peers:
+Comparing "CAPI vs OCM vs Crossplane Compositions" as three options for the same job produces confident conclusions from a false premise. They are not peers:
 
 - **CAPI is provisioning and node lifecycle.** It has nothing to say about tunnels, OIDC federation,
   or ArgoCD registration — not because it is weak there, but because that is not its scope.
@@ -651,18 +580,14 @@ confident conclusions from a false premise. They are not peers:
 - **A Crossplane composition is an API layer.** It is defined by what it composes, and it can
   compose CAPI objects.
 
-The consequence that matters: **"we want a clean `XCluster` API" is not an argument against CAPI**,
-because the XRD sits *above* whatever the composition emits. You get the custom domain API either
-way. The real question is narrower and more answerable — *what does the provisioning half of
-`XCluster` compose?* CAPI `Cluster`/`MachineDeployment` objects, a `provider-terraform` `Workspace`,
-or nothing at all for an adopted cluster.
+The consequence that matters: **"we want a clean `XCluster` API" is not an argument against CAPI**, because the XRD sits *above* whatever the composition emits.
+You get the custom domain API either way. The real question is narrower and more answerable — *what does the provisioning half of `XCluster` compose?* CAPI
+`Cluster`/`MachineDeployment` objects, a `provider-terraform` `Workspace`, or nothing at all for an adopted cluster.
 
 ### The three-way comparison, corrected
 
-With that premise fixed, the comparison is still worth keeping — it is the right set of dimensions,
-and it is the table to expand as the design firms up. Rows marked **⟳** are where the original
-framing changed under verification; the last three rows were missing and are the ones that most
-affect the answer.
+With that premise fixed, the comparison is still worth keeping — it is the right set of dimensions, and it is the table to expand as the design firms up. Rows
+marked **⟳** are where the original framing changed under verification; the last three rows were missing and are the ones that most affect the answer.
 
 | Dimension | **CAPI** | **OCM** | **Crossplane Compositions** |
 |---|---|---|---|
@@ -676,17 +601,14 @@ affect the answer.
 | **Deletion blast radius** | Cluster/machine deletion are separate concerns | Unregistering ≠ destroying | ⚠️ XR delete cascades — an enroll-only XR is safe, a provisioning XR can delete a live cluster |
 | **Status feedback** | `Cluster` conditions | ✅ Per-resource via `ManifestWork` | ✅ Native `Object` status → `status.ready`, already the repo's contract |
 
-Read the three columns as layers, not candidates: the realistic end states are *composition over
-CAPI*, *composition over Terraform*, or *composition over nothing* (enroll-only) — and OCM is a
-delivery-model change that can arrive later under any of them.
+Read the three columns as layers, not candidates: the realistic end states are *composition over CAPI*, *composition over Terraform*, or *composition over
+nothing* (enroll-only) — and OCM is a delivery-model change that can arrive later under any of them.
 
 ### What owning provisioning actually costs
 
-If the answer is "not CAPI", the cost is not the initial provisioning — a Terraform workspace that
-stands up k3s is genuinely straightforward. The cost is day-2, and it is the part CAPI exists for:
-rolling node upgrades with surge and drain, `MachineHealthCheck` auto-remediation, controlled
-control-plane upgrades, and etcd membership management. None of that is visible in month one and
-all of it is load-bearing by year two.
+If the answer is "not CAPI", the cost is not the initial provisioning — a Terraform workspace that stands up k3s is genuinely straightforward. The cost is
+day-2, and it is the part CAPI exists for: rolling node upgrades with surge and drain, `MachineHealthCheck` auto-remediation, controlled control-plane upgrades,
+and etcd membership management. None of that is visible in month one and all of it is load-bearing by year two.
 
 Two further hazards specific to expressing clusters as XRs:
 
@@ -702,10 +624,9 @@ Two further hazards specific to expressing clusters as XRs:
 
 ### The graduation this suggests
 
-The repo already anticipates the shape: `XPlatformCluster` is recorded as out of scope in
-[multi-cluster.md](multi-cluster.md#out-of-scope), graduating "when manual provisioning is stable",
-and [solution-matrix.md](solution-matrix.md) M2/M10 tracks it as composing CAPI clusters. Splitting
-it in two makes that graduation concrete and lets the valuable half ship years earlier:
+The repo already anticipates the shape: `XPlatformCluster` is recorded as out of scope in [multi-cluster.md](multi-cluster.md#out-of-scope), graduating "when
+manual provisioning is stable", and [solution-matrix.md](solution-matrix.md) M2/M10 tracks it as composing CAPI clusters. Splitting it in two makes that
+graduation concrete and lets the valuable half ship years earlier:
 
 ```
 Step 1  XClusterJoin  — enroll only. Works on existing AND new clusters.
@@ -718,17 +639,15 @@ Step 2  XCluster      — provision + enroll, by composing XClusterJoin.
                         deferred to when it must be made, not made up front.
 ```
 
-Step 1 is worth building regardless of how the provisioning question resolves, which is the
-strongest thing that can be said about any piece of this design. Step 2's open question is
-genuinely open, and nothing about choosing Crossplane for the API forecloses CAPI underneath it.
+Step 1 is worth building regardless of how the provisioning question resolves, which is the strongest thing that can be said about any piece of this design.
+Step 2's open question is genuinely open, and nothing about choosing Crossplane for the API forecloses CAPI underneath it.
 
 ---
 
 ## Where ArgoCD, Pinniped and CAPI actually combine
 
-The three are frequently discussed as a stack, which invites the assumption that they overlap or
-compete. They do not — they occupy three different layers, and the combination works precisely
-because each covers a property the others cannot.
+The three are frequently discussed as a stack, which invites the assumption that they overlap or compete. They do not — they occupy three different layers, and
+the combination works precisely because each covers a property the others cannot.
 
 | Component | Layer | Properties it serves | What it does **not** do |
 |---|---|---|---|
@@ -737,9 +656,8 @@ because each covers a property the others cannot.
 | **Pinniped** | Identity | P1 + P5 for humans everywhere; P1 for machines **only on non-CAPI spokes** | Not needed for machines on CAPI spokes; cannot use Gitea for the machine flow |
 | *(implicit)* **Crossplane** | Delivery (path ①) | The XR remains the fleet API; status flows back for P5 | Its `ProviderConfig` is a separate credential path from ArgoCD's |
 
-The honest one-line summary: **CAPI makes the secure option available, structured authn or cloud
-IAM makes the machine path safe, Pinniped makes the human path attributable, and ArgoCD is a
-consumer of whatever credential the first three produced — not a source of one.**
+The honest one-line summary: **CAPI makes the secure option available, structured authn or cloud IAM makes the machine path safe, Pinniped makes the human path
+attributable, and ArgoCD is a consumer of whatever credential the first three produced — not a source of one.**
 
 ### Anti-patterns, in the order people hit them
 
@@ -761,21 +679,16 @@ consumer of whatever credential the first three produced — not a source of one
 
 ## Reachability and serving-certificate trust
 
-P3 gets less attention than it deserves, mostly because it usually works until it abruptly does
-not.
+P3 gets less attention than it deserves, mostly because it usually works until it abruptly does not.
 
-**Server identity is pinned by `caData`, and pinned data goes stale.** Both the ArgoCD cluster
-Secret and the provider-kubernetes kubeconfig embed the spoke's CA bundle. When a spoke's serving
-CA rotates — a CAPI certificate rotation, a managed control-plane upgrade — every hub-side
-connection to that spoke fails at TLS with an error that reads like a network problem. Prefer
-referencing a CA bundle that ESO keeps synced from a source of truth over pasting base64 into a
+**Server identity is pinned by `caData`, and pinned data goes stale.** Both the ArgoCD cluster Secret and the provider-kubernetes kubeconfig embed the spoke's
+CA bundle. When a spoke's serving CA rotates — a CAPI certificate rotation, a managed control-plane upgrade — every hub-side connection to that spoke fails at
+TLS with an error that reads like a network problem. Prefer referencing a CA bundle that ESO keeps synced from a source of truth over pasting base64 into a
 manifest, and add CA rotation to the drill list below.
 
-**Never `insecure: true`.** It converts P3 from "verified" to "hoped", and in a push model the hub
-is exactly the party a MITM wants to be.
+**Never `insecure: true`.** It converts P3 from "verified" to "hoped", and in a push model the hub is exactly the party a MITM wants to be.
 
-**Reachability options, in rough order of preference**, all of which leave P1/P2 unchanged — a
-tunnel restores a network path, it does not authorise anything:
+**Reachability options, in rough order of preference**, all of which leave P1/P2 unchanged — a tunnel restores a network path, it does not authorise anything:
 
 | Approach | Notes |
 |---|---|
@@ -785,20 +698,16 @@ tunnel restores a network path, it does not authorise anything:
 | **Teleport** | Heavier; earns its cost when session recording is required — which is a P5 argument, not a P3 one |
 | Invert the direction (OCM / Git pull) | Removes the requirement rather than satisfying it |
 
-Full comparison in [multi-cluster.md §Option
-D](multi-cluster.md#option-d--reverse-tunnel-for-live-api-access).
+Full comparison in [multi-cluster.md §Option D](multi-cluster.md#option-d--reverse-tunnel-for-live-api-access).
 
 ### ⚠ The Headscale caveat — verify before designing on it
 
-"Tailscale or Headscale" reads like a hosted-vs-self-hosted toggle. For the Kubernetes operator
-specifically, it is not.
+"Tailscale or Headscale" reads like a hosted-vs-self-hosted toggle. For the Kubernetes operator specifically, it is not.
 
-The **official Tailscale Kubernetes operator authenticates with Tailscale's OAuth provider and
-drives Tailscale's proprietary control API** to register and manage nodes. Headscale implements its
-own gRPC API, not that one, and its maintainers have indicated OAuth parity is not planned. The
-practical consequence is that the official operator does not work against a Headscale control
-server — so a design that says "deploy the Tailscale operator via `provider-helm`, pointed at
-Headscale" has an unverified integration at its centre.
+The **official Tailscale Kubernetes operator authenticates with Tailscale's OAuth provider and drives Tailscale's proprietary control API** to register and
+manage nodes. Headscale implements its own gRPC API, not that one, and its maintainers have indicated OAuth parity is not planned. The practical consequence is
+that the official operator does not work against a Headscale control server — so a design that says "deploy the Tailscale operator via `provider-helm`, pointed
+at Headscale" has an unverified integration at its centre.
 
 Three ways out, none free:
 
@@ -809,17 +718,14 @@ Three ways out, none free:
 | Use **Headscale** with plain `tailscaled` clients (`--login-server=https://headscale.…`) | No operator: a DaemonSet or sidecar and pre-authenticated keys, with node registration and key rotation handled by your own composition logic — more code, but no dependency on API parity that may never arrive |
 
 **Treat this as a spike, ranked alongside the k8gb↔Traefik one** in
-[multi-cluster-proposal.md](multi-cluster-proposal.md#-the-traefik-wrinkle--spike-before-committing).
-Both have the same shape: a tool the design leans on, an integration surface assumed rather than
-verified, and a composition schema that cannot be finalised until someone tries it. The failure
-mode is also the same — discovering it after the XRD field names are public.
+[multi-cluster-proposal.md](multi-cluster-proposal.md#-the-traefik-wrinkle--spike-before-committing). Both have the same shape: a tool the design leans on, an
+integration surface assumed rather than verified, and a composition schema that cannot be finalised until someone tries it. The failure mode is also the same —
+discovering it after the XRD field names are public.
 
-One more point that survives whichever option wins: **Headscale is a control server, so it is a new
-trust root and a new single point of failure.** Anything that can issue a Headscale pre-auth key
-can join the tailnet and reach every spoke's apiserver at the network layer. That does not breach
-P1 or P2 — the spoke still authenticates and authorises the caller — but it collapses P3 for the
-whole fleet at once, so Headscale needs protection sized to the fleet it fronts, exactly as
-[E3](#e3--scoped-serviceaccount-tokens-made-dynamic-the-honest-stopgap) says of Vault.
+One more point that survives whichever option wins: **Headscale is a control server, so it is a new trust root and a new single point of failure.** Anything
+that can issue a Headscale pre-auth key can join the tailnet and reach every spoke's apiserver at the network layer. That does not breach P1 or P2 — the spoke
+still authenticates and authorises the caller — but it collapses P3 for the whole fleet at once, so Headscale needs protection sized to the fleet it fronts,
+exactly as [E3](#e3--scoped-serviceaccount-tokens-made-dynamic-the-honest-stopgap) says of Vault.
 
 ---
 
@@ -840,8 +746,7 @@ Beyond the options above, ordered by how likely they are to become relevant to t
 
 ## Proving it — five drills
 
-Each property above should be demonstrable, not asserted. These map one-to-one onto P1–P5 and are
-the natural extension of the prototype's exit criteria in
+Each property above should be demonstrable, not asserted. These map one-to-one onto P1–P5 and are the natural extension of the prototype's exit criteria in
 [multi-cluster-proposal.md](multi-cluster-proposal.md#the-prototype).
 
 1. **Attribution (P5).** Perform one Crossplane reconcile, one ArgoCD sync, and one human `exec` against
@@ -859,8 +764,7 @@ the natural extension of the prototype's exit criteria in
    credential against a *different* spoke — must also fail, which is what proves the per-spoke
    `audiences` line is doing its job.
 
-Drill 5's second half is the one most likely to be skipped and the one most likely to find a real
-bug.
+Drill 5's second half is the one most likely to be skipped and the one most likely to find a real bug.
 
 ---
 
@@ -906,13 +810,8 @@ These block nothing today but should be answered before the first *production* s
 - [`providers/rbac-provider-kubernetes.yaml`](../../providers/rbac-provider-kubernetes.yaml) — the scoped
   ClusterRole every spoke needs, already written
 
-**External** — [Kubernetes structured
-authentication](https://kubernetes.io/docs/reference/access-authn-authz/authentication/) · [EKS
-external OIDC
-providers](https://docs.aws.amazon.com/eks/latest/userguide/authenticate-oidc-identity-provider.html)
-· [GKE Identity
-Service](https://cloud.google.com/kubernetes-engine/enterprise/identity/setup/per-cluster) ·
-[Pinniped Concierge](https://pinniped.dev/docs/) · [Vault Kubernetes secrets
-engine](https://developer.hashicorp.com/vault/docs/secrets/kubernetes) · [SPIRE OIDC discovery
-provider](https://github.com/spiffe/spire/blob/main/support/oidc-discovery-provider/README.md)
-</content> </invoke>
+**External** — [Kubernetes structured authentication](https://kubernetes.io/docs/reference/access-authn-authz/authentication/) · [EKS external OIDC
+providers](https://docs.aws.amazon.com/eks/latest/userguide/authenticate-oidc-identity-provider.html) · [GKE Identity
+Service](https://cloud.google.com/kubernetes-engine/enterprise/identity/setup/per-cluster) · [Pinniped Concierge](https://pinniped.dev/docs/) · [Vault
+Kubernetes secrets engine](https://developer.hashicorp.com/vault/docs/secrets/kubernetes) · [SPIRE OIDC discovery
+provider](https://github.com/spiffe/spire/blob/main/support/oidc-discovery-provider/README.md) </content> </invoke>

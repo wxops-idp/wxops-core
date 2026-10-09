@@ -7,15 +7,14 @@ Accepted
 ## Context
 
 Every Core kind lives in one API group, `platform.wxops.cloud`. The RFCs in flight add a lot of new kinds: Git-hosting resources
-([RFC-003](../rfc/003-scm-connections-and-resources.md)), identity configuration ([RFC-004](../rfc/004-dex-identity-and-portal-authentication.md)),
-and object storage ([RFC-006](../rfc/006-cloudflare-r2-object-storage-and-backup.md)). One group would mix three audiences with three
-different trust boundaries: tenants asking for workloads, tenants and the platform dealing with external Git hosts, and platform operators
-deciding who can log in. [RFC-007](../rfc/007-package-layout-by-api-group.md) is the directory layout and tooling move this split
-actually needed (`package/<group>/<name>/`, `VERSIONS.yaml`'s `group`/`path`) — this ADR decides the split, RFC-007 is how the repo
-carries it.
+([RFC-003](../rfc/003-scm-connections-and-resources.md)), identity configuration ([RFC-004](../rfc/004-dex-identity-and-portal-authentication.md)), and object
+storage ([RFC-006](../rfc/006-cloudflare-r2-object-storage-and-backup.md)). One group would mix three audiences with three different trust boundaries: tenants
+asking for workloads, tenants and the platform dealing with external Git hosts, and platform operators deciding who can log in.
+[RFC-007](../rfc/007-package-layout-by-api-group.md) is the directory layout and tooling move this split actually needed (`package/<group>/<name>/`,
+`VERSIONS.yaml`'s `group`/`path`) — this ADR decides the split, RFC-007 is how the repo carries it.
 
-Two constraints shape the answer. A released XRD is additive-only and cannot change group, so anything already released stays where it is.
-And the four `gitea-*` kinds, released in `release-2026-09-16`, are Git-hosting resources that the `XScm*` family fully replaces.
+Two constraints shape the answer. A released XRD is additive-only and cannot change group, so anything already released stays where it is. And the four
+`gitea-*` kinds, released in `release-2026-09-16`, are Git-hosting resources that the `XScm*` family fully replaces.
 
 ## Decision
 

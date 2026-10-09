@@ -1,15 +1,11 @@
 # XTenantApp
 
-Tenant application scaffold — provisions a `Deployment` + `Service` +
-optional `IngressRoute` + optional `ServiceAccount` for an application workload, following the
-`app.kubernetes.io/*` label conventions used by the Kubewekend and Bitnami
-Helm "common" libraries (`app.kubernetes.io/name`, `app.kubernetes.io/instance`,
+Tenant application scaffold — provisions a `Deployment` + `Service` + optional `IngressRoute` + optional `ServiceAccount` for an application workload, following
+the `app.kubernetes.io/*` label conventions used by the Kubewekend and Bitnami Helm "common" libraries (`app.kubernetes.io/name`, `app.kubernetes.io/instance`,
 `app.kubernetes.io/managed-by: crossplane`).
 
-This XR deliberately stops at the application workload. Vault-backed secrets
-(`ExternalSecret`/`PushSecret`) and databases ([`XTenantDatabase`](tenant-database.md))
-are platform-level concerns wired up separately — point `envFrom` at the
-Secret(s) they produce.
+This XR deliberately stops at the application workload. Vault-backed secrets (`ExternalSecret`/`PushSecret`) and databases
+([`XTenantDatabase`](tenant-database.md)) are platform-level concerns wired up separately — point `envFrom` at the Secret(s) they produce.
 
 | | |
 |---|---|
@@ -29,7 +25,7 @@ Secret(s) they produce.
 |---|---|---|---|---|
 | `appName` | `string` | yes | | Application name. Used as the name of the `Deployment`/`Service`/`IngressRoute` and as the value of the `app.kubernetes.io/name` and `app.kubernetes.io/instance` labels. |
 | `namespace` | `string` | yes | | Target namespace for all resources created by this XR. |
-| `cluster` | `string` | | `"default"` | Name of the provider-kubernetes `ProviderConfig` to apply composed resources through. `default` is the local (hub) cluster — the only one wired up today, so leaving this unset is behaviour-neutral. See [multi-cluster.md](../core-ideas/multi-cluster.md). |
+| `cluster` | `string` | | `"default"` | Name of the provider-kubernetes `ProviderConfig` to apply composed resources through. `default` is the local (hub) cluster — the only one wired up today, so leaving this unset is behaviour-neutral. See [multi-cluster.md](../../development-docs/core-ideas/multi-cluster.md). |
 | `environment` | `string` | | `"dev"` | One of `dev`, `staging`, `prod`. Applied as the `wxops.cloud/environment` label on created resources — purely metadata for dashboards, cost reports, and Kyverno generate-policies. Pairs with an ArgoCD ApplicationSet matrix generator (apps × environments). |
 | `appFlavor` | `string` | | `"webapp"` | One of `webapp`, `ai`, `ai-webapp`, `geo-webapp`, `search-webapp`. Applied as the `wxops.cloud/app-flavor` label on created resources — purely metadata for platform-level automation (e.g. a separate `XTenantDatabase` claim choosing `pgvector`/`postgis` extensions, or Kyverno generate-policies) to key off. Does not affect any resource composed by this XR. |
 | `templateId` | `string` | | | Backstage/IDP software-template identifier this app was scaffolded from. Applied as the `wxops.cloud/template-id` annotation on all composed resources — catalog-linking metadata only. |
@@ -51,8 +47,7 @@ Secret(s) they produce.
 
 ### `rolloutStrategy`
 
-`Deployment.spec.strategy` — how Pods are replaced on update, relevant when
-`replicas > 1`.
+`Deployment.spec.strategy` — how Pods are replaced on update, relevant when `replicas > 1`.
 
 | Field | Type | Default | Description |
 |---|---|---|---|
@@ -70,9 +65,8 @@ Secret(s) they produce.
 
 ### `securityContext`
 
-Pod-level and container-level security settings. Pod-level fields apply to
-all containers; container-level fields apply to the main app container (and
-darlane container if enabled).
+Pod-level and container-level security settings. Pod-level fields apply to all containers; container-level fields apply to the main app container (and darlane
+container if enabled).
 
 | Field | Type | Default | Description |
 |---|---|---|---|
@@ -87,10 +81,8 @@ darlane container if enabled).
 
 ### `secretsFrom`
 
-Toggles for `envFrom.secretRef` entries pointing at Secrets provisioned
-out-of-band by the platform/GitOps. This XR only wires the reference by
-name — it does not provision or wait for the Secret to exist (the
-Deployment will fail to start until it's created).
+Toggles for `envFrom.secretRef` entries pointing at Secrets provisioned out-of-band by the platform/GitOps. This XR only wires the reference by name — it does
+not provision or wait for the Secret to exist (the Deployment will fail to start until it's created).
 
 | Field | Type | Default | Description |
 |---|---|---|---|
@@ -107,8 +99,7 @@ Deployment will fail to start until it's created).
 
 ### `volumes` — storage
 
-Mount volumes into the main app container. Volume source is determined by which
-discriminator field is set — supply exactly one per entry:
+Mount volumes into the main app container. Volume source is determined by which discriminator field is set — supply exactly one per entry:
 
 | Discriminator | Volume source |
 |---|---|
@@ -116,8 +107,7 @@ discriminator field is set — supply exactly one per entry:
 | `configMapName` | `ConfigMap` — mounts the named ConfigMap |
 | `secretName` | `Secret` — mounts the named Secret |
 
-For ConfigMap and Secret volumes, `items[]` allows key-to-path projections: only
-the listed keys are mounted, at the given relative paths inside `mountPath`.
+For ConfigMap and Secret volumes, `items[]` allows key-to-path projections: only the listed keys are mounted, at the given relative paths inside `mountPath`.
 
 | Field | Type | Default | Description |
 |---|---|---|---|
@@ -138,13 +128,10 @@ the listed keys are mounted, at the given relative paths inside `mountPath`.
 
 ### `darlane` (debug "twin" Deployment)
 
-If enabled, a second `<appName>-dev` Deployment is created alongside the
-main one — same `image`/`env`/`envFrom`/secrets, scaled to `0` by default
-and with **no `Service`/`IngressRoute` of its own** (zero external exposure).
-Scale it up on-demand, sync code with `wxops darlane sync`, or route real traffic via
-`trafficWeight` for A/B testing and feature flags. Use `mirrord` CLI directly
-against the darlane pod for local development with real cluster env and secrets.
-See [darlane.md](../core-ideas/darlane.md) for the full developer guide.
+If enabled, a second `<appName>-dev` Deployment is created alongside the main one — same `image`/`env`/`envFrom`/secrets, scaled to `0` by default and with **no
+`Service`/`IngressRoute` of its own** (zero external exposure). Scale it up on-demand, sync code with `wxops darlane sync`, or route real traffic via
+`trafficWeight` for A/B testing and feature flags. Use `mirrord` CLI directly against the darlane pod for local development with real cluster env and secrets.
+See [darlane.md](../../development-docs/core-ideas/darlane.md) for the full developer guide.
 
 #### Core
 
@@ -165,10 +152,9 @@ See [darlane.md](../core-ideas/darlane.md) for the full developer guide.
 
 #### Traffic routing
 
-Route a slice of real `IngressRoute` traffic to the darlane pod for A/B testing,
-feature flags, or explicit developer opt-in. Three independent controls compose freely —
-see [Combining traffic modes](../core-ideas/darlane.md#combining-traffic-modes) in the Darlane guide
-for the full interaction table and Traefik rule details.
+Route a slice of real `IngressRoute` traffic to the darlane pod for A/B testing, feature flags, or explicit developer opt-in. Three independent controls compose
+freely — see [Combining traffic modes](../../development-docs/core-ideas/darlane.md#combining-traffic-modes) in the Darlane guide for the full interaction table
+and Traefik rule details.
 
 | Field | Type | Default | Description |
 |---|---|---|---|
@@ -184,11 +170,9 @@ for the full interaction table and Traefik rule details.
 
 #### `darlane.volumes` — volumes
 
-Mount volumes into the darlane pod. Same discriminator pattern as main app `volumes[]`
-— set exactly one of `claimName`, `configMapName`, or `secretName`. Unlike main app
-volumes, PVC creation (`create: true`) is not supported here — reference existing
-claims only. Useful for persistent caches (pip/npm/go module downloads), shared datasets,
-config overlays, or Secret mounts that survive pod restarts.
+Mount volumes into the darlane pod. Same discriminator pattern as main app `volumes[]` — set exactly one of `claimName`, `configMapName`, or `secretName`.
+Unlike main app volumes, PVC creation (`create: true`) is not supported here — reference existing claims only. Useful for persistent caches (pip/npm/go module
+downloads), shared datasets, config overlays, or Secret mounts that survive pod restarts.
 
 | Field | Type | Default | Description |
 |---|---|---|---|
@@ -203,11 +187,9 @@ config overlays, or Secret mounts that survive pod restarts.
 
 #### `darlane.serviceAccount` — pod identity for portal/CI access
 
-When `create: true`, the composition emits a dedicated `ServiceAccount` named
-`{appName}-darlane` (or the value of `name`). Use the SA token in the portal
-or CI pipeline to authenticate against the cluster — combine with workload
-identity annotations (IRSA, GCP WI) for credential-less access to cloud APIs.
-When `create: false` and `name` is set, the darlane pod runs as that existing SA.
+When `create: true`, the composition emits a dedicated `ServiceAccount` named `{appName}-darlane` (or the value of `name`). Use the SA token in the portal or CI
+pipeline to authenticate against the cluster — combine with workload identity annotations (IRSA, GCP WI) for credential-less access to cloud APIs. When `create:
+false` and `name` is set, the darlane pod runs as that existing SA.
 
 | Field | Type | Default | Description |
 |---|---|---|---|
@@ -225,10 +207,8 @@ When `create: false` and `name` is set, the darlane pod runs as that existing SA
 
 ### `probes`
 
-HTTP GET liveness/readiness/startup probes against `containerPort`.
-`liveness`/`readiness` default to **enabled**, mirroring `service.enabled` —
-apps without a `Service` (e.g. background workers) default to no probes but
-can opt in explicitly.
+HTTP GET liveness/readiness/startup probes against `containerPort`. `liveness`/`readiness` default to **enabled**, mirroring `service.enabled` — apps without a
+`Service` (e.g. background workers) default to no probes but can opt in explicitly.
 
 | Field | Type | Default | Description |
 |---|---|---|---|
@@ -254,15 +234,11 @@ can opt in explicitly.
 
 ### `ingress`
 
-`ingress.enabled: true` always emits a Traefik `IngressRoute` (`traefik.io/v1alpha1`) —
-never a standard Kubernetes `Ingress`. This allows `darlane.trafficWeight` to switch
-between a plain `Service` backend and a `TraefikService` weighted split as a live
-in-place field update, with zero downtime.
+`ingress.enabled: true` always emits a Traefik `IngressRoute` (`traefik.io/v1alpha1`) — never a standard Kubernetes `Ingress`. This allows
+`darlane.trafficWeight` to switch between a plain `Service` backend and a `TraefikService` weighted split as a live in-place field update, with zero downtime.
 
-> **Migration note:** existing clusters that have a `networking.k8s.io/v1 Ingress`
-> managed by the old composition will experience a one-time gap when upgrading — the old
-> `Ingress` is orphaned and the new `IngressRoute` is created. After that, all subsequent
-> `trafficWeight` changes are zero-downtime.
+> **Migration note:** existing clusters that have a `networking.k8s.io/v1 Ingress` managed by the old composition will experience a one-time gap when upgrading
+> — the old `Ingress` is orphaned and the new `IngressRoute` is created. After that, all subsequent `trafficWeight` changes are zero-downtime.
 
 | Field | Type | Default | Description |
 |---|---|---|---|
@@ -279,8 +255,7 @@ in-place field update, with zero downtime.
 
 #### TLS auto-provisioning (cert-manager)
 
-When `ingress.tls.clusterIssuer` is set, the composition emits a `cert-manager.io/v1
-Certificate` CR alongside the `IngressRoute`:
+When `ingress.tls.clusterIssuer` is set, the composition emits a `cert-manager.io/v1 Certificate` CR alongside the `IngressRoute`:
 
 ```yaml
 apiVersion: cert-manager.io/v1
@@ -297,36 +272,28 @@ spec:
     - payment-api.example.com   # value of ingress.host
 ```
 
-cert-manager requests the certificate via the named `ClusterIssuer` and writes the
-resulting TLS key + chain into `tls.secretName`. The `IngressRoute`'s `spec.tls.secretName`
-references the same Secret — no manual certificate management required.
+cert-manager requests the certificate via the named `ClusterIssuer` and writes the resulting TLS key + chain into `tls.secretName`. The `IngressRoute`'s
+`spec.tls.secretName` references the same Secret — no manual certificate management required.
 
-**Prerequisites:** cert-manager installed in-cluster (`kubectl get crd certificates.cert-manager.io`),
-and the named `ClusterIssuer` exists and is ready (`kubectl get clusterissuer letsencrypt-prod`).
+**Prerequisites:** cert-manager installed in-cluster (`kubectl get crd certificates.cert-manager.io`), and the named `ClusterIssuer` exists and is ready
+(`kubectl get clusterissuer letsencrypt-prod`).
 
-**RBAC:** provider-kubernetes requires `cert-manager.io/certificates` in its ClusterRole —
-this is included in `providers/rbac-provider-kubernetes.yaml`.
+**RBAC:** provider-kubernetes requires `cert-manager.io/certificates` in its ClusterRole — this is included in `providers/rbac-provider-kubernetes.yaml`.
 
 #### SSO via oauth2-proxy
 
-When `ingress.auth.enabled: true`, Traefik runs the `auth-errors` and
-`forward-auth-redirect` middlewares before routing to this app — they call
-oauth2-proxy's ForwardAuth endpoint and redirect unauthenticated users (`401`) to
-the login page. References are added to `spec.routes[].middlewares` on the
-`IngressRoute` (not via annotation, as `IngressRoute` uses native Middleware CRD
-references).
+When `ingress.auth.enabled: true`, Traefik runs the `auth-errors` and `forward-auth-redirect` middlewares before routing to this app — they call oauth2-proxy's
+ForwardAuth endpoint and redirect unauthenticated users (`401`) to the login page. References are added to `spec.routes[].middlewares` on the `IngressRoute`
+(not via annotation, as `IngressRoute` uses native Middleware CRD references).
 
-Both `Middleware` CRDs are expected to exist in the `kube-system` namespace.
-Requires Traefik configured with `--providers.kubernetescrd.allowCrossNamespace=true`.
-`tenant-app` does not provision or manage these `Middleware` CRDs.
+Both `Middleware` CRDs are expected to exist in the `kube-system` namespace. Requires Traefik configured with
+`--providers.kubernetescrd.allowCrossNamespace=true`. `tenant-app` does not provision or manage these `Middleware` CRDs.
 
 ### `monitoring`
 
-Emits a real Prometheus Operator CRD. **Do not use `prometheus.io/*` pod
-annotations** — they are a convention read only by a `kubernetes_sd_config` job
-with matching relabel rules, and kube-prometheus-stack's
-`additionalScrapeConfigs` is empty here, so they scrape nothing. Full rationale
-in [observability.md](../core-ideas/observability.md).
+Emits a real Prometheus Operator CRD. **Do not use `prometheus.io/*` pod annotations** — they are a convention read only by a `kubernetes_sd_config` job with
+matching relabel rules, and kube-prometheus-stack's `additionalScrapeConfigs` is empty here, so they scrape nothing. Full rationale in
+[observability.md](../../development-docs/core-ideas/observability.md).
 
 | Field | Type | Default | Description |
 |---|---|---|---|
@@ -340,26 +307,19 @@ in [observability.md](../core-ideas/observability.md).
 | `honorLabels` | `boolean` | `false` | Target labels win over Prometheus-attached labels. |
 | `metricRelabelings` | `array` | `[]` | `metric_relabel_configs` applied at ingest — the escape hatch for a high-cardinality series. |
 
-**ServiceMonitor vs PodMonitor.** A `ServiceMonitor` only scrapes endpoints the
-Service considers `Ready`, so a pod failing its readiness probe drops out of the
-endpoint list and **stops being scraped — exactly when its metrics matter most**.
-A `PodMonitor` keeps scraping it, and is the only option when
-`service.enabled: false`. Setting `kind: ServiceMonitor` without a Service is a
-hard error rather than a silent no-op.
+**ServiceMonitor vs PodMonitor.** A `ServiceMonitor` only scrapes endpoints the Service considers `Ready`, so a pod failing its readiness probe drops out of the
+endpoint list and **stops being scraped — exactly when its metrics matter most**. A `PodMonitor` keeps scraping it, and is the only option when
+`service.enabled: false`. Setting `kind: ServiceMonitor` without a Service is a hard error rather than a silent no-op.
 
-The emitted monitor carries `release: kube-prometheus-stack`, which the Operator
-filters on (`serviceMonitorSelectorNilUsesHelmValues: true`), and selects on
-`app.kubernetes.io/component: app` so the Darlane twin's metrics never merge into
-the app's own series.
+The emitted monitor carries `release: kube-prometheus-stack`, which the Operator filters on (`serviceMonitorSelectorNilUsesHelmValues: true`), and selects on
+`app.kubernetes.io/component: app` so the Darlane twin's metrics never merge into the app's own series.
 
-> Requires `monitoring.coreos.com` in `providers/rbac-provider-kubernetes.yaml`.
-> Without it every emitted monitor fails `forbidden` at reconcile.
+> Requires `monitoring.coreos.com` in `providers/rbac-provider-kubernetes.yaml`. Without it every emitted monitor fails `forbidden` at reconcile.
 
 ## Developer access and RBAC
 
-**This composition emits no RBAC.** There is no `Role`, `ClusterRole`,
-`RoleBinding`, or `ClusterRoleBinding`, and provider-kubernetes is deliberately
-not granted permission to create them.
+**This composition emits no RBAC.** There is no `Role`, `ClusterRole`, `RoleBinding`, or `ClusterRoleBinding`, and provider-kubernetes is deliberately not
+granted permission to create them.
 
 | Concern | Owner | Mechanism |
 |---|---|---|
@@ -368,10 +328,8 @@ not granted permission to create them.
 | Define `Role` / `ClusterRole` | GitOps repo | plain manifests, reviewed as RBAC |
 | Bind role → ServiceAccount | GitOps repo | `RoleBinding` / `ClusterRoleBinding` |
 
-A composition that mints RBAC turns provider-kubernetes into a
-privilege-escalation vector — Kubernetes' escalation check only blocks granting
-permissions the creator lacks, and that ServiceAccount already holds broad
-grants. RBAC also deserves human review on a diff, which it gets in a GitOps repo.
+A composition that mints RBAC turns provider-kubernetes into a privilege-escalation vector — Kubernetes' escalation check only blocks granting permissions the
+creator lacks, and that ServiceAccount already holds broad grants. RBAC also deserves human review on a diff, which it gets in a GitOps repo.
 
 Read the ServiceAccount name from the XR, then bind to it:
 
@@ -392,16 +350,13 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
 ```
 
-> **`pods/exec` cannot be name-restricted by RBAC.** A grant that allows a shell
-> into the Darlane pod allows a shell into *every* pod in that namespace,
-> including the production Deployment. No authoring style changes this — size
-> tenant namespaces accordingly.
+> **`pods/exec` cannot be name-restricted by RBAC.** A grant that allows a shell into the Darlane pod allows a shell into *every* pod in that namespace,
+> including the production Deployment. No authoring style changes this — size tenant namespaces accordingly.
 
 ## Channels
 
-Every release labels its Composition `channel: stable`; `make install-dev` overrides it to
-`channel: nightly` via Kustomize. Track a channel with `spec.crossplane`, a sibling of
-`spec.parameters`, not a field inside it:
+Every release labels its Composition `channel: stable`; `make install-dev` overrides it to `channel: nightly` via Kustomize. Track a channel with
+`spec.crossplane`, a sibling of `spec.parameters`, not a field inside it:
 
 ```yaml
 spec:
@@ -432,29 +387,22 @@ Full mechanism, the `Manual`-pin alternative, and why: [Channels](../../developm
 | `darlane.ttl` | `string` | The configured `darlane.ttl` duration, echoed as-is. |
 | `darlane.serviceAccountName` | `string` | The RBAC binding target — see above. |
 
-**Why `ready` and `dependenciesReady` are separate.** `ready` covers only the
-core workload, so a consumer can render "app is up, TLS still issuing" instead of
-a blanket "not ready" for an app that is already serving. Check both before
-declaring the app healthy.
+**Why `ready` and `dependenciesReady` are separate.** `ready` covers only the core workload, so a consumer can render "app is up, TLS still issuing" instead of
+a blanket "not ready" for an app that is already serving. Check both before declaring the app healthy.
 
-`darlane.ttl` is a duration (`"4h"`), not an expiry timestamp — the composition
-has no clock. Combine it with the Deployment's `creationTimestamp` to compute one.
+`darlane.ttl` is a duration (`"4h"`), not an expiry timestamp — the composition has no clock. Combine it with the Deployment's `creationTimestamp` to compute
+one.
 
-This XR does **not** compose an `XTenantDatabase`; `secretsFrom.database` only
-wires an existing Secret in by name and is never waited on, so database
+This XR does **not** compose an `XTenantDatabase`; `secretsFrom.database` only wires an existing Secret in by name and is never waited on, so database
 provisioning is not reflected in either field.
 
-> Poll these fields rather than the native `type: Ready` condition, which is
-> unreliable on Crossplane v2.3 with function-kcl v0.12.1.
+> Poll these fields rather than the native `type: Ready` condition, which is unreliable on Crossplane v2.3 with function-kcl v0.12.1.
 
 ## Vault secrets & databases
 
-`tenant-app` does not provision Vault-backed secrets or databases itself.
-Environment variables sourced from Vault (`ExternalSecret`/`PushSecret`) and
-tenant databases ([`XTenantDatabase`](tenant-database.md)) are provisioned
-separately at the platform level. Reference the resulting Kubernetes
-`Secret`(s) via [`secretsFrom`](#secretsfrom) (simple enable + default
-naming convention):
+`tenant-app` does not provision Vault-backed secrets or databases itself. Environment variables sourced from Vault (`ExternalSecret`/`PushSecret`) and tenant
+databases ([`XTenantDatabase`](tenant-database.md)) are provisioned separately at the platform level. Reference the resulting Kubernetes `Secret`(s) via
+[`secretsFrom`](#secretsfrom) (simple enable + default naming convention):
 
 ```yaml
 secretsFrom:
@@ -466,32 +414,23 @@ secretsFrom:
 
 or via `envFrom` directly for any other Secret/ConfigMap name.
 
-> **Go-live ordering contract**: `tenant-app` does not wait for or validate
-> that `secretsFrom.{app,database}.secretName` exist — it only adds
-> `envFrom.secretRef` entries by name. The referenced Secret(s) **must be
-> created before (or alongside) this XR**, or the Deployment's Pods will
-> fail to start (`CreateContainerConfigError: secret "..." not found`).
-> This is the platform/GitOps's responsibility — when enabling
-> `secretsFrom`, make sure the corresponding `ExternalSecret`/`PushSecret`/
-> `XTenantDatabase` is applied first.
+> **Go-live ordering contract**: `tenant-app` does not wait for or validate that `secretsFrom.{app,database}.secretName` exist — it only adds
+> `envFrom.secretRef` entries by name. The referenced Secret(s) **must be created before (or alongside) this XR**, or the Deployment's Pods will fail to start
+> (`CreateContainerConfigError: secret "..." not found`). This is the platform/GitOps's responsibility — when enabling `secretsFrom`, make sure the
+> corresponding `ExternalSecret`/`PushSecret`/ `XTenantDatabase` is applied first.
 
-`appFlavor` remains purely a label (`wxops.cloud/app-flavor`) for portal
-filtering and platform automation — e.g. the portal/platform layer can use it
-to pick `pgvector`/`postgis`/etc. extensions when provisioning a database for
-this app, without `tenant-app` itself knowing anything about databases.
+`appFlavor` remains purely a label (`wxops.cloud/app-flavor`) for portal filtering and platform automation — e.g. the portal/platform layer can use it to pick
+`pgvector`/`postgis`/etc. extensions when provisioning a database for this app, without `tenant-app` itself knowing anything about databases.
 
 ## Golden Path Contract
 
-`tenant-app` defaults `probes.liveness` and `probes.readiness` to **enabled**
-whenever `service.enabled` is true (the default), targeting:
+`tenant-app` defaults `probes.liveness` and `probes.readiness` to **enabled** whenever `service.enabled` is true (the default), targeting:
 
 - `GET /healthz` — liveness
 - `GET /readyz` — readiness
 
-This is a *contract*, not something the Composition can enforce: if your
-application doesn't expose these two HTTP endpoints on `containerPort`, the
-Deployment will fail to become ready (`readinessProbe` failures) or be
-restarted in a loop (`livenessProbe` failures).
+This is a *contract*, not something the Composition can enforce: if your application doesn't expose these two HTTP endpoints on `containerPort`, the Deployment
+will fail to become ready (`readinessProbe` failures) or be restarted in a loop (`livenessProbe` failures).
 
 Two ways to satisfy the contract:
 
@@ -508,9 +447,8 @@ Two ways to satisfy the contract:
    doesn't serve HTTP at all (e.g. `service.enabled: false` workers default
    to no probes).
 
-`probes.startup` remains opt-in (`enabled: false` by default) for
-slow-starting apps that need extra grace before liveness/readiness probes
-begin counting failures.
+`probes.startup` remains opt-in (`enabled: false` by default) for slow-starting apps that need extra grace before liveness/readiness probes begin counting
+failures.
 
 ## Example
 
@@ -518,6 +456,6 @@ See [`examples/tenant-app/xr.yaml`](../../examples/tenant-app/xr.yaml).
 
 ## See also
 
-- [Darlane — In-Cluster Developer Environment](../core-ideas/darlane.md) —
+- [Darlane — In-Cluster Developer Environment](../../development-docs/core-ideas/darlane.md) —
   exec, file sync, traffic mirroring, A/B testing, AI agent workflow,
   and SRE Agent with the darlane debug twin.
