@@ -5,6 +5,14 @@ metadata:
   labels:
     wxops.cloud/managed-by: platform-database-clusters
 spec:
+  # spec.crossplane is a sibling of spec.parameters, not a field inside it — track a channel
+  # (every release labels its Composition channel: stable; make install-dev applies channel:
+  # nightly). See development-docs/development/releasing.md#channels for the Manual-pin alternative.
+  # crossplane:
+  #   compositionRevisionSelector:
+  #     matchLabels:
+  #       channel: stable          # or nightly
+  #   compositionUpdatePolicy: Automatic
   parameters:
     clusterName: cluster-a
     namespace: cnpg-system
@@ -99,12 +107,3 @@ spec:
     # For import-monolith:
     #   sourceDatabases: [myapp, reporting]
     #   sourceRoles: [myapp_owner, reporting_reader]
-
-  # spec.crossplane is a sibling of spec.parameters, not a field inside it — track a channel
-  # (every release labels its Composition channel: stable; make install-dev applies channel:
-  # nightly). See docs/development/releasing.md#channels for the Manual-pin alternative.
-  # crossplane:
-  #   compositionRevisionSelector:
-  #     matchLabels:
-  #       channel: stable          # or nightly
-  #   compositionUpdatePolicy: Automatic

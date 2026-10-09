@@ -5,6 +5,14 @@ metadata:
   labels:
     wxops.cloud/tenant-database: "true"
 spec:
+  # spec.crossplane is a sibling of spec.parameters, not a field inside it — track a channel
+  # (every release labels its Composition channel: stable; make install-dev applies channel:
+  # nightly). See development-docs/development/releasing.md#channels for the Manual-pin alternative.
+  # crossplane:
+  #   compositionRevisionSelector:
+  #     matchLabels:
+  #       channel: stable          # or nightly
+  #   compositionUpdatePolicy: Automatic
   parameters:
     # tier: shared     # default — auto-assigns to the least-loaded shared cluster
     # tier: dedicated  # composes a child XPlatformDatabaseCluster (1 cluster = 1 db)
@@ -34,12 +42,3 @@ spec:
     # databaseReclaimPolicy: "retain"
 
     vaultSecretStoreName: "vault-tenant"
-
-  # spec.crossplane is a sibling of spec.parameters, not a field inside it — track a channel
-  # (every release labels its Composition channel: stable; make install-dev applies channel:
-  # nightly). See docs/development/releasing.md#channels for the Manual-pin alternative.
-  # crossplane:
-  #   compositionRevisionSelector:
-  #     matchLabels:
-  #       channel: stable          # or nightly
-  #   compositionUpdatePolicy: Automatic
