@@ -52,7 +52,7 @@ packages:
     group: platform
     path: package/platform/platform-database-clusters
     package:
-      current: release-2026-09-16
+      current: release-2026-10-09
     api:
       served: [v1alpha1]
       storage: v1alpha1
@@ -62,7 +62,7 @@ packages:
     group: platform
     path: package/platform/tenant-database
     package:
-      current: release-2026-09-16
+      current: release-2026-10-09
     api:
       served: [v1alpha1]
       storage: v1alpha1
@@ -72,7 +72,7 @@ packages:
     group: platform
     path: package/platform/tenant-app
     package:
-      current: release-2026-09-16
+      current: release-2026-10-09
     api:
       served: [v1alpha1]
       storage: v1alpha1
@@ -88,7 +88,7 @@ packages:
     group: scm
     path: package/scm/connection
     package:
-      current: unreleased
+      current: release-2026-10-09
     api:
       served: [v1alpha1]
       storage: v1alpha1
@@ -98,7 +98,7 @@ packages:
     group: scm
     path: package/scm/repository
     package:
-      current: unreleased
+      current: release-2026-10-09
     api:
       served: [v1alpha1]
       storage: v1alpha1
@@ -108,7 +108,7 @@ packages:
     group: scm
     path: package/scm/oauth-app
     package:
-      current: unreleased
+      current: release-2026-10-09
     api:
       served: [v1alpha1]
       storage: v1alpha1

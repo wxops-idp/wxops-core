@@ -1,8 +1,8 @@
 apiVersion: pkg.crossplane.io/v1
 kind: Configuration
 metadata:
-  name: wxops-core-platform-database-clusters
+  name: wxops-core-scm-connection
 spec:
-  package: ghcr.io/wxops-idp/wxops-core/platform-database-clusters:release-2026-10-09
+  package: ghcr.io/wxops-idp/wxops-core/scm-connection:release-2026-10-09
   packagePullPolicy: IfNotPresent
   revisionActivationPolicy: Automatic

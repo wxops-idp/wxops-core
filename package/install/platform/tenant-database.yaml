@@ -3,6 +3,6 @@ kind: Configuration
 metadata:
   name: wxops-core-tenant-database
 spec:
-  package: ghcr.io/wxops-idp/wxops-core/tenant-database:release-2026-09-16
+  package: ghcr.io/wxops-idp/wxops-core/tenant-database:release-2026-10-09
   packagePullPolicy: IfNotPresent
   revisionActivationPolicy: Automatic
