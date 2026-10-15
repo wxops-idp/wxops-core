@@ -1,0 +1,108 @@
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XOIDCClient
+metadata:
+  name: cli
+spec:
+  crossplane:
+    resourceRefs:
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: b7f6de86-client-es
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: b7f6de86-push-record
+status:
+  clientId: wxops-cli
+  conditions:
+    - reason: WatchCircuitClosed
+      status: 'True'
+      type: Responsive
+    - reason: ReconcileSuccess
+      status: 'True'
+      type: Synced
+    - message: 'Unready resources: b7f6de86-client-es, b7f6de86-push-record'
+      reason: Creating
+      status: 'False'
+      type: Ready
+  created: false
+  ready: false
+  vaultKey: dex/clients/wxops-cli
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: b7f6de86-client-es
+  labels:
+    crossplane.io/composite: cli
+  name: b7f6de86-client-es
+  ownerReferences:
+    - apiVersion: auth.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XOIDCClient
+      name: cli
+      uid: b7f6de86-6f68-515a-aaaa-5e563a110573
+spec:
+  forProvider:
+    manifest:
+      apiVersion: external-secrets.io/v1
+      kind: ExternalSecret
+      metadata:
+        name: b7f6de86-client-es
+        namespace: crossplane-system
+      spec:
+        refreshInterval: '0'
+        refreshPolicy: OnChange
+        target:
+          creationPolicy: Owner
+          name: oidc-b7f6de86-client-creds
+          template:
+            data:
+              record: '{"id":"wxops-cli","name":"W''xOps CLI","redirectURIs":"[\"http://localhost:8000/callback\"]","public":true}'
+            engineVersion: v2
+            metadata:
+              annotations:
+                auth.wxops.cloud/generation: '1'
+  providerConfigRef:
+    name: default
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: b7f6de86-push-record
+  labels:
+    crossplane.io/composite: cli
+  name: b7f6de86-push-record
+  ownerReferences:
+    - apiVersion: auth.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XOIDCClient
+      name: cli
+      uid: b7f6de86-6f68-515a-aaaa-5e563a110573
+spec:
+  forProvider:
+    manifest:
+      apiVersion: external-secrets.io/v1alpha1
+      kind: PushSecret
+      metadata:
+        name: b7f6de86-client-es-push-record
+        namespace: crossplane-system
+      spec:
+        data:
+          - match:
+              remoteRef:
+                remoteKey: dex/clients/wxops-cli
+              secretKey: record
+        deletionPolicy: Delete
+        refreshInterval: 1m
+        secretStoreRefs:
+          - kind: ClusterSecretStore
+            name: vault-platform
+        selector:
+          secret:
+            name: oidc-b7f6de86-client-creds
+  providerConfigRef:
+    name: default

@@ -1,0 +1,246 @@
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XOIDCClient
+metadata:
+  name: portal
+spec:
+  crossplane:
+    resourceRefs:
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: 4787e0c9-client-es
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: 4787e0c9-push-record
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: 4787e0c9-push-secret
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: 4787e0c9-secret-es
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: 4787e0c9-secret-gen
+status:
+  clientId: wxops-portal
+  conditions:
+    - reason: WatchCircuitClosed
+      status: 'True'
+      type: Responsive
+    - reason: ReconcileSuccess
+      status: 'True'
+      type: Synced
+    - message: 'Unready resources: 4787e0c9-client-es, 4787e0c9-push-record, 4787e0c9-push-secret, and 2 more'
+      reason: Creating
+      status: 'False'
+      type: Ready
+  created: false
+  ready: false
+  vaultKey: dex/clients/wxops-portal
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: 4787e0c9-client-es
+  labels:
+    crossplane.io/composite: portal
+  name: 4787e0c9-client-es
+  ownerReferences:
+    - apiVersion: auth.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XOIDCClient
+      name: portal
+      uid: 4787e0c9-c05f-5439-8061-c506d5b62ded
+spec:
+  forProvider:
+    manifest:
+      apiVersion: external-secrets.io/v1
+      kind: ExternalSecret
+      metadata:
+        name: 4787e0c9-client-es
+        namespace: crossplane-system
+      spec:
+        data:
+          - remoteRef:
+              key: dex/clients-def/wxops-portal
+              property: secret
+            secretKey: password
+          - remoteRef:
+              key: dex/clients-def/wxops-portal
+              property: generation
+            secretKey: generation
+        refreshInterval: '0'
+        refreshPolicy: OnChange
+        secretStoreRef:
+          kind: ClusterSecretStore
+          name: vault-platform
+        target:
+          creationPolicy: Owner
+          name: oidc-4787e0c9-client-creds
+          template:
+            data:
+              record: '{{ if ne .generation "1" }}{{ fail "waiting for dex/clients-def/wxops-portal generation 1" }}{{ end }}{"id":"wxops-portal","name":"W''xOps Portal","redirectURIs":"[\"https://portal.example.com/auth/callback\"]","secret":"{{ .password }}"}'
+            engineVersion: v2
+            metadata:
+              annotations:
+                auth.wxops.cloud/generation: '1'
+  providerConfigRef:
+    name: default
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: 4787e0c9-push-record
+  labels:
+    crossplane.io/composite: portal
+  name: 4787e0c9-push-record
+  ownerReferences:
+    - apiVersion: auth.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XOIDCClient
+      name: portal
+      uid: 4787e0c9-c05f-5439-8061-c506d5b62ded
+spec:
+  forProvider:
+    manifest:
+      apiVersion: external-secrets.io/v1alpha1
+      kind: PushSecret
+      metadata:
+        name: 4787e0c9-client-es-push-record
+        namespace: crossplane-system
+      spec:
+        data:
+          - match:
+              remoteRef:
+                remoteKey: dex/clients/wxops-portal
+              secretKey: record
+        deletionPolicy: Delete
+        refreshInterval: 1m
+        secretStoreRefs:
+          - kind: ClusterSecretStore
+            name: vault-platform
+        selector:
+          secret:
+            name: oidc-4787e0c9-client-creds
+  providerConfigRef:
+    name: default
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: 4787e0c9-push-secret
+  labels:
+    crossplane.io/composite: portal
+  name: 4787e0c9-push-secret
+  ownerReferences:
+    - apiVersion: auth.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XOIDCClient
+      name: portal
+      uid: 4787e0c9-c05f-5439-8061-c506d5b62ded
+spec:
+  forProvider:
+    manifest:
+      apiVersion: external-secrets.io/v1alpha1
+      kind: PushSecret
+      metadata:
+        name: 4787e0c9-secret-es-push
+        namespace: crossplane-system
+      spec:
+        data:
+          - match:
+              remoteRef:
+                remoteKey: dex/clients-def/wxops-portal
+              secretKey: def
+        deletionPolicy: Delete
+        refreshInterval: 1m
+        secretStoreRefs:
+          - kind: ClusterSecretStore
+            name: vault-platform
+        selector:
+          secret:
+            name: oidc-4787e0c9-secret-def
+  providerConfigRef:
+    name: default
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: 4787e0c9-secret-es
+  labels:
+    crossplane.io/composite: portal
+  name: 4787e0c9-secret-es
+  ownerReferences:
+    - apiVersion: auth.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XOIDCClient
+      name: portal
+      uid: 4787e0c9-c05f-5439-8061-c506d5b62ded
+spec:
+  forProvider:
+    manifest:
+      apiVersion: external-secrets.io/v1
+      kind: ExternalSecret
+      metadata:
+        annotations:
+          force-sync: '1'
+        name: 4787e0c9-secret-es
+        namespace: crossplane-system
+      spec:
+        dataFrom:
+          - sourceRef:
+              generatorRef:
+                apiVersion: generators.external-secrets.io/v1alpha1
+                kind: Password
+                name: 4787e0c9-secret-gen
+        refreshInterval: 99999h
+        refreshPolicy: Periodic
+        target:
+          creationPolicy: Owner
+          name: oidc-4787e0c9-secret-def
+          template:
+            data:
+              def: '{"secret":{{ .password | toJson }},"generation":"1"}'
+            engineVersion: v2
+  providerConfigRef:
+    name: default
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: 4787e0c9-secret-gen
+  labels:
+    crossplane.io/composite: portal
+  name: 4787e0c9-secret-gen
+  ownerReferences:
+    - apiVersion: auth.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XOIDCClient
+      name: portal
+      uid: 4787e0c9-c05f-5439-8061-c506d5b62ded
+spec:
+  forProvider:
+    manifest:
+      apiVersion: generators.external-secrets.io/v1alpha1
+      kind: Password
+      metadata:
+        name: 4787e0c9-secret-gen
+        namespace: crossplane-system
+      spec:
+        allowRepeat: false
+        digits: 8
+        length: 32
+        noUpper: false
+        symbolCharacters: ''
+        symbols: 0
+  providerConfigRef:
+    name: default

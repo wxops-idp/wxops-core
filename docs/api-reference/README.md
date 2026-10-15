@@ -1,7 +1,7 @@
 # API Reference — what you declare, what Core reconciles
 
 > Every W'xOps Core API is a Crossplane composite resource (XR) at `v1alpha1`, and every Kind is cluster-scoped. Kinds are split across API groups by trust
-> boundary — `platform.wxops.cloud` for workloads and data, `scm.wxops.cloud` for Git hosting (see
+> boundary — `platform.wxops.cloud` for workloads and data, `scm.wxops.cloud` for Git hosting, `auth.wxops.cloud` for OIDC broker configuration (see
 > [ADR-002](../../development-docs/adr/002-three-api-groups.md)). This page explains what the reconcile loop does for you and lists every Kind. Each Kind's own
 > page has the full `spec.parameters` and `status` reference.
 
@@ -91,9 +91,14 @@ All of it is on one page: [status contract](status-contract.md).
 | [`XTenantDatabase`](tenant-database.md) | `tenant-database` | `tier` (`shared` or `dedicated`), `environment`, `dbName`, `owner`, `extensions`, `databaseReclaimPolicy` | On a discovered shared cluster, or a dedicated `XPlatformDatabaseCluster` it creates: a CNPG `Database`, a provider-sql `Role`, a generated password with a connection-creds `ExternalSecret`, and a `PushSecret` to Vault | `clusterRef`, `clusterNamespace`, `tier`, `dbName` |
 | [`XTenantApp`](tenant-app.md) | `tenant-app` | `appName`, `namespace`, `image`, `replicas`, `resources`, `env`/`secretsFrom`, `volumes`, `service`, `probes`, `ingress` (TLS, SSO), `monitoring`, `darlane` | `Deployment`, `Service`, `ServiceAccount`, PVCs, cert-manager `Certificate`, Traefik `IngressRoute`/`TraefikService`, `ServiceMonitor`/`PodMonitor`, and the Darlane twin `Deployment` with its Services | `dependenciesReady`, `url`, `namespace`, `image`, `darlane.*` |
 | [`XRandomPassword`](_archives/random-password.md) (archived) | `random-password` (utility, not published) | `length`, `special`, `overrideSpecial` | An OpenTofu `Workspace` that generates a random password | No status fields |
-| [`XScmConnection`](scm-connection.md) | `scm-connection` | `vendor`, `org`, `baseUrl`, `access`, `secretStoreRef` | An ESO `ExternalSecret` rendering the host token into `scm-connection-<name>`, in tfvars form, for every consumer's `Workspace` | `secretName` |
+| [`XScmConnection`](scm-connection.md) | `scm-connection` | `vendor`, `org`, `baseUrl`, `access`, `secretStoreRef` | An ESO `ExternalSecret` rendering the host token into `scm-connection-<name>`, in tfvars form, for every consumer's `Workspace`; plus a read-only `inspect` `Workspace` summarising the org | `secretName`, `org`, `repositories`, `teams` |
 | [`XScmRepository`](scm-repository.md) | `scm-repository` | `scmRef`, `mode`, `org`, `repoName`, `visibility`, `defaultBranch`, `topics`, `retain` | An OpenTofu `Workspace` that creates (`managed`) or reads (`observed`) the repository on whichever host the connection names | `exists`, `repoId`, `cloneUrl`, `sshUrl`, `htmlUrl`, `fullName` |
 | [`XScmOAuthApp`](scm-oauth-app.md) | `scm-oauth-app` | `scmRef`, `mode`, `appName`, `redirectUris`, `confidential`, `rotation`, `vaultKey` | An OpenTofu `Workspace` for the host-side application, and a `PushSecret` mirroring its credentials to the secret store | `clientId`, `vaultKey`, `generation` |
+| [`XScmTeam`](scm-team.md) | `scm-team` | `scmRef`, `vendor`, `mode`, `teamName`, `permission`, `units`, `repositories`, `members`, `retain` | An OpenTofu `Workspace` that creates (`managed`) or reads (`observed`) the team and its membership | `exists`, `id`, `org`, `dexTeam`, `oidcGroup` |
+| [`XOIDCConnection`](oidc-connection.md) | `oidc-connection` | `vendor`, `issuer`, `secretStoreRef`, `config` | An `Object` that **observes** the broker's own config `ExternalSecret` (the W'xOps `dexidp` chart) — writes nothing | `message`, `callbackUrl` |
+| [`XOIDCStaticPassword`](oidc-static-password.md) | `oidc-static-password` | `connectionRef`, `email`, `username`, `groups`, `secret` (`generate`\|`static`), `rotation` | ESO `Password` generator (or a human-written key) + `ExternalSecret` (bcrypt hash computed in-template) + `PushSecret`(s) | `userId`, `vaultKey` |
+| [`XOIDCClient`](oidc-client.md) | `oidc-client` | `connectionRef`, `clientId`, `redirectUris`, `public`, `secret`, `rotation` | ESO `Password` generator (confidential + `generate` only) + `ExternalSecret` + `PushSecret` | `clientId`, `vaultKey` |
+| [`XOIDCConnector`](oidc-connector.md) | `oidc-connector` | `connectionRef`, `connectorId`, `scmRef`, `oauthAppRef`, `orgs` | An `ExternalSecret` reading the oauth app's client secret + `PushSecret`; `orgs[].teams` generated from labelled `XScmTeam`s | `vaultKey`, `teams` |
 
 Each composed resource appears only when its parameters ask for it. The *Composed resources* list at the top of each `kcl/<package>/main.k` records the exact
 condition for every one.

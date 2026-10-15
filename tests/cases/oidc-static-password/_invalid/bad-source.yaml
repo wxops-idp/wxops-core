@@ -1,0 +1,16 @@
+# expect: parameters.secret.source
+# expect: is not one of
+#
+# Only generate and static exist — a typo must not fall through silently.
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XOIDCStaticPassword
+metadata:
+  name: bad-source
+spec:
+  parameters:
+    connectionRef:
+      name: dex
+    email: admin@wxops.local
+    username: admin
+    secret:
+      source: random

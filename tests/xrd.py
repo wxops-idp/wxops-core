@@ -18,6 +18,16 @@ These are our own schemas, so they are validated exactly. Three checks:
      computes offline differs from what a cluster produces — reported, not
      failed, since only some fields are mirrored in KCL.
 
+  4. `mode` is immutable: an XRD whose parameters carry a managed/observed `mode`
+     must declare the `self == oldSelf` transition rule on it. Flipping that enum
+     on a live XR takes `count` from 1 to 0 and OpenTofu destroys the host object.
+     CEL is not evaluated offline, so this proves the rule is declared, not that it
+     rejects — that part needs an API server (see the note on check_mode_immutable).
+
+  5. `unitPermissions` keys: the CEL rule's list of allowed keys must equal the `units`
+     enum minus the `all` shorthand (they are the same ten units), and the map must be bounded (`maxProperties`),
+     or the API server rejects the rule as too costly. Declared-and-consistent only.
+
 Usage:
     python3 tests/xrd.py            # all packages
     python3 tests/xrd.py tenant-app
@@ -133,6 +143,66 @@ def check_invalid(package: str, failures: list[str]) -> int:
     return checked
 
 
+def check_mode_immutable(package: str, failures: list[str]) -> int:
+    """Every managed/observed `mode` must carry the `self == oldSelf` transition rule.
+
+    Only the *declaration* is checked: this harness has no CEL evaluator, and a transition rule
+    needs two objects (stored + incoming) which a single-XR fixture cannot express. Whether the
+    rule compiles and rejects is checked against a real API server, with a server-side dry-run of
+    a CRD built from the same schema.
+    """
+    _, schema = X.spec_schema(package)
+    mode = (((schema.get("properties") or {}).get("parameters") or {}).get("properties") or {}).get("mode")
+    if not isinstance(mode, dict) or set(mode.get("enum") or []) != {"managed", "observed"}:
+        return 0
+    rules = [v.get("rule", "") for v in (mode.get("x-kubernetes-validations") or [])]
+    if any(r.replace(" ", "") == "self==oldSelf" for r in rules):
+        print(f"    {R.GREEN}ok{R.RESET}      mode is immutable {R.DIM}(self == oldSelf){R.RESET}")
+    else:
+        print(f"    {R.RED}MUTABLE MODE{R.RESET} spec.parameters.mode has no `self == oldSelf` rule")
+        print(f"        {R.DIM}flipping managed -> observed would destroy the host object{R.RESET}")
+        failures.append(f"{package}/mode-immutable")
+    return 1
+
+
+def check_unit_keys_rule(package: str, failures: list[str]) -> int:
+    """`unitPermissions` must carry a keys rule listing exactly the units in `units`' enum.
+
+    Two lists of the same ten names in one file will drift. CEL is not evaluated here — this
+    checks the rule is declared, matches the enum, and that the map is bounded.
+    """
+    _, schema = X.spec_schema(package)
+    props = ((schema.get("properties") or {}).get("parameters") or {}).get("properties") or {}
+    up = props.get("unitPermissions")
+    units = props.get("units")
+    if not isinstance(up, dict) or not isinstance(units, dict):
+        return 0
+    # `all` is a shorthand for the units, not a unit — it has no per-unit meaning as a map key.
+    enum = set(((units.get("items") or {}).get("enum")) or []) - {"all"}
+    rules = [v.get("rule", "") for v in (up.get("x-kubernetes-validations") or [])]
+    listed = set()
+    for r in rules:
+        m = re.search(r"self\.all\(\s*k\s*,\s*k\s+in\s+\[([^\]]*)\]\s*\)", r)
+        if m:
+            listed = set(re.findall(r"'([^']+)'", m.group(1)))
+    problems = []
+    if not listed:
+        problems.append("no `self.all(k, k in [...])` rule on unitPermissions")
+    elif listed != enum:
+        problems.append(f"rule keys differ from the units enum: only in rule {sorted(listed - enum)},"
+                        f" only in enum {sorted(enum - listed)}")
+    if not isinstance(up.get("maxProperties"), int):
+        problems.append("unitPermissions has no maxProperties (the rule's cost is unbounded)")
+    if problems:
+        for pr in problems:
+            print(f"    {R.RED}UNIT KEYS{R.RESET} {pr}")
+        failures.append(f"{package}/unit-keys-rule")
+    else:
+        print(f"    {R.GREEN}ok{R.RESET}      unitPermissions keys rule matches units"
+              f" {R.DIM}({len(enum)} units, maxProperties {up['maxProperties']}){R.RESET}")
+    return 1
+
+
 def check_default_parity(package: str) -> list[str]:
     """Report XRD defaults whose KCL `_get` fallback disagrees.
 
@@ -183,6 +253,8 @@ def main() -> int:
         print(f"  {package}")
         n_valid += check_valid(package, failures)
         n_invalid += check_invalid(package, failures)
+        check_mode_immutable(package, failures)
+        check_unit_keys_rule(package, failures)
         notes = check_default_parity(package)
         if notes:
             parity[package] = notes

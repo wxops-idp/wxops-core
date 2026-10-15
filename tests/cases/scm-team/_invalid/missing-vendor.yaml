@@ -1,0 +1,13 @@
+# expect: 'vendor' is a required property
+#
+# vendor picks which Terraform provider's module runs — there is no default, because defaulting
+# to either host would silently mismatch some connections. See ADR-004.
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmTeam
+metadata:
+  name: no-vendor
+spec:
+  parameters:
+    scmRef:
+      name: gitea-internal
+    teamName: developers

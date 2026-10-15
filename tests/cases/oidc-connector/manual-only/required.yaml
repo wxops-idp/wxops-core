@@ -1,0 +1,48 @@
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XOIDCConnection
+metadata:
+  name: dex
+  labels:
+    crossplane.io/composite: dex
+spec:
+  parameters:
+    vendor: dex
+    issuer: https://idp.wxops.local
+    secretStoreRef:
+      name: vault-platform
+    config:
+      namespace: dex
+status:
+  callbackUrl: https://idp.wxops.local/callback
+---
+# github.com — baseUrl left empty, so the connector's config carries no hostName at all.
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmConnection
+metadata:
+  name: github-wxops-idp
+  labels:
+    crossplane.io/composite: github-wxops-idp
+spec:
+  parameters:
+    vendor: github
+    org: wxops-idp
+status:
+  secretName: scm-connection-github-wxops-idp
+---
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmOAuthApp
+metadata:
+  name: dex-github
+  labels:
+    crossplane.io/composite: dex-github
+spec:
+  parameters:
+    scmRef:
+      name: github-wxops-idp
+    appName: dex
+    mode: observed
+status:
+  clientId: "Iv1.abcdef0123456789"
+  vaultKey: oauth/dex-github/credentials
+# No XScmTeam opted in here — "teams" is hand-listed only, which is a valid, documented shape
+# (Dex admits the whole org when a team list ends up empty; this case has one entry instead).

@@ -1,0 +1,16 @@
+# expect: parameters.notificationSetting
+# expect: is not one of
+#
+# Only the provider's own two literal values exist — not abstracted to a boolean, since
+# notification_setting is itself a string on the github_team resource.
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmTeam
+metadata:
+  name: bad-notification-setting
+spec:
+  parameters:
+    scmRef:
+      name: github-wxops-idp
+    vendor: github
+    teamName: developers
+    notificationSetting: enabled

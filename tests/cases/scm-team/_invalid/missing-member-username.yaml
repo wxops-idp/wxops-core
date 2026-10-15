@@ -1,0 +1,16 @@
+# expect: 'username' is a required property
+#
+# A member entry with no username names nobody — rejected at the schema, not discovered later as a
+# Terraform error over a null username.
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmTeam
+metadata:
+  name: missing-member-username
+spec:
+  parameters:
+    scmRef:
+      name: gitea-internal
+    vendor: gitea
+    teamName: developers
+    members:
+      - role: maintainer

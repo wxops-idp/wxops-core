@@ -79,7 +79,7 @@ Deleting the XR **keeps** the repository by default (`retain: true` orphans the 
 |---|---|---|---|---|
 | `scmRef.name` | string | yes | — | The `XScmConnection` to act through. Also the sole source of the org/owner — there is no `org` field here |
 | `repoName` | string | yes | — | Repository name |
-| `mode` | string | no | `managed` | `managed` or `observed` |
+| `mode` | string | no | `managed` | `managed` or `observed`. **Immutable** — switching `managed` → `observed` would make OpenTofu destroy the host object, so the API server rejects any change; delete and recreate the XR instead. |
 | `description` | string | no | `""` | |
 | `visibility` | string | no | `private` | `private` or `public` |
 | `defaultBranch` | string | no | `main` | Applied on GitHub only when `autoInit` is true |

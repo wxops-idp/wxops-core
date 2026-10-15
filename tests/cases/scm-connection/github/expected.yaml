@@ -8,6 +8,9 @@ spec:
       - apiVersion: kubernetes.crossplane.io/v1alpha2
         kind: Object
         name: github-wxops-idp-72f67cd39db3
+      - apiVersion: opentofu.upbound.io/v1beta1
+        kind: Workspace
+        name: github-wxops-idp-24e2a206e1cf
 status:
   conditions:
     - reason: WatchCircuitClosed
@@ -16,7 +19,7 @@ status:
     - reason: ReconcileSuccess
       status: 'True'
       type: Synced
-    - message: 'Unready resources: credentials'
+    - message: 'Unready resources: credentials, inspect'
       reason: Creating
       status: 'False'
       type: Ready
@@ -72,5 +75,36 @@ spec:
 
                 '
             engineVersion: v2
+  providerConfigRef:
+    name: default
+---
+apiVersion: opentofu.upbound.io/v1beta1
+kind: Workspace
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: inspect
+  generateName: github-wxops-idp-
+  labels:
+    crossplane.io/composite: github-wxops-idp
+  name: github-wxops-idp-24e2a206e1cf
+  ownerReferences:
+    - apiVersion: scm.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XScmConnection
+      name: github-wxops-idp
+      uid: 39d7bb83-275b-515d-a375-cad74f5d379f
+spec:
+  forProvider:
+    module: "terraform {\n  required_providers {\n    github = { source = \"integrations/github\", version = \"~> 6.13\" }\n  }\n}\n\n# \u2500\u2500 From the XScmConnection Secret (varFiles) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nvariable \"vendor\" { type = string }\nvariable \"base_url\" { type = string } # \"\" means github.com\nvariable \"default_org\" { type = string }\nvariable \"access\" { type = string }\nvariable \"token\" {\n  type      = string\n  sensitive = true\n}\n\nlocals {\n  # Names are capped so a very large org cannot bloat the XR; the counts\n  # stay exact.\n  max_names = 50\n\n  # github.com, or the Enterprise host with its `/api/v3` suffix removed.\n  web_url = var.base_url == \"\" ? \"https://github.com\" : trimsuffix(trimsuffix(var.base_url, \"/\"), \"/api/v3\")\n}\n\nprovider \"github\" {\n  base_url = var.base_url != \"\" ? var.base_url\
+      \ : null\n  owner    = var.default_org\n  token    = var.token\n}\n\n# A missing org fails the read, so the outputs below never appear for one.\n# Not summary_only: the repository list is only fetched without it.\ndata \"github_organization\" \"this\" {\n  name         = var.default_org\n  summary_only = false\n}\n\n# Takes no org argument \u2014 it reads the provider's `owner`.\ndata \"github_organization_teams\" \"this\" {\n  summary_only = true\n}\n\nlocals {\n  # Repositories arrive as `owner/name`; teams are named by their slug,\n  # the same form XScmTeam reports as `dexTeam`.\n  repo_names = sort([for r in data.github_organization.this.repositories : element(split(\"/\", r), length(split(\"/\", r)) - 1)])\n  team_names = sort([for t in data.github_organization_teams.this.teams : t.slug])\n}\n\noutput \"org_exists\" {\n  value = \"true\"\n}\noutput \"org_name\" {\n  value = data.github_organization.this.login\n}\noutput \"org_id\" {\n  value = tostring(data.github_organization.this.id)\n\
+      }\noutput \"org_url\" {\n  value = \"${local.web_url}/${var.default_org}\"\n}\noutput \"repositories_count\" {\n  value = tostring(length(local.repo_names))\n}\noutput \"repositories_names\" {\n  value = jsonencode(slice(local.repo_names, 0, min(local.max_names, length(local.repo_names))))\n}\noutput \"teams_count\" {\n  value = tostring(length(local.team_names))\n}\noutput \"teams_names\" {\n  value = jsonencode(slice(local.team_names, 0, min(local.max_names, length(local.team_names))))\n}\n"
+    source: Inline
+    varFiles:
+      - secretKeyRef:
+          key: credentials
+          name: scm-connection-github-wxops-idp
+          namespace: crossplane-system
+        source: SecretKey
   providerConfigRef:
     name: default

@@ -1,0 +1,115 @@
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XOIDCConnector
+metadata:
+  name: gitea
+spec:
+  crossplane:
+    resourceRefs:
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: 5baa3ae9-connector-es
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: 5baa3ae9-push-record
+status:
+  conditions:
+    - reason: WatchCircuitClosed
+      status: 'True'
+      type: Responsive
+    - reason: ReconcileSuccess
+      status: 'True'
+      type: Synced
+    - message: 'Unready resources: 5baa3ae9-connector-es, 5baa3ae9-push-record'
+      reason: Creating
+      status: 'False'
+      type: Ready
+  created: false
+  ready: false
+  teams:
+    platform-team:
+      - Developers
+  vaultKey: dex/connectors/gitea
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: 5baa3ae9-connector-es
+  labels:
+    crossplane.io/composite: gitea
+  name: 5baa3ae9-connector-es
+  ownerReferences:
+    - apiVersion: auth.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XOIDCConnector
+      name: gitea
+      uid: 5baa3ae9-0122-58e7-8f7f-deefa98a3345
+spec:
+  forProvider:
+    manifest:
+      apiVersion: external-secrets.io/v1
+      kind: ExternalSecret
+      metadata:
+        name: 5baa3ae9-connector-es
+        namespace: crossplane-system
+      spec:
+        data:
+          - remoteRef:
+              key: oauth/dex-gitea/credentials
+              property: client_secret
+            secretKey: client_secret
+        refreshInterval: 1h
+        refreshPolicy: OnChange
+        secretStoreRef:
+          kind: ClusterSecretStore
+          name: vault-platform
+        target:
+          creationPolicy: Owner
+          name: oidc-5baa3ae9-connector-creds
+          template:
+            data:
+              record: '{"type":"gitea","id":"gitea","name":"Gitea","config":"{\"clientID\":\"7b4c1234\",\"clientSecret\":\"{{ .client_secret }}\",\"redirectURI\":\"https://idp.wxops.local/callback\",\"orgs\":[{\"name\":\"platform-team\",\"teams\":[\"Developers\"]}],\"loadAllGroups\":false,\"useLoginAsID\":false,\"baseURL\":\"https://gitea.example.com\"}"}'
+            engineVersion: v2
+  providerConfigRef:
+    name: default
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: 5baa3ae9-push-record
+  labels:
+    crossplane.io/composite: gitea
+  name: 5baa3ae9-push-record
+  ownerReferences:
+    - apiVersion: auth.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XOIDCConnector
+      name: gitea
+      uid: 5baa3ae9-0122-58e7-8f7f-deefa98a3345
+spec:
+  forProvider:
+    manifest:
+      apiVersion: external-secrets.io/v1alpha1
+      kind: PushSecret
+      metadata:
+        name: 5baa3ae9-connector-es-push-record
+        namespace: crossplane-system
+      spec:
+        data:
+          - match:
+              remoteRef:
+                remoteKey: dex/connectors/gitea
+              secretKey: record
+        deletionPolicy: Delete
+        refreshInterval: 1m
+        secretStoreRefs:
+          - kind: ClusterSecretStore
+            name: vault-platform
+        selector:
+          secret:
+            name: oidc-5baa3ae9-connector-creds
+  providerConfigRef:
+    name: default

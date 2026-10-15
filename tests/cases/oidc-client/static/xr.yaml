@@ -1,0 +1,14 @@
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XOIDCClient
+metadata:
+  name: oauth2-proxy
+spec:
+  parameters:
+    connectionRef:
+      name: dex
+    clientId: wxops-oauth2-proxy
+    displayName: OAuth2 Proxy
+    redirectUris:
+      - https://proxy.example.com/oauth2/callback
+    secret:
+      source: static

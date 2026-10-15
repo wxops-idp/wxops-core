@@ -1,0 +1,115 @@
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XOIDCConnector
+metadata:
+  name: github
+spec:
+  crossplane:
+    resourceRefs:
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: afe96a90-connector-es
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: afe96a90-push-record
+status:
+  conditions:
+    - reason: WatchCircuitClosed
+      status: 'True'
+      type: Responsive
+    - reason: ReconcileSuccess
+      status: 'True'
+      type: Synced
+    - message: 'Unready resources: afe96a90-connector-es, afe96a90-push-record'
+      reason: Creating
+      status: 'False'
+      type: Ready
+  created: false
+  ready: false
+  teams:
+    wxops-idp:
+      - platform
+  vaultKey: dex/connectors/github
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: afe96a90-connector-es
+  labels:
+    crossplane.io/composite: github
+  name: afe96a90-connector-es
+  ownerReferences:
+    - apiVersion: auth.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XOIDCConnector
+      name: github
+      uid: afe96a90-bf8f-5c6a-9d0f-2101aa5f41d1
+spec:
+  forProvider:
+    manifest:
+      apiVersion: external-secrets.io/v1
+      kind: ExternalSecret
+      metadata:
+        name: afe96a90-connector-es
+        namespace: crossplane-system
+      spec:
+        data:
+          - remoteRef:
+              key: oauth/dex-github/credentials
+              property: client_secret
+            secretKey: client_secret
+        refreshInterval: 1h
+        refreshPolicy: OnChange
+        secretStoreRef:
+          kind: ClusterSecretStore
+          name: vault-platform
+        target:
+          creationPolicy: Owner
+          name: oidc-afe96a90-connector-creds
+          template:
+            data:
+              record: '{"type":"github","id":"github","name":"GitHub","config":"{\"clientID\":\"Iv1.abcdef0123456789\",\"clientSecret\":\"{{ .client_secret }}\",\"redirectURI\":\"https://idp.wxops.local/callback\",\"orgs\":[{\"name\":\"wxops-idp\",\"teams\":[\"platform\"]}],\"loadAllGroups\":false,\"useLoginAsID\":false,\"teamNameField\":\"slug\"}"}'
+            engineVersion: v2
+  providerConfigRef:
+    name: default
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: afe96a90-push-record
+  labels:
+    crossplane.io/composite: github
+  name: afe96a90-push-record
+  ownerReferences:
+    - apiVersion: auth.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XOIDCConnector
+      name: github
+      uid: afe96a90-bf8f-5c6a-9d0f-2101aa5f41d1
+spec:
+  forProvider:
+    manifest:
+      apiVersion: external-secrets.io/v1alpha1
+      kind: PushSecret
+      metadata:
+        name: afe96a90-connector-es-push-record
+        namespace: crossplane-system
+      spec:
+        data:
+          - match:
+              remoteRef:
+                remoteKey: dex/connectors/github
+              secretKey: record
+        deletionPolicy: Delete
+        refreshInterval: 1m
+        secretStoreRefs:
+          - kind: ClusterSecretStore
+            name: vault-platform
+        selector:
+          secret:
+            name: oidc-afe96a90-connector-creds
+  providerConfigRef:
+    name: default

@@ -48,6 +48,14 @@ form (`vendor`, `base_url`, `default_org`, `access`, `token`) — which is exact
 `Workspace` reads as `varFiles`. Full detail, including the token scopes each host needs, is in
 [`examples/scm-connection/token-secret.md`](../../../examples/scm-connection/token-secret.md).
 
+## What it reports
+
+For a connection with an `org`, a read-only `inspect` Workspace writes the org's summary into status — `org` (`exists`, `name`, `id`, `url`), `repositories`
+and `teams` (`count` and `names`, names capped at 50). Names only; the detail is on each `XScmRepository` / `XScmTeam`. It never gates `ready`: a missing
+org, a token without access, or (Gitea) a token whose user is not an org member leaves these fields absent and the reason on the Workspace. The user layer
+(no `org`) reports nothing. See
+[`docs/api-reference/scm-connection.md`](../../../docs/api-reference/scm-connection.md#what-the-connection-reports-about-the-org).
+
 ## Usage
 
 ```yaml
@@ -71,7 +79,7 @@ See [`examples/scm-connection/xr.yaml`](../../../examples/scm-connection/xr.yaml
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|
 | `vendor` | string | yes | — | `gitea` or `github` |
-| `org` | string | yes | — | Default organisation; a resource may override it |
+| `org` | string | no | `""` | The organisation every resource acts against. Unset is the user layer: the token's own account, with nothing to inspect. No per-resource override |
 | `baseUrl` | string | no | `""` | Required for a self-hosted host; unset for github.com |
 | `access` | string | no | `write` | `write`, or `read` to allow observation only |
 | `secretStoreRef.name` | string | no | `vault-platform` | ESO `ClusterSecretStore` holding the token |

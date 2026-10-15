@@ -1,0 +1,52 @@
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XOIDCConnection
+metadata:
+  name: dex
+spec:
+  crossplane:
+    resourceRefs:
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: dex-8488b7bce4ff
+status:
+  conditions:
+    - reason: WatchCircuitClosed
+      status: 'True'
+      type: Responsive
+    - reason: ReconcileSuccess
+      status: 'True'
+      type: Synced
+    - message: 'Unready resources: dex-config'
+      reason: Creating
+      status: 'False'
+      type: Ready
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    auth.wxops.cloud/callback-url: https://idp.wxops.local/callback
+    crossplane.io/composition-resource-name: dex-config
+  generateName: dex-
+  labels:
+    crossplane.io/composite: dex
+  name: dex-8488b7bce4ff
+  ownerReferences:
+    - apiVersion: auth.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XOIDCConnection
+      name: dex
+      uid: b34a6496-f37c-5ac5-a00f-26f850097d8d
+spec:
+  forProvider:
+    manifest:
+      apiVersion: external-secrets.io/v1
+      kind: ExternalSecret
+      metadata:
+        name: dex-config
+        namespace: dex
+  managementPolicies:
+    - Observe
+  providerConfigRef:
+    name: default

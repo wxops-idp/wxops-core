@@ -31,7 +31,7 @@ application should belong to.
 |---|---|---|---|---|
 | `scmRef.name` | `string` | yes | — | The `XScmConnection` to act through. Carries the vendor, base URL and token. |
 | `appName` | `string` | yes | — | The application name as it appears on the host. |
-| `mode` | `string` (`managed`, `observed`) | | `managed` | `managed` registers it and owns the secret (Gitea only). `observed` publishes an operator-registered pair. |
+| `mode` | `string` (`managed`, `observed`) | | `managed` | `managed` registers it and owns the secret (Gitea only). `observed` publishes an operator-registered pair. **Immutable** — switching `managed` → `observed` would make OpenTofu destroy the host object, so the API server rejects any change; delete and recreate the XR instead. |
 | `redirectUris` | `[]string` | | `[]` | Accepted redirect URIs. At least one is required for `managed`. |
 | `confidential` | `boolean` | | `true` | True for a server-side client that can keep a secret, such as Dex. False for a browser-only client, which must use PKCE. |
 | `credentialsSecretRef` | `object` (`name`, `namespace`) | | `{namespace: crossplane-system}` | `observed` only: a Secret whose `credentials` key sets `existing_client_id` and `existing_client_secret` in tfvars form. Ignored for `managed`. |

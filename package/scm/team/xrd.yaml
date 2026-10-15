@@ -1,0 +1,282 @@
+apiVersion: apiextensions.crossplane.io/v2
+kind: CompositeResourceDefinition
+metadata:
+  name: xscmteams.scm.wxops.cloud
+spec:
+  group: scm.wxops.cloud
+  # Cluster-scoped, like every other Kind today. A namespaced `ScmTeam` twin is designed in
+  # RFC-003 but waits on namespaced Workspace support in provider-opentofu.
+  scope: Cluster
+  names:
+    kind: XScmTeam
+    plural: xscmteams
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - parameters
+              properties:
+                parameters:
+                  type: object
+                  required:
+                    - scmRef
+                    - vendor
+                    - teamName
+                  properties:
+                    scmRef:
+                      type: object
+                      description: |
+                        The XScmConnection this team is created on. The connection carries the base URL, the
+                        org and the token — none of those appear here. There is no per-resource override.
+                      required:
+                        - name
+                      properties:
+                        name:
+                          type: string
+                    vendor:
+                      type: string
+                      description: |
+                        Must match the vendor on the `scmRef` connection — the composition rejects a mismatch
+                        with a clear error. Repeated here for the same reason `XScmRepository.spec.parameters.vendor`
+                        is: Crossplane has to pick between two Terraform provider configurations before the
+                        connection's Secret is rendered. See ADR-004 and
+                        development-docs/rfc/003-scm-connections-and-resources.md.
+                      enum: ["gitea", "github"]
+                    mode:
+                      type: string
+                      description: |
+                        `managed` — Core creates and owns the team.
+                        `observed` — Core only reads it, through a data source, and never writes or
+                        deletes it. Use this for a host's built-in team (e.g. Gitea's Owners) that Core
+                        should not try to create. In `observed` mode the creation fields below are not applied.
+                      enum: ["managed", "observed"]
+                      default: managed
+                      # A transition rule: evaluated on update, against the stored value. Without it a
+                      # one-word edit takes count from 1 to 0 and the apply destroys the host object.
+                      x-kubernetes-validations:
+                        - rule: "self == oldSelf"
+                          message: "mode is immutable: switching managed -> observed would make OpenTofu destroy the team on the host, un-assigning its repositories and removing members. Delete and recreate the XR instead; retain: true (the default) leaves the team in place."
+                    teamName:
+                      type: string
+                      description: |
+                        Team name within the connection's org. Also what a connector reports in the
+                        `groups` claim (`<org>:<teamName>`) — see status.oidcGroup.
+                      pattern: '^[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$'
+                      maxLength: 63
+                    description:
+                      type: string
+                      default: ""
+                    permission:
+                      type: string
+                      description: |
+                        Base level for the units in `units` (Gitea) or, on GitHub, the role every listed
+                        `repositories` entry gets (`read`→`pull`, `write`→`push`, `admin`→`admin`).
+                        Gitea takes `read` or `write` only — `admin` is rejected there, and a unit that
+                        should differ is set in `unitPermissions`.
+
+                        The two hosts apply it at a different scope. On Gitea it is a **team-wide**
+                        grant (the per-unit matrix), in effect as soon as the team exists, with or
+                        without any `repositories` listed. On GitHub it is **per repository**
+                        (`github_team_repository`), so an empty `repositories` list means `permission`
+                        has no effect at all there — the team exists but grants access to nothing.
+                      enum: ["read", "write", "admin"]
+                      default: write
+                    units:
+                      type: array
+                      description: |
+                        **Gitea only.** Which repository features the team can use, all at the
+                        `permission` level. A unit you don't list is not granted, unless
+                        `unitPermissions` adds it. Any non-default value fails on GitHub.
+
+                        All ten units Gitea has (its `repo.*` units; Core adds the `repo.` prefix for
+                        you): `code` (source: read = browse/clone, write = push), `issues` (built-in
+                        issue tracker), `ext_issues` (link to an external tracker — only meaningful if
+                        the repository has one configured), `wiki` (built-in wiki), `ext_wiki` (link to
+                        an external wiki), `pulls` (pull requests), `releases` (releases and tags),
+                        `projects` (project boards), `actions` (CI/CD) and `packages` (package
+                        registry).
+
+                        `all` is shorthand for all ten, for an organisation that wants every feature
+                        without spelling them out: `units: [all]`. Anything listed next to it is already
+                        covered.
+
+                        Everything here gets the same level. For a mix — e.g. write code but only read
+                        actions — use `unitPermissions`.
+
+                        Reference: https://registry.terraform.io/providers/go-gitea/gitea/latest/docs/resources/team
+                      items:
+                        type: string
+                        enum: ["all", "code", "issues", "ext_issues", "wiki", "ext_wiki", "pulls", "releases", "projects", "actions", "packages"]
+                      default: ["code", "issues", "pulls"]
+                    unitPermissions:
+                      type: object
+                      description: |
+                        **Gitea only.** Per-unit overrides, laid on top of `units` and `permission`.
+                        Core builds one matrix of the ten units — every unit in `units` at
+                        `permission`, every other unit `none` — and a unit set here takes this level
+                        instead. So "write everywhere, but only read actions and packages" is
+                        `permission: write`, `units: [all]` and
+                        `unitPermissions: {actions: read, packages: read}`; there is no need to spell
+                        out all ten.
+
+                        Keys are the same unit names as `units`, without the `repo.` prefix: `code`,
+                        `issues`, `ext_issues`, `wiki`, `ext_wiki`, `pulls`, `releases`, `projects`,
+                        `actions`, `packages`. Values: `read`, `write`, or `none`. `none` is only
+                        reachable here — it removes a unit that `units` would have granted. A unit
+                        listed here but not in `units` is added at the level given.
+
+                        Keys are checked at admission against those ten names, so a typo is rejected
+                        here instead of reaching Gitea.
+                        Reference: https://registry.terraform.io/providers/go-gitea/gitea/latest/docs/resources/team
+                      additionalProperties:
+                        type: string
+                        enum: ["none", "read", "write"]
+                      # `enum` constrains the values; nothing in OpenAPI constrains a map's keys
+                      # (`propertyNames` is not allowed in a structural schema), so a CEL rule does.
+                      # Ten units exist, and the bound also keeps the rule's cost estimate finite — an
+                      # unbounded map is costed at the request-size limit.
+                      maxProperties: 10
+                      x-kubernetes-validations:
+                        - rule: "self.all(k, k in ['code', 'issues', 'ext_issues', 'wiki', 'ext_wiki', 'pulls', 'releases', 'projects', 'actions', 'packages'])"
+                          message: "unitPermissions keys must be unit names without the repo. prefix: code, issues, ext_issues, wiki, ext_wiki, pulls, releases, projects, actions or packages."
+                      default: {}
+                    repositories:
+                      type: array
+                      description: |
+                        Repository names (just the name, not `org/name`), in the connection's org, that
+                        this team has access to. What access means depends on the host: on Gitea it is
+                        the team's own repository list, and the units above decide what the team can do
+                        in them; on GitHub each listed repository gets `permission` as its role, so an
+                        empty list there means `permission` grants nothing.
+                      items:
+                        type: string
+                      default: []
+                    includeAllRepositories:
+                      type: boolean
+                      description: |
+                        **Gitea only.** Automatically grant the team access to every repository in the
+                        org, present and future — the Gitea provider's own flag, passed through
+                        unchanged. `true` fails the apply on GitHub, which has no equivalent: team
+                        access there is only ever granted per repository (`repositories` above).
+                      default: false
+                    canCreateRepos:
+                      type: boolean
+                      description: |
+                        **Gitea only.** Let team members create repositories in the org — the Gitea
+                        provider's own flag, passed through unchanged. `true` fails the apply on
+                        GitHub, which has no team-level equivalent (repository creation is an
+                        org-wide member permission there, outside this kind's scope).
+                      default: false
+                    privacy:
+                      type: string
+                      description: |
+                        **GitHub only.** `closed` — visible to every org member. `secret` — visible
+                        only to org owners and this team's own members. Gitea has no equivalent
+                        concept; a non-default value fails the apply there.
+                      enum: ["closed", "secret"]
+                      default: closed
+                    parentTeamId:
+                      type: string
+                      description: |
+                        **GitHub only.** The id or slug of the parent team, making this a nested
+                        (child) team. Gitea has no nested teams; a non-empty value fails the apply
+                        there.
+                      default: ""
+                    notificationSetting:
+                      type: string
+                      description: |
+                        **GitHub only.** The provider's own two literal values, passed through
+                        unchanged — not abstracted to a boolean, since `notification_setting` is a
+                        string on the resource itself. Gitea has no equivalent setting; a non-default
+                        value fails the apply there.
+                      enum: ["notifications_enabled", "notifications_disabled"]
+                      default: notifications_enabled
+                    members:
+                      type: array
+                      description: |
+                        Existing host usernames — authoritative: removing a name removes that member
+                        from the team on the next reconcile.
+
+                        **GitHub:** each must already be a member of the connection's org; one that is
+                        not fails the whole apply, naming it, because GitHub would only send an
+                        invitation and leave the membership pending. Invite people to the org first;
+                        logins match case-insensitively.
+
+                        **Gitea:** adding a user to a team is how they join the org, so there is no
+                        such check — and dropping someone from the only team they belong to also
+                        removes them from the org, which Gitea does itself.
+
+                        An email address is not a username on either host.
+                      items:
+                        type: object
+                        required:
+                          - username
+                        properties:
+                          username:
+                            type: string
+                            minLength: 1
+                          role:
+                            type: string
+                            description: |
+                              **GitHub only.** `maintainer` can add/remove members and edit most team
+                              settings from GitHub's own UI — useful for a team lead who shouldn't need
+                              a PR for routine membership changes. Gitea has no equivalent per-member
+                              role (only the team-wide `permission`); a non-`member` role fails the
+                              apply on Gitea rather than being silently ignored.
+                            enum: ["member", "maintainer"]
+                            default: member
+                      default: []
+                    retain:
+                      type: boolean
+                      description: |
+                        Keep the team when the XR is deleted. True by default; orphans the Workspace
+                        instead of destroying the team (and un-assigning its repositories).
+                      default: true
+            status:
+              type: object
+              properties:
+                created:
+                  type: boolean
+                  description: |
+                    True once the apply has completed and written state, derived from the presence of
+                    the `id` output.
+
+                    Absent — not false — until that first successful apply, because the patch is
+                    skipped while its source path does not exist. Treat absent as false.
+                ready:
+                  type: boolean
+                  description: True when the team exists. Equal to `created` by construction.
+                exists:
+                  type: boolean
+                  description: |
+                    True when the team is present on the host. In `observed` mode this is the whole
+                    point of the resource; in `managed` mode it equals `created`.
+                id:
+                  type: string
+                  description: The host's own identifier for the team.
+                org:
+                  type: string
+                  description: The connection's org, echoed for convenience.
+                baseUrl:
+                  type: string
+                  description: |
+                    The connection's base URL, echoed so an `XOIDCConnector` can match this team to
+                    the right host without a second lookup — two hosts can otherwise share an org
+                    name and be wrongly conflated.
+                dexTeam:
+                  type: string
+                  description: |
+                    The team name as a connector would see it — the Gitea name, or the GitHub slug.
+                oidcGroup:
+                  type: string
+                  description: |
+                    `<org>:<dexTeam>` — the exact string a connector emits in the `groups` claim once
+                    this team is referenced by an `XOIDCConnector` (directly or via the
+                    `scm.wxops.cloud/oidc-login` label).

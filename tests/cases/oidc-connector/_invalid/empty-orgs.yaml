@@ -1,0 +1,19 @@
+# expect: parameters.orgs
+# expect: should be non-empty
+#
+# An empty orgs list would admit every user the connection's token can see — rejected at the
+# schema, not discovered later as a KCL assert.
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XOIDCConnector
+metadata:
+  name: no-orgs
+spec:
+  parameters:
+    connectionRef:
+      name: dex
+    connectorId: gitea
+    scmRef:
+      name: gitea-platform-team
+    oauthAppRef:
+      name: dex-gitea
+    orgs: []

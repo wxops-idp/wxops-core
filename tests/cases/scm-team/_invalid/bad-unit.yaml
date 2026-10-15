@@ -1,0 +1,16 @@
+# expect: parameters.units
+# expect: is not one of
+#
+# units is a closed enum per item — only the unit names both the Gitea provider and this package's
+# permission matrix know about.
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmTeam
+metadata:
+  name: bad-unit
+spec:
+  parameters:
+    scmRef:
+      name: gitea-internal
+    vendor: gitea
+    teamName: developers
+    units: [code, not-a-real-unit]

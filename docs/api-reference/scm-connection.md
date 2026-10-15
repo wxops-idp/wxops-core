@@ -47,8 +47,48 @@ A consumer never reads the connection object: it turns `scmRef.name` into that S
 | Field | Type | Description |
 |---|---|---|
 | `created` | `boolean` | True once the credential Secret has been rendered. **Absent** — not `false` — until then; treat absent as false. |
-| `ready` | `boolean` | True when the Secret is in sync. Equal to `created` by construction. **The token is never verified against the host** — only a resource using the connection can prove it works. |
+| `ready` | `boolean` | True when the Secret is in sync. Equal to `created` by construction. It does **not** say the token works — `org` below does, for an org connection. |
 | `secretName` | `string` | The Secret consumers read, published so the name is discoverable rather than conventional. |
+| `org` | `object` | `exists`, `name`, `id`, `url` — the org as the host reports it. See [What the connection reports](#what-the-connection-reports-about-the-org). |
+| `repositories` | `object` | `count` and `names` of the org's repositories. |
+| `teams` | `object` | `count` and `names` of the org's teams. |
+
+## What the connection reports about the org
+
+For a connection with an `org`, a second composed resource — an `inspect` OpenTofu `Workspace` — reads the org through the same token and writes a
+summary into status. It exists so you can tell, from the connection alone, whether the token reaches the org it is meant to and what is in there before
+you provision `XScmRepository` or `XScmTeam` on it. It is **read-only** (data sources only, never a resource) and never touches `ready`: the connection
+stays usable when the inspection cannot run.
+
+```yaml
+status:
+  created: true
+  ready: true
+  org:
+    exists: true
+    name: wxops-idp
+    id: "7"
+    url: https://gitea.example.com/wxops-idp
+  repositories:
+    count: 2
+    names: [payment-api, web]
+  teams:
+    count: 3
+    names: [Developers, Owners, Reviewers]
+```
+
+| Behaviour | Detail |
+|---|---|
+| **Names and counts only** | The detail of one repository or team is on its own `XScmRepository` / `XScmTeam` status. `names` is sorted and capped at 50; `count` is always exact. |
+| **No org — user layer** | Nothing is inspected, so `org`, `repositories` and `teams` are absent. |
+| **Missing org, or no access** | The read fails, so the fields stay absent — never `exists: false`. Gitea and GitHub both fail the read outright and the two causes are not distinguishable. The reason is on the `inspect` `Workspace`'s conditions. |
+| **What the token sees** | A token with less scope returns less, silently: private repositories it cannot read are not counted. Archived repositories are counted. |
+| **Gitea teams** | Gitea lists an org's teams only to a token whose user is a **member** of the org; for anyone else the whole inspection fails. |
+| **GitHub teams** | Named by slug — the form `XScmTeam` reports as `dexTeam`. |
+| **Members** | Deliberately not reported: the Gitea provider has no org-members data source, so there is no uniform field. Members are on `XScmTeam`. |
+| **Cost** | One extra `Workspace`, re-read on its poll interval. On GitHub the organisation read also lists members as a side effect of listing repositories. |
+
+The `exists`, `name`, `id` and `url` literals are vendor-neutral; the module that fills them is chosen by `vendor`, as in every `scm-*` package (ADR-004).
 
 ## Example
 

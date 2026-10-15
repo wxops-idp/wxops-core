@@ -1,0 +1,86 @@
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmTeam
+metadata:
+  name: rocket-team-ci
+spec:
+  crossplane:
+    resourceRefs:
+      - apiVersion: opentofu.upbound.io/v1beta1
+        kind: Workspace
+        name: rocket-team-ci-f8f83a619f35
+status:
+  conditions:
+    - reason: WatchCircuitClosed
+      status: 'True'
+      type: Responsive
+    - reason: ReconcileSuccess
+      status: 'True'
+      type: Synced
+    - message: 'Unready resources: tf-workspace'
+      reason: Creating
+      status: 'False'
+      type: Ready
+---
+apiVersion: opentofu.upbound.io/v1beta1
+kind: Workspace
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: tf-workspace
+  generateName: rocket-team-ci-
+  labels:
+    crossplane.io/composite: rocket-team-ci
+  name: rocket-team-ci-f8f83a619f35
+  ownerReferences:
+    - apiVersion: scm.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XScmTeam
+      name: rocket-team-ci
+      uid: 000d0b16-fe08-51d1-b489-3501a0479f38
+spec:
+  deletionPolicy: Orphan
+  forProvider:
+    module: "terraform {\n  required_providers {\n    gitea = { source = \"go-gitea/gitea\", version = \"~> 0.8\" }\n  }\n}\n\n# \u2500\u2500 From the XScmConnection Secret (varFiles) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nvariable \"vendor\" {\n  type = string\n  validation {\n    condition     = var.vendor == \"gitea\"\n    error_message = \"XScmTeam.spec.parameters.vendor is gitea, but scmRef's XScmConnection resolves to a different vendor. Fix the mismatch on one side.\"\n  }\n}\nvariable \"base_url\" {\n  type = string\n  validation {\n    condition     = var.base_url != \"\"\n    error_message = \"baseUrl is required on a Gitea XScmConnection \u2014 there is no default host to fall back to.\"\n  }\n}\nvariable \"default_org\" { type = string }\nvariable \"access\" {\n  type = string\n  validation {\n    condition     = contains([\"write\", \"read\"], var.access)\n\
+      \    error_message = \"access must be write or read.\"\n  }\n}\nvariable \"token\" {\n  type      = string\n  sensitive = true\n}\n\n# \u2500\u2500 From the XR \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nvariable \"mode\" {\n  type = string\n  validation {\n    condition     = contains([\"managed\", \"observed\"], var.mode)\n    error_message = \"mode must be managed or observed.\"\n  }\n}\nvariable \"team_name\" { type = string }\nvariable \"description\" { type = string }\nvariable \"permission\" {\n  type = string\n  validation {\n    condition     = contains([\"read\", \"write\", \"admin\"], var.permission)\n    error_message = \"permission must be read, write or admin.\"\n  }\n}\nvariable\
+      \ \"units\" { type = string }            # JSON array of strings\nvariable \"unit_permissions\" { type = string } # JSON object, unit -> none|read|write\nvariable \"repositories\" { type = string }     # JSON array of strings\nvariable \"members\" { type = string }          # JSON array of {username, role}\nvariable \"include_all_repositories\" { type = bool }\nvariable \"can_create_repos\" { type = bool }\nvariable \"privacy\" { type = string }              # GitHub-only\nvariable \"parent_team_id\" { type = string }       # GitHub-only\nvariable \"notification_setting\" { type = string } # GitHub-only\n\nlocals {\n  managed  = var.mode == \"managed\"\n  observed = var.mode == \"observed\"\n\n  # One matrix, one record per unit, always sent as `units_map`: every unit in\n  # `units` (`all` stands for the ten) at `permission`, then `unit_permissions`\n  # laid over it \u2014 a unit set there takes that level, and `none` is only reachable\n  # there. A unit in neither is `none`. The\
+      \ resource's own `units` string is never\n  # sent, so there is one path and no stale state to fall back on: units_map is\n  # Optional+Computed, and a null or partial map would leave a previous grant in\n  # force. Native attributes at go-gitea/gitea 0.8.1 \u2014 see the package README.\n  all_units      = [\"code\", \"issues\", \"ext_issues\", \"wiki\", \"ext_wiki\", \"pulls\", \"releases\", \"projects\", \"actions\", \"packages\"]\n  unit_names     = contains(jsondecode(var.units), \"all\") ? local.all_units : jsondecode(var.units)\n  unit_perms_map = jsondecode(var.unit_permissions)\n  unit_matrix    = merge({ for u in toset(local.unit_names) : u => var.permission }, local.unit_perms_map)\n  units_map      = { for u in local.all_units : \"repo.${u}\" => lookup(local.unit_matrix, u, \"none\") }\n\n  member_list = jsondecode(var.members)\n  repo_list   = jsondecode(var.repositories)\n\n  # Gitea has no per-member role \u2014 only the team-wide `permission` above.\n  # `maintainer`\
+      \ is a GitHub-only concept (see the github branch's\n  # github_team_membership), so any non-\"member\" role reaching this branch\n  # is rejected below rather than silently treated as \"member\".\n  non_member_roles = [for m in local.member_list : m if try(m.role, \"member\") != \"member\"]\n\n  # privacy/parentTeamId/notificationSetting are GitHub-only (team\n  # visibility, nested teams, and GitHub notifications all have no Gitea\n  # equivalent) \u2014 any non-default value reaching this branch is rejected\n  # below, not silently dropped.\n  no_github_only_fields = var.privacy == \"closed\" && var.parent_team_id == \"\" && var.notification_setting == \"notifications_enabled\"\n}\n\nprovider \"gitea\" {\n  base_url = var.base_url\n  token    = var.token\n}\n\nresource \"gitea_team\" \"this\" {\n  count = local.managed ? 1 : 0\n\n  name         = var.team_name\n  organisation = var.default_org\n  description  = var.description\n  permission   = var.permission\n  # The per-unit levels\
+      \ are `units_map`; `permission` is the base level it was built from.\n  units_map                = local.units_map\n  repositories             = local.repo_list\n  include_all_repositories = var.include_all_repositories\n  can_create_repos         = var.can_create_repos\n\n  lifecycle {\n    precondition {\n      condition     = var.access == \"write\"\n      error_message = \"mode: managed needs a write connection; this XScmConnection is access: read.\"\n    }\n    precondition {\n      condition     = var.permission != \"admin\"\n      error_message = \"permission: admin is not supported on Gitea \u2014 access is a per-unit matrix of read, write and none. Use write, and unitPermissions for any unit that should differ.\"\n    }\n    precondition {\n      condition     = length(local.non_member_roles) == 0\n      error_message = \"members[].role is GitHub-only \u2014 Gitea has no per-member maintainer role, only the team-wide permission. Remove the role (or set it to \\\"member\\\"\
+      ) for Gitea teams.\"\n    }\n    precondition {\n      condition     = local.no_github_only_fields\n      error_message = \"privacy/parentTeamId/notificationSetting are GitHub-only \u2014 Gitea has no team visibility, nested-team or per-team notification concept. Leave them at their defaults for a Gitea team.\"\n    }\n  }\n}\n\nresource \"gitea_team_membership\" \"this\" {\n  for_each = local.managed ? toset([for m in local.member_list : m.username]) : toset([])\n  team_id  = gitea_team.this[0].id\n  username = each.key\n}\n\ndata \"gitea_teams\" \"all\" {\n  count        = local.observed ? 1 : 0\n  organisation = var.default_org\n}\n\nlocals {\n  observed_match = local.observed ? [\n    for t in data.gitea_teams.all[0].teams : t if t.name == var.team_name\n  ] : []\n}\n\n# \u2500\u2500 Neutral outputs: the same set whatever the host \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\noutput \"id\" {\n  value = local.managed\
+      \ ? tostring(gitea_team.this[0].id) : (\n    length(local.observed_match) > 0 ? tostring(local.observed_match[0].id) : \"\"\n  )\n}\noutput \"org\" {\n  value = var.default_org\n}\noutput \"base_url\" {\n  value = var.base_url\n}\noutput \"dex_team\" {\n  value = var.team_name\n}\noutput \"exists\" {\n  value = local.managed ? \"true\" : (length(local.observed_match) > 0 ? \"true\" : \"false\")\n}\n"
+    source: Inline
+    varFiles:
+      - secretKeyRef:
+          key: credentials
+          name: scm-connection-gitea-internal
+          namespace: crossplane-system
+        source: SecretKey
+    vars:
+      - key: mode
+        value: managed
+      - key: team_name
+        value: CI
+      - key: description
+        value: "Pipelines \u2014 write code, read issues, no wiki, read Actions"
+      - key: permission
+        value: write
+      - key: units
+        value: '["code","issues","pulls"]'
+      - key: unit_permissions
+        value: '{"actions":"read","code":"write","issues":"read","wiki":"none"}'
+      - key: repositories
+        value: '["rocket-api"]'
+      - key: members
+        value: '[]'
+      - key: include_all_repositories
+        value: 'false'
+      - key: can_create_repos
+        value: 'false'
+      - key: privacy
+        value: closed
+      - key: parent_team_id
+        value: ''
+      - key: notification_setting
+        value: notifications_enabled
+  providerConfigRef:
+    name: default

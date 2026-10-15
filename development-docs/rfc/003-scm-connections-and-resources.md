@@ -2,13 +2,16 @@
 
 ## Status
 <!-- Draft | In review | Accepted | Declined | Withdrawn | Implemented — and the GitHub issue that carries the discussion, e.g. "Draft · #42" -->
-Implemented (Phase 1)
+Implemented (Phases 1–2)
 
 > [!NOTE]
-> Phase 1 shipped: `scm-connection`, `scm-repository` and `scm-oauth-app`, Gitea and GitHub, `managed`/`observed` where each vendor supports it. `gitea-*` is
-> archived (§Removing the old kinds), not migrated through the deprecation window this RFC originally described, since no cluster ever ran it. `XScmRepository`
-> additionally repeats `vendor` from its connection — see [ADR-004](../adr/004-scm-repository-vendor-field.md) for why. Not done: GitLab,
-> `XScmOrg`/`Team`/`User` (see §Org is not a kind for why org/team is deferred, not just unbuilt), the namespaced twin, and `import: true` adoption.
+> Phase 1 shipped: `scm-connection`, `scm-repository` and `scm-oauth-app`, Gitea and GitHub, `managed`/`observed` where each vendor supports it. Phase 2
+> shipped `scm-team` — Gitea/GitHub `managed`/`observed`, a `permission` vocabulary mapped onto each host's own model (see §What ships next for the matrix),
+> and the `scm.wxops.cloud/oidc-login` label that lets [RFC-004](004-dex-identity-and-portal-authentication.md)'s `XOIDCConnector` generate its team
+> allow-list. `gitea-*` is archived (§Removing the old kinds), not migrated through the deprecation window this RFC originally described, since no cluster
+> ever ran it. `XScmRepository` and `XScmTeam` both repeat `vendor` from their connection — see
+> [ADR-004](../adr/004-scm-repository-vendor-field.md) for why. Not done: GitLab, `XScmOrg` (see §Org is not a kind — decided against, not unbuilt),
+> `XScmUser` (rejected — see §What ships next), the namespaced twin, and `import: true` adoption.
 
 ## Summary
 
@@ -267,6 +270,13 @@ not install it, which stays platform GitOps like Dex.
   GitLab owner) are HCL `validation`/`precondition` blocks in the OpenTofu module. Their failure is the Workspace's error, which the
   composition maps into the XR's status. See *Testing*.
 
+- **The connection reports the org it points at.** A second composed resource, an `inspect` Workspace of data sources only, writes the org's `exists`,
+  `name`, `id` and `url`, and the `count` and `names` of its repositories and teams, into `XScmConnection.status` — names only, capped at 50, detail
+  staying on each `XScmRepository`/`XScmTeam`. It never gates `ready`, and a user-layer connection (no `org`) reports nothing. A missing org makes the
+  read fail rather than return `exists: false`: neither provider distinguishes a missing org from one the token cannot see, so the fields stay absent
+  and the cause is on the Workspace. Members are left out — `go-gitea/gitea` has no org-members data source. This is what "observe the org through the
+  API" in *Org is not a kind* below became: a status on the connection, not a kind.
+
 The Portal reads connections to offer the vendor choices, so it needs read access to `XScmConnection`.
 
 ### Org is not a kind
@@ -284,16 +294,16 @@ The Portal reads connections to offer the vendor choices, so it needs read acces
 - Whether `go-gitea/gitea` even ships a writable `gitea_org` *resource* (as opposed to the `data.gitea_org` this RFC already verified) was
   never checked against the real provider schema — the kind matrix's claim predates the spike and should not be trusted until confirmed.
 
-If a reason to observe the platform org through the API ever appears — visibility in the catalogue, something to reference by status — an `observed`-only
-`XScmOrg` is a small addition. It is not planned now.
+The one reason that did appear — seeing from the connection alone that its token reaches the org and what the org holds — is met by the connection's own
+status (see *`XScmConnection` and `scmRef`*), not by a kind. An `observed`-only `XScmOrg` stays unplanned.
 
 ### What ships next, and what doesn't ship at all
 
 - **`XScmUser` — rejected.** People authenticate through Dex (RFC-004); the only remaining use was bot accounts, not worth the
   credential-lifecycle risk of a kind whose job is minting host accounts.
-- **`XScmTeam` — next, bundled with [RFC-004](004-dex-identity-and-portal-authentication.md) and
-  [RFC-005](005-git-mapped-authorization.md).** Together they're the Git-to-cluster workflow: team membership, the
-  `wxops.cloud/owner`-to-Git-team authorization mapping, and Dex login as that member — none completes it alone.
+- **`XScmTeam` — shipped (Phase 2), bundled with [RFC-004](004-dex-identity-and-portal-authentication.md); RFC-005 still ahead.** Together they're the
+  Git-to-cluster workflow: team membership (done), the `wxops.cloud/owner`-to-Git-team authorization mapping (RFC-005, not started), and broker login
+  as that member (RFC-004, done for the connector side) — none of the three alone completes the workflow.
 - **GitLab — deprioritized, pattern kept.** Not worth a third provider/module branch for vendors nobody's using yet; the
   one-kind/vendor-exclusive-module pattern ([ADR-004](../adr/004-scm-repository-vendor-field.md)) still applies whenever it's picked up.
 - **Namespaced `Scm*` twin — unchanged**, still blocked on confirming `provider-opentofu`'s `Workspace` support; RFC-005's
@@ -555,9 +565,9 @@ Gitea) can discover them across hosts without a per-repository Application. This
 
 ### Compatibility and change tier
 
-Five new packages, one per kind: `scm-connection`, `scm-team`, `scm-user`, `scm-repository` and `scm-oauth-app`. Each has `current: unreleased` in
-`VERSIONS.yaml`. Adding a package is `safe` under `tests/api_compat.py`; no released XRD changes. All would be labelled `channel: stable` per
-[ADR-001](../adr/001-package-channel-label.md).
+Four packages shipped across Phases 1–2: `scm-connection`, `scm-repository`, `scm-oauth-app` and `scm-team` — `scm-user` and `scm-org` are rejected, not
+pending (see *Org is not a kind*, *What ships next*). Each has `current: unreleased` in `VERSIONS.yaml` until its first release. Adding a package is
+`safe` under `tests/api_compat.py`; no released XRD changes. All are labelled `channel: stable` per [ADR-001](../adr/001-package-channel-label.md).
 
 ### Testing
 
@@ -637,8 +647,15 @@ confirmed against each provider in the same spike.
   SCM connection and an app. Two providers from the first phase means the field-matrix invariant and the module's vendor preconditions
   are built here, not later. Acceptance: a throwaway **GitHub org** (free) and an **external Gitea** the
   maintainer or adopter operates; Core only needs its URL and a token.
-- [ ] **Phase 2 — team, user.** `scm-team`, `scm-user`: Gitea `managed`; GitHub `managed` for teams, `observed` for user. `import: true`,
-  and the same-host migration off `gitea-*` run end to end to prove it destroys nothing. **No `scm-org`** — see *Org is not a kind*.
+- [x] **Phase 2 — team, built. `scm-user` dropped from scope, not deferred.** `scm-team` ships: Gitea and GitHub `managed`/`observed`, one
+  `permission` vocabulary mapped to GitHub's five repository roles and a Gitea `units`/`units_map` preset per role (the archived `gitea-team`'s own
+  matrix, now native at provider 0.8.1 — no `null_resource`/`local-exec`, see [ADR-004](../adr/004-scm-repository-vendor-field.md)).
+  `members` is **usernames only** — no email modelling, matching how both providers already take membership; an email-format string still passes the
+  schema. A team opts in to broker login with the label `scm.wxops.cloud/oidc-login: "true"`, which is what
+  [`XOIDCConnector`](004-dex-identity-and-portal-authentication.md) generates its `groups` claim allow-list from — this is the "bundled with RFC-004"
+  pairing this phase always intended. **No `scm-org`** (unchanged — see *Org is not a kind*), and **no `scm-user`**: nothing in this phase's actual
+  work needed it, and `XScmUser` was already rejected once (see *What ships next, and what doesn't ship at all*) — carrying it as a phase item
+  overstated what was still open. `import: true` and the same-host migration off `gitea-*` remain deferred, unchanged from the original plan.
 - [ ] **Phase 3 — GitLab.** `gitlabhq/gitlab` on a **self-managed CE** instance first, with an administrator token on its own connection:
   repository, org, user and `managed` OAuth app; then GitLab.com with its top-level group `observed`. Teams as subgroups if open
   question 8 says so.

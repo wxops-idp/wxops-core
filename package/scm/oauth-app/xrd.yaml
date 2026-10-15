@@ -48,6 +48,11 @@ spec:
                         credentials it is given. The only mode available for GitHub.
                       enum: ["managed", "observed"]
                       default: managed
+                      # A transition rule: evaluated on update, against the stored value. Without it a
+                      # one-word edit takes count from 1 to 0 and the apply destroys the host object.
+                      x-kubernetes-validations:
+                        - rule: "self == oldSelf"
+                          message: "mode is immutable: switching managed -> observed would make OpenTofu destroy the OAuth application on the host (gitea_oauth2_app is count = managed ? 1 : 0). Delete and recreate the XR instead."
                     appName:
                       type: string
                       description: The application name as it appears on the host.

@@ -5,17 +5,34 @@
 Accepted
 
 > [!NOTE]
-> Its prerequisite, RFC-003 Phase 1, has shipped (`scm-connection`, `scm-repository`, `scm-oauth-app`) — `XDexConnector` can now point at a real
-> `XScmConnection` and `XOIDCClient` at a real `XScmOAuthApp`. Implementation work starts after this release; flips to *In progress* once it does.
+> **Amended, implementation underway.** The design below is unchanged in its core argument — configuration, not an operator or Dex's API; OpenBao as
+> the record; rotation driven by a refresh/generation, not scheduled; the claim contract and rollout-safety layers. Two things changed once real
+> building started:
+>
+> 1. **The aggregator moved out of this repo.** It is no longer hand-written platform GitOps — it ships as the W'xOps
+>    [`dexidp` Helm chart](https://github.com/wxops-idp/charts/tree/main/dexidp), a reusable wrapper around the upstream Dex chart. Core's compositions
+>    write records to OpenBao and nothing else; they render no config, install no broker, and restart nothing. `XOIDCConnection` observes the chart's
+>    own config `ExternalSecret` for its Ready condition — Core's only window into "did the broker get every record".
+> 2. **The kinds are renamed and regrouped**, to read as a protocol (ADR-002 already reserves `auth.wxops.cloud` for identity configuration, and
+>    rejects naming a group after a technology): `XDexConnector` → **`XOIDCConnector`**, and a new **`XOIDCConnection`** (which broker, where its
+>    records live) and **`XOIDCStaticPassword`** (a local user — the bootstrap admin, break-glass) that this RFC's first draft did not have.
+>    `XOIDCClient` keeps its name. `scm-team` (RFC-003 Phase 2) ships alongside these and is what makes `XOIDCConnector`'s team allow-list
+>    *generated* rather than hand-maintained — see §The flow, below.
+>
+> Implemented: `oidc-connection`, `oidc-static-password`, `oidc-client`, `oidc-connector` (`package/auth/`). Records, remote-key layout and the
+> gRPC-API alternative were all re-examined against Dex v2.46.0's actual source before building — see §Records in OpenBao and §Alternatives.
 
 ## Summary
 
-Adopt [Dex](https://dexidp.io) as the platform's OpenID Connect issuer and manage its **configuration entirely through Core**, with no operator and no call to
-Dex's API. Two new resources, `XDexConnector` (an upstream Git vendor) and `XOIDCClient` (an application that logs in through Dex), each convert their
-parameters into one record in OpenBao. A single platform-owned External Secrets `ExternalSecret` gathers every record, renders Dex's `config.yaml` into a
-Secret, Dex mounts it, and Reloader restarts Dex when it changes. The Portal authenticates its users through Dex as the first client; OAuth2 Proxy is the second
-consumer of the same contract. Dex itself stays platform infrastructure installed through GitOps. The claims Dex issues are the input to the authorization model
-in [RFC-005](005-git-mapped-authorization.md).
+Adopt [Dex](https://dexidp.io) as the platform's OpenID Connect issuer and manage its **configuration entirely through Core-written OpenBao records**, with
+no operator and no call to Dex's API. Four kinds: **`XOIDCConnection`** (which broker, where its records live), **`XOIDCConnector`** (an upstream Git
+vendor), **`XOIDCClient`** (an application that logs in through the broker) and **`XOIDCStaticPassword`** (a local user — the bootstrap admin,
+break-glass), each converting their parameters into one record in OpenBao. The W'xOps [`dexidp` Helm chart](https://github.com/wxops-idp/charts/tree/main/dexidp)
+— not this repo — gathers every record with its own `ExternalSecret`, renders Dex's `config.yaml` into a Secret, Dex mounts it, and Reloader restarts Dex
+when it changes; `XOIDCConnection` only observes that chart-owned `ExternalSecret`'s Ready condition. `XOIDCConnector`'s per-org team allow-list is
+**generated** from [`XScmTeam`](003-scm-connections-and-resources.md)s labelled for login, not hand-maintained. The Portal authenticates its users through
+Dex as the first client; OAuth2 Proxy is the second consumer of the same contract. Dex itself stays platform infrastructure installed through GitOps (the
+chart). The claims Dex issues are the input to the authorization model in [RFC-005](005-git-mapped-authorization.md).
 
 ## Motivation
 
@@ -36,51 +53,65 @@ nothing today answers who a user is. Three gaps:
 
 | In this RFC | Not in this RFC |
 |---|---|
-| `XDexConnector` and `XOIDCClient` resources and the OpenBao record each writes | Installing and operating Dex itself (platform GitOps) |
-| The aggregating `ExternalSecret` that renders Dex's config, and Reloader | The authorization model — Kyverno, ABAC, RBAC mapping (RFC-005) |
+| `XOIDCConnection`, `XOIDCConnector`, `XOIDCClient`, `XOIDCStaticPassword` and the OpenBao record each writes | Installing and operating Dex itself — the W'xOps `dexidp` chart, platform GitOps |
+| `XOIDCConnection` observing the chart's own aggregating `ExternalSecret`, and Reloader (both chart-owned) | The authorization model — Kyverno, ABAC, RBAC mapping (RFC-005) |
 | The claim contract Portal and OAuth2 Proxy rely on | Deploying OAuth2 Proxy or the Portal |
 | Rotation of client secrets | **Tenant-owned** clients (Phase 4, gated on a store-scope question below) |
+| `XOIDCConnector`'s team allow-list generated from `XScmTeam` | `scm-team` itself (RFC-003 Phase 2) |
 
 ### Why configuration, not an operator or Dex's API
 
-Dex reads its connectors and its static clients from one config file. Managing them through Dex's gRPC API or its Kubernetes storage objects would tie Core to
-Dex internals — an API that cannot manage connectors at all (a dynamic connector API has only been proposed upstream,
-[dexidp/dex#1472](https://github.com/dexidp/dex/issues/1472)), or a storage format Dex may change — and would need either a controller or a stack of
-hand-derived objects. Managing the **config file** uses the one interface Dex documents as its configuration contract, works with any Dex storage backend, and
-treats connectors and clients identically. The price is that a change restarts Dex. That price is accepted (see Drawbacks) and bounded (see Rollout safety).
+Dex reads its connectors and its static clients from one config file. **Re-checked against Dex v2.46.0's actual source** (not assumed, as this RFC's
+first draft had to): the gRPC API now covers all three object types CRUD (clients, passwords, and — since
+[dexidp/dex#1472](https://github.com/dexidp/dex/issues/1472) landed — connectors), gated behind `DEX_API_CONNECTORS_CRUD` (default off). That closes the
+original objection that the API "cannot manage connectors at all." It does not change the decision: no IaC tool covers all three object types today
+(`marcofranssen/dexidp`'s Terraform provider has `client` only; `loafoe/provider-dex`'s Crossplane provider has no password resource and replaces Dex's
+own API module with a fork) — building that tooling is its own project, not a side effect of this one. Managing the **config file** uses the one interface
+Dex documents as its configuration contract, works with any Dex storage backend, treats connectors and clients identically, and needs no new
+provider or controller. The price is that a change restarts Dex. That price is accepted (see Drawbacks) and bounded (see Rollout safety). See
+Alternatives for the full comparison, kept for the record.
 
 ### The flow
 
 ```mermaid
 flowchart LR
-    U["UI / Git"] -->|"XR"| X["XDexConnector /<br/>XOIDCClient"]
-    X -->|"Core composition converts"| P["PushSecret<br/>(+ Password generator for clients)"]
+    U["UI / Git"] -->|"XR"| X["XOIDCConnector /<br/>XOIDCClient / XOIDCStaticPassword"]
+    X -->|"Core composition converts"| P["PushSecret<br/>(+ ESO Password generator for clients/passwords)"]
     P -->|"one record per resource"| B["OpenBao"]
-    B -->|"find by prefix"| A["Aggregator ExternalSecret<br/>(platform-owned, GitOps)"]
+    B -->|"scans paths"| A["dexidp chart's own ExternalSecret<br/>(not Core — a separate repo)"]
     A -->|"renders config.yaml"| S["Secret dex-config"]
     S -->|"mounted"| D["Dex"]
-    S -.->|"change detected"| R["Reloader"]
+    S -.->|"change detected"| R["Reloader<br/>(chart-owned)"]
     R -->|"rolling restart"| D
     B -->|"ExternalSecret<br/>(client_id, client_secret)"| C["Portal / OAuth2 Proxy"]
+    X2["XOIDCConnection"] -.->|"observes Ready"| A
 ```
 
 The UI never talks to OpenBao or ESO. It writes an XR — through Git or the API, per [open decision 3](../_archives/ROADMAP.md#open-decisions) — and Core does
-the conversion. A commit carries a declaration, never a secret value, and `status` carries only the OpenBao path.
+the conversion. A commit carries a declaration, never a secret value, and `status` carries only the OpenBao path. `XOIDCConnection` is the one kind that reads
+back from the chart's side: it observes the chart's aggregating `ExternalSecret`'s Ready condition, so a malformed record surfaces on the connection's own
+status rather than only in the chart's logs.
 
 ### Records in OpenBao
 
-One record per resource, all under the platform store, and `remoteKey` omits the KV mount prefix per the [Vault path
-convention](../../CLAUDE.md#vault-path-convention):
+One record per resource, under the platform store (mount `platform`), and `remoteKey` omits the KV mount prefix per the [Vault path
+convention](../../CLAUDE.md#vault-path-convention). The prefix is `<vendor>` (the broker — `dex` is the only one today, named on `XOIDCConnection`), matching
+the `dexidp` chart's own `dynamicConfig.sources` defaults exactly, so no chart value needs changing:
 
 | Resource | `remoteKey` | Full logical path |
 |---|---|---|
 | Connector | `dex/connectors/{connectorId}` | `platform/dex/connectors/{connectorId}` |
 | Client | `dex/clients/{clientId}` | `platform/dex/clients/{clientId}` |
+| Client (the secret — written by the operator in `static`, by Core in `generate`) | `dex/clients-def/{clientId}` | `platform/dex/clients-def/{clientId}` |
+| Static password (the record Dex reads) | `dex/users/{username}` | `platform/dex/users/{username}` |
+| Static password (the password — written by the operator in `static`, by Core in `generate`, with `generation`) | `dex/users-def/{username}` | `platform/dex/users-def/{username}` |
 
-A **client record** holds `client_id`, `client_secret`, `name`, `redirect_uris` (JSON array), `public`, `owner` and `generation`. A **connector record** holds
-`type`, `id`, `name`, `client_id`, `client_secret` (the vendor OAuth application's credentials), and `config`, a JSON object of the connector's non-secret
-settings. The same record serves two readers: the aggregator reads all fields, and a consuming application's own `ExternalSecret` reads just `client_id` and
-`client_secret`.
+A **client record** holds `id`, `name`, `redirectURIs` (JSON array), and one of `secret` / `secretEnv` / `public`. A **connector record** holds `type`, `id`,
+`name`, and `config` — a JSON object carrying the vendor OAuth application's `clientID`/`clientSecret` alongside the connector's non-secret settings
+(`orgs`, `redirectURI`, `teamNameField`, …; the exact shape differs per vendor, see `XOIDCConnector`'s own page). A **static-password record** holds `email`,
+`username`, `name`, `userID`, `groups`, and a bcrypt `hash` — never the plaintext, which lives only at the `users-def` path for a human to read once. The
+same connector/client record serves two readers: the chart's aggregator reads every field, and a consuming application's own `ExternalSecret` reads just
+`client_id`/`client_secret` (or the client record's `secret`).
 
 External Secrets Operator documents OpenBao as supported through its Vault provider (tested upstream with ESO v0.16.1 and OpenBao v2.2.0), so the store
 definition changes and nothing else does. All records are in the platform store in this RFC by design — see *Tenant clients*.
@@ -89,27 +120,40 @@ definition changes and nothing else does. All records are in the platform store 
 
 ```yaml
 apiVersion: auth.wxops.cloud/v1alpha1
-kind: XDexConnector
+kind: XOIDCConnection
+metadata:
+  name: dex
+spec:
+  parameters:
+    vendor: dex                              # enum [dex]; also the remote-key prefix every oidc-* kind writes under
+    issuer: https://idp.wxops.local          # must equal the dexidp chart's own dynamicConfig.base.issuer
+    secretStoreRef: {name: vault-platform}
+    config: {namespace: dex, externalSecretName: dex-config}   # identifies the chart's own ExternalSecret, observed for status
+status:
+  created: true
+  ready: true            # the chart's config ExternalSecret reports Ready: "True" — never that Dex has reloaded
+  callbackUrl: https://idp.wxops.local/callback
+```
+
+```yaml
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XOIDCConnector
 metadata:
   name: github
 spec:
   parameters:
+    connectionRef: {name: dex}
     connectorId: github
-    type: github                 # github | gitlab | gitea
-    name: GitHub
-    issuer: https://dex.example.com     # builds the connector's callback URL
-    scmRef: {name: github-wxops}        # optional: take vendor and baseUrl from an XScmConnection instead of the two fields below
-    oauthAppRef: {name: dex-github}     # optional: take client id and secret from an XScmOAuthApp's OpenBao record
-    baseUrl: ""                  # GitHub Enterprise / self-hosted GitLab / Gitea; empty for the SaaS host
-    organizations:               # github: restrict to orgs, and optionally teams
-      - name: wxops
+    scmRef: {name: github-wxops}        # the vendor ("gitea"/"github") becomes the broker connector `type`; baseUrl becomes hostName/baseURL
+    oauthAppRef: {name: dex-github}     # client id/secret read from this XScmOAuthApp's OpenBao record
+    orgs:                                # per org, every ready XScmTeam labelled scm.wxops.cloud/oidc-login: "true" in this org
+      - name: wxops                      # contributes its team automatically — unioned with any listed here by hand
         teams: []
-    groups: []                   # gitlab: restrict to groups
-    credentialsSecretRef: {name: dex-github-oauth, namespace: dex}   # the vendor OAuth application's client_id / client_secret
 status:
   created: true
   ready: true
-  vault: {path: platform/dex/connectors/github}
+  vaultKey: platform/dex/connectors/github
+  teams: {wxops: [platform-team, rocket-team]}   # the fully resolved per-org team list — what will appear in `groups`
 ```
 
 ```yaml
@@ -119,51 +163,70 @@ metadata:
   name: portal
 spec:
   parameters:
+    connectionRef: {name: dex}
     clientId: wxops-portal
-    name: W'xOps Portal
+    displayName: W'xOps Portal
     redirectUris: [https://portal.example.com/auth/callback]
     public: false                # true = no secret, PKCE only, for browser-only apps
     owner: platform              # platform only in this RFC; see Tenant clients
+    secret: {source: generate}   # or {source: static} reading <vendor>/clients-def/<clientId> — no OpenTofu, no external provider; ESO's own Password generator
     rotation:
-      interval: 2160h            # ~90 days; omit to never rotate on a schedule
       generation: 1              # bump to rotate now
 status:
   created: true
   ready: true
   clientId: wxops-portal         # the secret never appears in status
-  vault: {path: platform/dex/clients/wxops-portal}
+  vaultKey: platform/dex/clients/wxops-portal
 ```
 
 Both expose `status.created` and `status.ready` per the [status contract](../../docs/api-reference/status-contract.md). **What `ready` means here is narrower
-than it sounds:** the record is written to OpenBao. Whether Dex has *loaded* it is a property of the aggregator and Dex, not of the XR, and Core cannot observe
-it. That is a stated limitation, not an oversight.
+than it sounds:** the record is written to OpenBao. Whether Dex has *loaded* it is a property of the chart's aggregator and Dex, not of the XR, and Core
+cannot observe it directly — `XOIDCConnection.status.ready` is the closest proxy, since it reflects the aggregator's own render succeeding.
 
-The vendor OAuth application behind a connector is an [`XScmOAuthApp`](003-scm-connections-and-resources.md), and a connector may point at it with `oauthAppRef`
-(and at the host with `scmRef`). **The two stay independent:** a connector without those references still works from `credentialsSecretRef` and explicit
-`type`/`baseUrl`, so Dex does not require SCM, and SCM does not require Dex. The referenced form exists so the two can be integrated — one OAuth app record in
-OpenBao serving both an SCM resource and a Dex connector — and is built after RFC-003's Phase 1.
+The vendor OAuth application behind a connector is an [`XScmOAuthApp`](003-scm-connections-and-resources.md), read through `oauthAppRef` — its
+`status.vaultKey` is read, not assumed, so an app pushed to a non-conventional key is still found, and its `status.clientId` is read directly (it is not
+secret) rather than round-tripped through OpenBao a second time. `scmRef` supplies the vendor and base URL from the matching `XScmConnection`. Dex does
+not require SCM to exist — a connector could in principle be built without these references — but this RFC only builds the referenced form, since every
+upstream connector this platform needs already has an `XScmConnection` and an `XScmOAuthApp`.
 
 ### Compositions
 
-Each is a `function-kcl` composition, per the repo's rule for multi-resource compositions, emitting `provider-kubernetes` `Object`s:
+`XOIDCConnection` is a thin `function-patch-and-transform` pipeline — one `provider-kubernetes` `Object` with `managementPolicies: ["Observe"]` on the
+chart's own config `ExternalSecret`; it writes nothing. The three record kinds are each `function-extra-resources` + `function-kcl` (the
+`tenant-database` pattern), reading `XOIDCConnection` by the `crossplane.io/composite` label Crossplane stamps on every root XR with its own name — no
+user-written discovery label needed:
 
-- **`XOIDCClient`** — a Password generator; a `PushSecret` sourcing it and using `spec.template` to build the whole record in one write
-  (the same technique `platform-database-clusters` uses for its pooler connection strings). The generated secret never exists in Git or in
-  an XR field. For `public: true` there is no generator and no `client_secret`.
-- **`XDexConnector`** — a `PushSecret` sourcing `credentialsSecretRef`, with a template that merges in the connector's non-secret
-  configuration.
+- **`XOIDCClient` / `XOIDCStaticPassword`** — the shared "generate or static" pattern, as **two `ExternalSecret`s**, because ESO refreshes one
+  `ExternalSecret` atomically (every `data`/`dataFrom` entry, the whole template), and a generator or `bcrypt`'s random salt redraws on every refresh:
+  - **ESO1, `generate` only, owns the secret.** The `Password` generator → `{password|secret, generation}` → its own `PushSecret` →
+    `<vendor>/{users,clients}-def/<id>` (the same path `static` mode's operator writes by hand). `refreshPolicy: Periodic` with a `99999h`
+    interval: only a change to its top-level `force-sync` annotation, which carries `rotation.generation`, refreshes it — so only a deliberate bump
+    ever re-runs the generator.
+  - **ESO2, both modes, owns the record.** It reads the secret from `<kind>-def` through a plain `data[].remoteRef` (the same path whichever of a
+    generator or the operator put it there — the secret never appears in this resource's `spec`), builds the whole record in one render — for
+    `XOIDCStaticPassword`, including `{{ .password | bcrypt }}` (ESO v2's template engine merges in Sprig) — and pushes it. `refreshPolicy:
+    OnChange`, so any field edit syncs on its own without touching the generator. In `generate` mode its render fails until `<kind>-def` carries
+    `rotation.generation`, so a bump never settles on the previous secret.
+  - The one accepted cost: `bcrypt` re-salts on every ESO2 render, so an unrelated edit changes the record's `hash` string (the password is
+    unchanged) and `dex-config` changes once. The generated/read secret never exists in Git or in an XR field. `public: true` skips all of it — the
+    record carries `"public": true`, built from literal XR fields with no remote data source at all.
+- **`XOIDCConnector`** — reads the `XScmConnection` (vendor, base URL) and the `XScmOAuthApp` (`status.clientId`, `status.vaultKey`) by the same
+  composite-label lookup, plus every `XScmTeam` labelled `scm.wxops.cloud/oidc-login: "true"` (a label-value selector, no per-XR name). It builds each
+  org's team list by unioning the hand-listed `teams` with every matching team's `status.dexTeam`, then an `ExternalSecret` reads the oauth app's
+  `client_secret` from OpenBao and templates the connector record.
 
-Neither adds a Crossplane provider or any RBAC: `provider-kubernetes` already holds the grant for `externalsecrets`, `pushsecrets` and `passwords` in
-`providers/rbac-provider-kubernetes.yaml`, and the compositions still emit no RBAC.
+None of this adds a Crossplane provider or any RBAC: `provider-kubernetes` already holds the grant for `externalsecrets`, `pushsecrets` and
+`generators.external-secrets.io/passwords` in `providers/rbac-provider-kubernetes.yaml`, and the compositions still emit no RBAC. No OpenTofu, no
+external Terraform provider, anywhere in this family.
 
-### The aggregator
+### The aggregator — owned by the `dexidp` chart, not this repo
 
-One `ExternalSecret`, platform-owned, in GitOps beside Dex — deliberately not a Core resource, since Dex is infrastructure Core does not own. It is shipped as
-`providers/dex-config.yaml`. It collects every record under `dex/connectors/` and `dex/clients/` and renders Dex's file. The shape (not the final syntax — how
-`dataFrom.find` and `rewrite` behave on OpenBao KV v2 is the spike's first question):
+The aggregating `ExternalSecret` is **not a Core resource and not hand-written platform GitOps**, as this RFC's first draft proposed — it ships as part
+of the W'xOps [`dexidp` Helm chart](https://github.com/wxops-idp/charts/tree/main/dexidp), a reusable wrapper around the upstream Dex chart, in its own
+repository. Its real, working shape (confirmed against the chart's source, not illustrative):
 
 ```yaml
-# illustrative shape
+# dexidp chart — templates/externalsecret-config.yaml, abbreviated
 spec:
   refreshInterval: 1m
   target:
@@ -172,38 +235,54 @@ spec:
       engineVersion: v2
       data:
         config.yaml: |
-          issuer: https://dex.example.com
-          storage: {...}                 # fixed platform settings live here, in GitOps
-          connectors:
-            # for each connector record: type, id, name, config + client_id/client_secret
-          staticClients:
-            # for each client record: id, name, secret, redirectURIs, public
+          {{- $cfg := fromJson `__BASE_JSON__` -}}   # dynamicConfig.base — issuer, storage, web, expiry; a chart value, in Git
+          # ... merges $cfg.connectors/staticClients/staticPasswords with every record found below ...
   dataFrom:
     - find: {path: dex/connectors/, name: {regexp: ".*"}}
+      rewrite: [{regexp: {source: "^(.*)$", target: "connector_$1"}}]
     - find: {path: dex/clients/,    name: {regexp: ".*"}}
+      rewrite: [{regexp: {source: "^(.*)$", target: "client_$1"}}]
+    - find: {path: dex/users/,      name: {regexp: ".*"}}
+      rewrite: [{regexp: {source: "^(.*)$", target: "user_$1"}}]
 ```
 
-Dex's fixed settings — issuer, storage, web listener, token expiry — are part of this template, reviewed in Git like everything else. Each change to a record
-changes the rendered Secret at the next `refreshInterval`, so Dex restarts at most once per interval however many records changed.
+Dex's fixed settings — issuer, storage, web listener, token expiry — are the chart's own `dynamicConfig.base` value, reviewed in Git like everything
+else, but in the chart's repository, not this one. The template **fails closed**: a malformed record (missing field, duplicate id, a plaintext
+password where a bcrypt hash is required) fails the whole render, and ESO leaves the previous `dex-config` Secret in place rather than writing a half-good
+one. `XOIDCConnection.status.message` surfaces that failure's condition message. Each change to a record changes the rendered Secret at the next
+`refreshInterval`, so Dex restarts at most once per interval however many records changed.
 
 ### Reloader
 
-Stakater's [Reloader](https://github.com/stakater/Reloader), an open-source controller, restarts a workload when a Secret or ConfigMap it uses changes. The
-annotation naming `dex-config` goes on Dex's Deployment in the Helm values, once. Consumers (Portal, OAuth2 Proxy) carry the annotation for the Secret their own
-`ExternalSecret` produces. This is the only add-on beyond what the stack has; it is not an operator for Dex and holds no Dex-specific logic.
+Stakater's [Reloader](https://github.com/stakater/Reloader), an open-source controller, restarts a workload when a Secret or ConfigMap it uses changes.
+The `dexidp` chart sets its annotation on Dex's own Deployment by default (`podAnnotations: {reloader.stakater.com/auto: "true"}`) — this is chart
+configuration, not something Core installs or manages. Consumers (Portal, OAuth2 Proxy) carry the same annotation for the Secret their own
+`ExternalSecret` produces, in their own charts/manifests.
 
 ### Secrets and rotation in OpenBao
 
 **OpenBao does not rotate a KV secret by itself.** It is the store of record: versioned KV v2 (every rotation is a new version, so the history answers *when did
-this change*), per-path ACLs, and an audit log. Rotation is *driven* by ESO — the client's Password generator produces a new value on each `refreshInterval` of
-the `PushSecret`, which `rotation.interval` sets, and `generation` forces one on demand. Both are visible in Git, as a value or a commit.
+this change*), per-path ACLs, and an audit log. Rotation is *driven* by ESO — the Password generator produces a new value once per `generation`, not on a
+schedule the way this RFC's first draft proposed. The bump is stamped as the generator `ExternalSecret`'s own top-level `force-sync` annotation:
+ESO compares `GetResourceVersion() = "<generation>-<hash(annotations, labels)>"` against what it last synced, so changing that annotation refreshes a
+`Periodic` / `99999h` resource at once, while any other reconcile renders the same value and refreshes nothing. Both the bump and the resulting record
+are visible in Git/Crossplane as a spec change, not a timer.
 
-A rotation flows: new record in OpenBao → the aggregator renders a new config → Reloader restarts Dex; in parallel the consumer's `ExternalSecret` refreshes and
-Reloader restarts the consumer. A Dex client has exactly one secret, so between those two changes landing, logins for that client can fail. Matching refresh
-intervals keep that window to minutes, and rotation is meant for quiet hours; a real overlap would need dual-secret support Dex does not offer.
+A rotation flows: new record in OpenBao → the chart's aggregator renders a new config → Reloader restarts Dex; in parallel the consumer's `ExternalSecret`
+refreshes and Reloader restarts the consumer. A Dex client has exactly one secret, so between those two changes landing, logins for that client can fail.
+Rotation is meant for quiet hours; a real overlap would need dual-secret support Dex does not offer.
 
-One behaviour to verify: an ESO generator produces a new value each time it is evaluated, so the spike must show that a controller restart or an unrelated edit
-to the `PushSecret` does not rotate a secret nobody asked to rotate.
+The split is what answers this RFC's original open question about generator re-rotation: a generator is only re-evaluated when *its own*
+`ExternalSecret` re-syncs, and nothing but a `generation` bump changes that resource — a controller restart or an edit to any other field does not
+rotate a secret nobody asked to rotate. (A single `ExternalSecret` cannot give this: any refresh re-runs every source in it.)
+
+**What was verified against ESO v1.2.1, and what it overturned** — the first implementation put `refreshInterval: "0"` on one `ExternalSecret` and
+stamped `rotation.generation` into `spec.target.template.metadata.annotations`. That never re-synced, and the cause is in
+`shouldRefreshPeriodic()`: with `refreshInterval <= 0` and one prior sync it returns `false` *before* it compares versions, so no change of any kind
+can refresh it. Established in order, live and in source: `force-sync=$(date +%s)` has no handler in the controller (the constant exists only for
+`ClusterExternalSecret` mirroring) and did nothing; `refreshPolicy: OnChange` fixed field edits but, as one atomic refresh, also re-ran the
+generator on an unrelated `groups` edit; a `PushSecret` watches only its own CR, never its source `Secret`, so `refreshInterval` is its only timing
+lever; and a property-empty `PushSecret` write *replaces* the whole remote document, while property-set writes one key as a raw string.
 
 ### Rollout safety
 
@@ -245,22 +324,24 @@ is settled, and both are RFC-005's territory, so Phase 4 waits on the answer (op
 
 ### Compatibility and change tier
 
-Two new packages, `dex-connector` and `oidc-client`, each `current: unreleased` in `VERSIONS.yaml`; adding a package is `safe`. Each needs its own
-`docs/api-reference/` page, an example, a `package/<name>/README.md`, and test cases. `providers/dex-config.yaml` is new and applied with `make providers`.
-Reloader and Dex are added to the reference stack and `NOTICE` when this lands. They depend on `function-kcl` and the ESO CRDs already in the stack, and on Dex
-and Reloader being present at runtime, which a composition cannot check.
+Four new packages — `oidc-connection`, `oidc-connector`, `oidc-client`, `oidc-static-password` — group `auth`, each `current: unreleased` in
+`VERSIONS.yaml`; adding a package is `safe`. Each has its own `docs/api-reference/` page, an example, a `package/auth/<name>/README.md`, and test cases.
+Nothing is applied with `make providers`: the broker and its Reloader annotation are the `dexidp` chart's job, installed in its own repository, not
+`providers/`. Reference-stack additions here are the chart itself and the providers it depends on (ESO, Reloader) — see `CLAUDE.md`'s reference stack —
+not Dex or Reloader as Core dependencies, since Core never installs either.
 
 ### Testing
 
-- goldens: each connector type; confidential vs `public` client; with and without `rotation.interval`; the rendered record contents
+- goldens: each connector vendor (gitea/github) and field-name difference (`baseURL` vs `hostName`); confidential vs `public` client; `generate` vs
+  `static` for both `XOIDCClient` and `XOIDCStaticPassword`; the rendered record contents, including the bcrypt hash placeholder
 - `observed.yaml` readiness cases via `mkobserved.py`
-- negative cases: `public: true` with `rotation`, empty `redirectUris`, an `http://` redirect outside localhost, an unknown connector type,
-  `owner` other than `platform`
-- invariants: `remoteKey` carries no KV mount prefix; no secret value in any XR field or status; the compositions emit no RBAC
+- negative cases: `public: true` with a `secret` set, empty `redirectUris`, an empty `orgs` list, `secret.source` unknown, `owner` other than `platform`
+- invariants: `remoteKey` carries no KV mount prefix; no secret value in any XR field or status; the compositions emit no RBAC; no OpenTofu/external
+  provider in any `auth` package
 
-Offline tests prove the records Core writes. They do **not** prove that the aggregator template renders a valid Dex config, or that Dex accepts it —
-reimplementing the template in a test would prove the reimplementation, not ESO. That needs a cluster with ESO, OpenBao and Dex, which is the kind-based e2e
-tier and, for the next release, a manual acceptance run.
+Offline tests prove the records Core writes. They do **not** prove that the chart's aggregator template renders a valid Dex config, or that Dex accepts
+it — reimplementing the template in a test would prove the reimplementation, not ESO. That needs a cluster with ESO, OpenBao, the `dexidp` chart and Dex,
+which is the kind-based e2e tier and, for the next release, a manual acceptance run.
 
 ## Drawbacks
 
@@ -282,8 +363,10 @@ tier and, for the next release, a manual acceptance run.
   because Dex reads storage per request. But it couples Core to Dex's Kubernetes storage format, does not work with SQL-backed Dex, needs
   the object's name derived the way Dex derives it, puts the secret in the object's own field, and still leaves connectors in Helm values.
   Held in reserve if restart cost proves unacceptable for a high-churn tenant-client future.
-- **Drive Dex's gRPC API.** The supported runtime-management path for clients, but it needs a component that speaks gRPC to Dex, cannot
-  manage connectors, and no Crossplane provider for it exists.
+- **Drive Dex's gRPC API.** Re-checked against Dex v2.46.0: the API now covers connectors too (behind `DEX_API_CONNECTORS_CRUD`, default off), so the
+  original "cannot manage connectors at all" objection no longer holds. What still holds: no IaC tool covers all three object types today —
+  `marcofranssen/dexidp`'s Terraform provider has `client` only, and `loafoe/provider-dex`'s Crossplane provider has no password resource and depends
+  on a fork of Dex's own API module. Building that tooling first is a real option for a future RFC, not a blocker for this one.
 - **A Dex operator.** Stakater's Dex Config Operator manages connectors, clients and storage through CRDs; its source is not publicly
   reachable and its documentation carries an End User License Agreement, which is at odds with an Apache-2.0 stack. Open-source Dex operators
   exist, and each would be a new controller in a control plane that has chosen not to add one.
@@ -296,31 +379,33 @@ tier and, for the next release, a manual acceptance run.
 
 ## Rollout Plan
 
-The next release covers Phases 0–2.
-
-- [ ] **Phase 0 — spike, before acceptance.** On a scratch cluster with ESO, OpenBao, Dex and Reloader:
-  - `dataFrom.find` (with `rewrite`) on OpenBao KV v2: does it return each record's fields so the template can loop over them?
-  - Does the Dex Helm chart accept an externally created config Secret, and does Reloader restart a Helm-owned Deployment from an annotation?
-  - Can a `PushSecret` template combine a generated password with the client's other fields in a single write?
-  - Does an ESO generator rotate on a controller restart or an unrelated edit?
-  - Does an aggregator render error leave the previous Secret in place, and does a bad config stall under `maxUnavailable: 0`?
-  - Which connector option makes the `groups` claim carry team slugs?
-- [ ] **Phase 1 — connectors.** `dex-connector`, the aggregator, `providers/dex-config.yaml`, Reloader on Dex. Connectors move from hand-kept
-  Helm values into Core. Against a scratch Dex first, then the real one.
-- [ ] **Phase 2 — the Portal's client.** `oidc-client` for `owner: platform`, confidential and public clients, manual rotation through
-  `generation`. The Portal registered as `wxops-portal`.
-- [ ] **Phase 3 — scheduled rotation.** `rotation.interval`, with the overlap window measured, not assumed.
+- [x] **Phase 0 — spike, mostly answered by building, not a scratch cluster.** `dataFrom.find`/`rewrite` and the fail-closed template are confirmed
+  from the `dexidp` chart's own source and tests, not a live run. **Answered on a real cluster**: a generator re-ran under `OnChange` on an
+  unrelated edit and `refreshInterval: "0"` never re-synced at all — hence the two-`ExternalSecret` split (see *Secrets and rotation*).
+  **Still open**: does `bcrypt` (Sprig, via ESO's template engine) produce a hash the chart accepts; does the
+  `scm.wxops.cloud/oidc-login` label selector return teams reliably at scale; does a bad config actually stall under the chart's `maxUnavailable`
+  setting. Which connector option carries team slugs is **settled**: `teamNameField: "slug"`, always requested by `XOIDCConnector` on GitHub.
+- [x] **Phase 1 — connectors.** `oidc-connection`, `oidc-connector`, with team generation from labelled `XScmTeam`s (not hand-kept Helm values, and not
+  the aggregator pattern originally proposed — the chart owns that). Implemented; cluster acceptance (a real login) still pending.
+- [x] **Phase 2 — the Portal's client.** `oidc-client` for `owner: platform`, confidential and public clients, manual rotation through `generation`.
+  Implemented; the Portal's own registration as `wxops-portal` is for the Portal's own repository to apply.
+- [ ] **Phase 2.5 — local users.** `oidc-static-password`, not in the original plan: the bootstrap admin and break-glass accounts, needed before any
+  upstream connector exists.
+- [ ] **Phase 3 — scheduled rotation.** Superseded by the `rotation.generation` bump (see *Secrets and rotation*) for on-demand rotation; a
+  *scheduled* rotation (rotate every *N* days with no commit) is still open and would need its own mechanism, since nothing here does that today.
 - [ ] **Phase 4 — tenant clients and OAuth2 Proxy**, after the store-scope question is settled.
-- [ ] **Release deliverables** for Phases 1–2: the two packages with tests, `docs/api-reference/` pages and examples, `VERSIONS.yaml`
-  entries, the README packages table, the `CLAUDE.md` package list and reference stack, and `NOTICE`.
+- [x] **Release deliverables** for Phases 1–2.5: four packages with tests, `docs/api-reference/` pages and examples, `VERSIONS.yaml` entries, the
+  README packages table, the `CLAUDE.md` package list and reference stack.
 
-On acceptance, ADRs for: Dex configured through Core-rendered config rather than an operator or Dex's API, OpenBao as the record with ESO as the rotation
-driver, and Reloader as the restart mechanism.
+ADRs recorded on acceptance of this amendment: Dex configured through Core-written OpenBao records with delivery owned by the `dexidp` chart (not an
+operator, not Dex's API, not a Core-owned aggregator); stable secrets (a client secret, a password) held in their own generation-gated
+`ExternalSecret`, separate from the record that is free to react to any field edit, rather than regenerated on a schedule.
 
 ## Open Questions
 
-1. **Group claim format.** `org:team` alone collides across vendors. Something like `github:org:team`, prefixed by the connector id, needs
-   deciding before RFC-005 keys on it.
+1. **Group claim format — settled.** `<org>:<team>` (Dex's own format, unprefixed by connector id). A same-named org on two different vendors is a
+   collision in principle, but was decided not to be a concern for this platform's actual topology (one org per connector today); the mitigation path if
+   it ever is — a consumer-side CEL mapping, or `federated_claims.connector_id` — is noted but not built.
 2. **Token and refresh lifetimes.** They set how stale Git membership can be. What is the acceptable bound?
 3. **Tenant clients and store scope.** Where do a tenant's client records live, given the aggregator must read all of them and a tenant's
    application must read its own? This gates Phase 4.

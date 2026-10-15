@@ -114,5 +114,61 @@ packages:
       storage: v1alpha1
     description: Registers a host-side OAuth application (Gitea) or adopts an operator-registered one (GitHub), and publishes its credentials to the secret store.
 
+  scm-team:
+    group: scm
+    path: package/scm/team
+    package:
+      current: unreleased
+    api:
+      served: [v1alpha1]
+      storage: v1alpha1
+    description: Creates (managed) or reads (observed) a team and its membership on Gitea or GitHub, through one generic OpenTofu module.
+
+  # ── auth.wxops.cloud — OIDC configuration, Dex the first broker (RFC-004) ──
+  # Every record kind writes one OpenBao record under its connection's prefix; the W'xOps
+  # `dexidp` Helm chart (wxops-idp/charts/dexidp) owns the aggregator that turns those
+  # records into a running broker's config. Core never runs a broker and never writes
+  # Dex's own fixed settings (issuer, storage, expiry) — those are chart values.
+
+  oidc-connection:
+    group: auth
+    path: package/auth/oidc-connection
+    package:
+      current: unreleased
+    api:
+      served: [v1alpha1]
+      storage: v1alpha1
+    description: Observes the dexidp chart's config ExternalSecret and publishes which broker, issuer and remote-key prefix every other oidc-* resource writes under.
+
+  oidc-static-password:
+    group: auth
+    path: package/auth/oidc-static-password
+    package:
+      current: unreleased
+    api:
+      served: [v1alpha1]
+      storage: v1alpha1
+    description: A local broker user (bootstrap admin, break-glass), ESO-generated or operator-defined, pushed to OpenBao as a bcrypt-hashed record.
+
+  oidc-client:
+    group: auth
+    path: package/auth/oidc-client
+    package:
+      current: unreleased
+    api:
+      served: [v1alpha1]
+      storage: v1alpha1
+    description: A downstream OAuth client that logs in through the broker, ESO-generated or operator-defined, pushed to OpenBao.
+
+  oidc-connector:
+    group: auth
+    path: package/auth/oidc-connector
+    package:
+      current: unreleased
+    api:
+      served: [v1alpha1]
+      storage: v1alpha1
+    description: An upstream Git vendor connector, with its team allow-list generated from labelled XScmTeams, credentials read from an XScmOAuthApp, pushed to OpenBao.
+
 # Utility compositions — not yet published as standalone OCI packages.
 utilities:

@@ -1,0 +1,116 @@
+apiVersion: apiextensions.crossplane.io/v2
+kind: CompositeResourceDefinition
+metadata:
+  name: xoidcconnectors.auth.wxops.cloud
+spec:
+  group: auth.wxops.cloud
+  scope: Cluster
+  names:
+    kind: XOIDCConnector
+    plural: xoidcconnectors
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - parameters
+              properties:
+                parameters:
+                  type: object
+                  required:
+                    - connectionRef
+                    - connectorId
+                    - scmRef
+                    - oauthAppRef
+                    - orgs
+                  properties:
+                    connectionRef:
+                      type: object
+                      description: The XOIDCConnection this connector belongs to — its vendor names the remote-key prefix.
+                      required:
+                        - name
+                      properties:
+                        name:
+                          type: string
+                    connectorId:
+                      type: string
+                      description: |
+                        Immutable — part of every `sub` the broker issues. Also this resource's own
+                        identifier: the remote key is `<vendor>/connectors/<connectorId>`.
+                      pattern: '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
+                    displayName:
+                      type: string
+                      default: ""
+                    scmRef:
+                      type: object
+                      description: |
+                        The XScmConnection this connector authenticates against — its vendor becomes
+                        the broker connector `type`, and its `baseUrl` the connector's own base URL.
+                      required:
+                        - name
+                      properties:
+                        name:
+                          type: string
+                    oauthAppRef:
+                      type: object
+                      description: |
+                        The XScmOAuthApp whose client id/secret this connector uses. Its
+                        `status.vaultKey` is read, not assumed — so an app pushed to a
+                        non-conventional key is still found.
+                      required:
+                        - name
+                      properties:
+                        name:
+                          type: string
+                    orgs:
+                      type: array
+                      description: |
+                        Which orgs (and which of their teams) may sign in. An empty list is rejected
+                        — it would admit every host user. Per org, every ready `XScmTeam` labelled
+                        `scm.wxops.cloud/oidc-login: "true"`, bound to this same `scmRef`, in this
+                        org, contributes its team automatically — union'd with any listed by hand
+                        under `teams`, so a team not modelled as an `XScmTeam` can still be added.
+                      items:
+                        type: object
+                        required:
+                          - name
+                        properties:
+                          name:
+                            type: string
+                          teams:
+                            type: array
+                            items:
+                              type: string
+                            default: []
+                      minItems: 1
+            status:
+              type: object
+              properties:
+                created:
+                  type: boolean
+                  description: |
+                    True once the record has been pushed at least once.
+
+                    Absent — not false — until then. Treat absent as false.
+                ready:
+                  type: boolean
+                  description: True when the record is in sync. Equal to `created` by construction.
+                vaultKey:
+                  type: string
+                  description: Where the record was pushed, inside the store.
+                teams:
+                  type: object
+                  description: |
+                    Per org, the full team list this connector ended up with — generated team names
+                    unioned with any listed by hand — so what will actually appear in a `groups`
+                    claim is visible without reading the pushed record itself.
+                  additionalProperties:
+                    type: array
+                    items:
+                      type: string

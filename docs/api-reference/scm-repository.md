@@ -23,7 +23,7 @@ credentials error.
 | `scmRef.name` | `string` | yes | — | The `XScmConnection` to act through. Carries the base URL, org and token. There is no per-resource `org` override — the connection is the single source, and a `/` in its `org` is rejected there (nested GitLab groups are not v1, and RFC-005's owner label cannot carry one). |
 | `vendor` | `string` (`gitea`, `github`) | yes | — | Must match `scmRef`'s own `vendor` — picks which Terraform provider's module runs, before the connection is even read. See the note above. |
 | `repoName` | `string` | yes | — | Repository name. Renaming creates a new repository, so treat it as immutable. |
-| `mode` | `string` (`managed`, `observed`) | | `managed` | `managed` creates and owns the repository; `observed` only reads it, through a data source, and never writes or deletes it. |
+| `mode` | `string` (`managed`, `observed`) | | `managed` | `managed` creates and owns the repository; `observed` only reads it, through a data source, and never writes or deletes it. **Immutable** — switching `managed` → `observed` would make OpenTofu destroy the host object, so the API server rejects any change; delete and recreate the XR instead. |
 | `description` | `string` | | `""` | |
 | `visibility` | `string` (`private`, `public`) | | `private` | Deliberately the opposite of `XGiteaRepository`, whose default was public. `internal` exists on GitHub Enterprise and GitLab but not Gitea, so it is not offered. |
 | `defaultBranch` | `string` | | `main` | On GitHub this needs the branch to exist, so it is applied only when `autoInit` is true. |

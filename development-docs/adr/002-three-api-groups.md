@@ -22,8 +22,8 @@ Split the API by trust boundary, not by technology:
 
 | Group | Holds | Audience |
 |---|---|---|
-| `scm.wxops.cloud` | `XScmConnection`, `XScmOrg`, `XScmTeam`, `XScmUser`, `XScmRepository`, `XScmOAuthApp` | tenants (all but `XScmConnection`, which is platform-only) |
-| `auth.wxops.cloud` | `XDexConnector`, `XOIDCClient` | platform operators |
+| `scm.wxops.cloud` | `XScmConnection`, `XScmRepository`, `XScmOAuthApp`, `XScmTeam` (`XScmOrg`/`XScmUser` rejected, not pending) | tenants (all but `XScmConnection`, which is platform-only) |
+| `auth.wxops.cloud` | `XOIDCConnection`, `XOIDCConnector`, `XOIDCClient`, `XOIDCStaticPassword` | platform operators |
 | `platform.wxops.cloud` | `XTenantApp`, `XTenantDatabase`, `XPlatformDatabaseCluster`, `XObjectBucket`, `XRandomPassword` | tenants and platform |
 
 - **New kinds start in their group; released kinds do not move.** Nothing Git-related is created in `platform` from now on.

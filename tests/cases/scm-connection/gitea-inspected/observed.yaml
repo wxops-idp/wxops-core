@@ -1,0 +1,49 @@
+# Mocked observed state: the ExternalSecret reports Ready, and the inspect Workspace has applied.
+# Workspace outputs are all strings; the composition converts counts to integers and the *_names
+# JSON strings to arrays.
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: credentials
+  name: gitea-internal-credentials
+status:
+  atProvider:
+    manifest:
+      status:
+        conditions:
+          - reason: SecretSynced
+            status: 'True'
+            type: Ready
+  conditions:
+    - reason: Available
+      status: 'True'
+      type: Ready
+    - reason: ReconcileSuccess
+      status: 'True'
+      type: Synced
+---
+apiVersion: opentofu.upbound.io/v1beta1
+kind: Workspace
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: inspect
+  name: gitea-internal-inspect
+status:
+  atProvider:
+    outputs:
+      org_exists: 'true'
+      org_name: wxops-idp
+      org_id: '7'
+      org_url: http://gitea-http.gitea.svc.cluster.local:3000/wxops-idp
+      repositories_count: '2'
+      repositories_names: '["payment-api","web"]'
+      teams_count: '3'
+      teams_names: '["Developers","Owners","Reviewers"]'
+  conditions:
+    - reason: Available
+      status: 'True'
+      type: Ready
+    - reason: ReconcileSuccess
+      status: 'True'
+      type: Synced

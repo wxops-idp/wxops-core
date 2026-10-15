@@ -1,0 +1,30 @@
+# A team on the connection above. `vendor` must match the connection's own — see
+# XScmTeam.spec.parameters.vendor and ADR-004. The oidc-login label admits this team's members
+# through Dex once an XOIDCConnector lists the connection's org — see package/auth/oidc-connector.
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmTeam
+metadata:
+  name: rocket-team-developers
+  labels:
+    wxops.cloud/owner: rocket-team
+    scm.wxops.cloud/oidc-login: "true"
+spec:
+  parameters:
+    scmRef:
+      name: gitea-rocket-team
+    vendor: gitea
+    teamName: Developers
+    description: Rocket squad developers
+    permission: write
+    units: [code, issues, pulls]
+    repositories:
+      - rocket-api
+    # includeAllRepositories, canCreateRepos: Gitea only.
+    # privacy, parentTeamId, notificationSetting: GitHub only — not set here, since vendor: gitea.
+    members:
+      - username: alice
+      - username: bob
+        # role is GitHub-only — a maintainer can add/remove members and edit most team settings
+        # from GitHub's own UI, useful for a team lead. Fails the apply on Gitea if set here.
+    # retain defaults to true — deleting this XR leaves the team in place.
+    # retain: true

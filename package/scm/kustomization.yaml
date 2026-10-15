@@ -10,3 +10,4 @@ resources:
   - connection
   - repository
   - oauth-app
+  - team

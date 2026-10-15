@@ -1,0 +1,86 @@
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmTeam
+metadata:
+  name: rocket-team-developers
+spec:
+  crossplane:
+    resourceRefs:
+      - apiVersion: opentofu.upbound.io/v1beta1
+        kind: Workspace
+        name: rocket-team-developers-2c40af8632cc
+status:
+  conditions:
+    - reason: WatchCircuitClosed
+      status: 'True'
+      type: Responsive
+    - reason: ReconcileSuccess
+      status: 'True'
+      type: Synced
+    - message: 'Unready resources: tf-workspace'
+      reason: Creating
+      status: 'False'
+      type: Ready
+---
+apiVersion: opentofu.upbound.io/v1beta1
+kind: Workspace
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: tf-workspace
+  generateName: rocket-team-developers-
+  labels:
+    crossplane.io/composite: rocket-team-developers
+  name: rocket-team-developers-2c40af8632cc
+  ownerReferences:
+    - apiVersion: scm.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XScmTeam
+      name: rocket-team-developers
+      uid: f84b24b8-366e-5d7f-a9b3-59267751598f
+spec:
+  deletionPolicy: Orphan
+  forProvider:
+    module: "terraform {\n  required_providers {\n    github = { source = \"integrations/github\", version = \"~> 6.13\" }\n  }\n}\n\n# \u2500\u2500 From the XScmConnection Secret (varFiles) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nvariable \"vendor\" {\n  type = string\n  validation {\n    condition     = var.vendor == \"github\"\n    error_message = \"XScmTeam.spec.parameters.vendor is github, but scmRef's XScmConnection resolves to a different vendor. Fix the mismatch on one side.\"\n  }\n}\nvariable \"base_url\" { type = string } # \"\" means github.com\nvariable \"default_org\" {\n  type = string\n  validation {\n    condition     = var.default_org != \"\"\n    error_message = \"GitHub teams are an org concept \u2014 the XScmConnection needs org set (the user layer has no teams).\"\n  }\n}\nvariable \"access\" {\n  type = string\n  validation {\n    condition  \
+      \   = contains([\"write\", \"read\"], var.access)\n    error_message = \"access must be write or read.\"\n  }\n}\nvariable \"token\" {\n  type      = string\n  sensitive = true\n}\n\n# \u2500\u2500 From the XR \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nvariable \"mode\" {\n  type = string\n  validation {\n    condition     = contains([\"managed\", \"observed\"], var.mode)\n    error_message = \"mode must be managed or observed.\"\n  }\n}\nvariable \"team_name\" { type = string }\nvariable \"description\" { type = string }\nvariable \"permission\" {\n  type = string\n  validation {\n    condition     = contains([\"read\", \"write\", \"admin\"], var.permission)\n    error_message = \"permission\
+      \ must be read, write or admin.\"\n  }\n}\nvariable \"units\" { type = string }\nvariable \"unit_permissions\" { type = string }\nvariable \"repositories\" { type = string }\nvariable \"members\" { type = string } # JSON array of {username, role}\nvariable \"include_all_repositories\" { type = bool }\nvariable \"can_create_repos\" { type = bool }\nvariable \"privacy\" {\n  type = string\n  validation {\n    condition     = contains([\"closed\", \"secret\"], var.privacy)\n    error_message = \"privacy must be closed or secret.\"\n  }\n}\nvariable \"parent_team_id\" { type = string }\nvariable \"notification_setting\" {\n  type = string\n  validation {\n    condition     = contains([\"notifications_enabled\", \"notifications_disabled\"], var.notification_setting)\n    error_message = \"notificationSetting must be notifications_enabled or notifications_disabled.\"\n  }\n}\n\nlocals {\n  managed  = var.mode == \"managed\"\n  observed = var.mode == \"observed\"\n\n  # GitHub has no per-unit\
+      \ grants and no team-level admin \u2014 any Gitea-only\n  # customization reaching this module is rejected below, not silently\n  # dropped. See the package README's permission matrix.\n  units_is_default = jsondecode(var.units) == [\"code\", \"issues\", \"pulls\"]\n  no_unit_custom   = local.units_is_default && jsondecode(var.unit_permissions) == {}\n\n  member_list = jsondecode(var.members)\n  # username -> role, for github_team_membership's for_each (which needs a\n  # map, not the list the JSON arrives as).\n  member_roles = { for m in local.member_list : m.username => try(m.role, \"member\") }\n  repo_list    = jsondecode(var.repositories)\n\n  github_permission = { read = \"pull\", write = \"push\", admin = \"admin\" }[var.permission]\n\n  # GitHub slugifies a team's display name for its API identifier (lowercase,\n  # spaces/underscores to hyphens). teamName is used as both here, so a name\n  # outside that shape needs confirming against a real GitHub org (spike item).\n  slug\
+      \ = lower(replace(var.team_name, \" \", \"-\"))\n}\n\nprovider \"github\" {\n  base_url = var.base_url != \"\" ? var.base_url : null\n  owner    = var.default_org\n  token    = var.token\n}\n\n# \u2500\u2500 Org-member gate \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n# GitHub invites a non-member by email and leaves the membership pending, so a wrong username would\n# neither fail nor take effect. members[] must already be in the org; a pending invitee is not.\n# Reading the member list needs the token's user to be a member of the org (an owner, to add anyone).\nlocals {\n  gate = local.managed && length(local.member_list) > 0\n}\n\n# Not summary_only: the member list is only fetched without it.\ndata \"github_organization\"\
+      \ \"this\" {\n  count        = local.gate ? 1 : 0\n  name         = var.default_org\n  summary_only = false\n}\n\nlocals {\n  org_members     = local.gate ? [for u in data.github_organization.this[0].users : lower(u.login)] : []\n  non_org_members = [for m in local.member_list : m.username if !contains(local.org_members, lower(m.username))]\n}\n\nresource \"github_team\" \"this\" {\n  count = local.managed ? 1 : 0\n\n  name                 = var.team_name\n  description          = var.description\n  privacy              = var.privacy\n  parent_team_id       = var.parent_team_id != \"\" ? var.parent_team_id : null\n  notification_setting = var.notification_setting\n\n  lifecycle {\n    precondition {\n      condition     = var.access == \"write\"\n      error_message = \"mode: managed needs a write connection; this XScmConnection is access: read.\"\n    }\n    precondition {\n      condition     = length(local.non_org_members) == 0\n      error_message = \"members must already belong\
+      \ to the org ${var.default_org}; not members: ${join(\", \", local.non_org_members)}. GitHub would only send them an invitation and leave the membership pending, so nothing is applied. Invite them to the org first and wait for them to accept.\"\n    }\n    precondition {\n      condition     = local.no_unit_custom\n      error_message = \"GitHub grants a role per repository, not per unit \u2014 units/unitPermissions are Gitea-only. Use permission with repositories instead.\"\n    }\n    precondition {\n      condition     = !var.include_all_repositories && !var.can_create_repos\n      error_message = \"includeAllRepositories/canCreateRepos are Gitea-only \u2014 GitHub has no team-level equivalent for either. Grant access per repository (repositories), and repository creation is an org-wide GitHub setting outside this kind's scope.\"\n    }\n  }\n}\n\nresource \"github_team_membership\" \"this\" {\n  for_each = local.managed ? local.member_roles : {}\n  team_id  = github_team.this[0].id\n\
+      \  username = each.key\n  role     = each.value\n}\n\nresource \"github_team_repository\" \"this\" {\n  for_each   = local.managed ? toset(local.repo_list) : toset([])\n  team_id    = github_team.this[0].id\n  repository = each.key\n  permission = local.github_permission\n}\n\ndata \"github_team\" \"this\" {\n  count = local.observed ? 1 : 0\n  slug  = local.slug\n}\n\n# \u2500\u2500 Neutral outputs: the same set whatever the host \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\noutput \"id\" {\n  value = local.managed ? tostring(github_team.this[0].id) : tostring(data.github_team.this[0].id)\n}\noutput \"org\" {\n  value = var.default_org\n}\noutput \"base_url\" {\n  value = var.base_url\n}\noutput \"dex_team\" {\n  value = local.managed ? github_team.this[0].slug : data.github_team.this[0].slug\n}\noutput \"exists\" {\n  value = \"true\" # both branches fail the apply outright if the team is absent\n}\n"
+    source: Inline
+    varFiles:
+      - secretKeyRef:
+          key: credentials
+          name: scm-connection-github-wxops-idp
+          namespace: crossplane-system
+        source: SecretKey
+    vars:
+      - key: mode
+        value: managed
+      - key: team_name
+        value: developers
+      - key: description
+        value: Rocket squad developers
+      - key: permission
+        value: write
+      - key: units
+        value: '["code","issues","pulls"]'
+      - key: unit_permissions
+        value: '{}'
+      - key: repositories
+        value: '["rocket-api"]'
+      - key: members
+        value: '[{"role":"maintainer","username":"alice"},{"role":"member","username":"bob"}]'
+      - key: include_all_repositories
+        value: 'false'
+      - key: can_create_repos
+        value: 'false'
+      - key: privacy
+        value: secret
+      - key: parent_team_id
+        value: '42'
+      - key: notification_setting
+        value: notifications_disabled
+  providerConfigRef:
+    name: default

@@ -1,0 +1,18 @@
+# A Gitea upstream connector. Teams come from labelled XScmTeams (see examples/scm-team/xr.yaml) —
+# the platform-team org here needs no hand-listed teams at all once one exists and is labelled.
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XOIDCConnector
+metadata:
+  name: gitea
+spec:
+  parameters:
+    connectionRef:
+      name: dex
+    connectorId: gitea
+    displayName: Gitea
+    scmRef:
+      name: gitea-platform-team
+    oauthAppRef:
+      name: dex-gitea
+    orgs:
+      - name: platform-team

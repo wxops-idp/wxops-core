@@ -62,6 +62,11 @@ spec:
                         deletes it. In `observed` mode the creation fields below are not applied.
                       enum: ["managed", "observed"]
                       default: managed
+                      # A transition rule: evaluated on update, against the stored value. Without it a
+                      # one-word edit takes count from 1 to 0 and the apply destroys the host object.
+                      x-kubernetes-validations:
+                        - rule: "self == oldSelf"
+                          message: "mode is immutable: switching managed -> observed would make OpenTofu destroy the repository on the host (the resources are count = managed ? 1 : 0). Delete and recreate the XR instead; retain: true (the default) leaves the repository in place."
                     repoName:
                       type: string
                       description: Repository name. Immutable in practice — renaming creates a new repository.

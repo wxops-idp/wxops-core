@@ -110,7 +110,7 @@ start-up need a restart. Rotate deliberately, in a quiet window.
 |---|---|---|---|---|
 | `scmRef.name` | string | yes | — | The `XScmConnection` to act through |
 | `appName` | string | yes | — | Application name on the host |
-| `mode` | string | no | `managed` | `managed` (Gitea) or `observed` (any host) |
+| `mode` | string | no | `managed` | `managed` (Gitea) or `observed` (any host). **Immutable** — switching `managed` → `observed` would make OpenTofu destroy the host object, so the API server rejects any change; delete and recreate the XR instead. |
 | `redirectUris` | []string | no | `[]` | At least one required for `managed` |
 | `confidential` | bool | no | `true` | False for a browser-only client (PKCE) |
 | `credentialsSecretRef` | object | no | — | `observed` only: the operator's tfvars Secret |

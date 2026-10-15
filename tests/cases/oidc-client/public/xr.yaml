@@ -1,0 +1,13 @@
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XOIDCClient
+metadata:
+  name: cli
+spec:
+  parameters:
+    connectionRef:
+      name: dex
+    clientId: wxops-cli
+    displayName: W'xOps CLI
+    redirectUris:
+      - http://localhost:8000/callback
+    public: true

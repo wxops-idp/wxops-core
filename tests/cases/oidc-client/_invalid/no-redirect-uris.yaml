@@ -1,0 +1,15 @@
+# expect: parameters.redirectUris
+# expect: should be non-empty
+#
+# At least one redirect URI is required — a client nobody can call back is not useful and likely a
+# mistake, not an intentional "accept none" state.
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XOIDCClient
+metadata:
+  name: no-redirects
+spec:
+  parameters:
+    connectionRef:
+      name: dex
+    clientId: bad-client
+    redirectUris: []

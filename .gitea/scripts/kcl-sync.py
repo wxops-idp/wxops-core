@@ -30,7 +30,10 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT / "tests" / "lib"))
 import packages as P  # noqa: E402
 
-KCL_PACKAGES = ["platform-database-clusters", "tenant-database", "tenant-app"]
+KCL_PACKAGES = [
+    "platform-database-clusters", "tenant-database", "tenant-app",
+    "oidc-static-password", "oidc-client", "oidc-connector",
+]
 
 # The YAML block scalar marker as it appears in composition.yaml.
 # 10 spaces + "source: |" matches the nesting depth of KCLInput.spec.source.

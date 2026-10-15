@@ -1,0 +1,12 @@
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XOIDCStaticPassword
+metadata:
+  name: breakglass
+spec:
+  parameters:
+    connectionRef:
+      name: dex
+    email: breakglass@wxops.cloud
+    username: breakglass
+    secret:
+      source: generate

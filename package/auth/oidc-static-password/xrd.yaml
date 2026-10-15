@@ -1,0 +1,134 @@
+apiVersion: apiextensions.crossplane.io/v2
+kind: CompositeResourceDefinition
+metadata:
+  name: xoidcstaticpasswords.auth.wxops.cloud
+spec:
+  group: auth.wxops.cloud
+  # Cluster-scoped: a local broker user is platform infrastructure (the bootstrap admin, a
+  # break-glass account), not a tenant-facing kind.
+  scope: Cluster
+  names:
+    kind: XOIDCStaticPassword
+    plural: xoidcstaticpasswords
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - parameters
+              properties:
+                parameters:
+                  type: object
+                  required:
+                    - connectionRef
+                    - email
+                    - username
+                  properties:
+                    connectionRef:
+                      type: object
+                      description: The XOIDCConnection this user belongs to — its vendor names the remote-key prefix.
+                      required:
+                        - name
+                      properties:
+                        name:
+                          type: string
+                    email:
+                      type: string
+                      description: The broker signs this user in by email, per the broker's own documented contract.
+                    username:
+                      type: string
+                      description: |
+                        Display login, and the resource's own identifier: the remote key is
+                        `<vendor>/users/<username>` (and `<vendor>/users-def/<username>` for the
+                        human side). Immutable in practice — renaming moves the record to a new key.
+                      pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$'
+                    displayName:
+                      type: string
+                      default: ""
+                    userId:
+                      type: string
+                      description: |
+                        The broker's own stable identifier for this user. Defaults to `username` —
+                        deterministic, never random, so the record never needs reconciling with a
+                        value nobody else holds.
+                      default: ""
+                    groups:
+                      type: array
+                      description: |
+                        Claim groups this user carries at login — independent of any `XScmTeam`, since
+                        this is a local account with no Git membership behind it. Keep this short and
+                        audited; see the package README.
+                      items:
+                        type: string
+                      default: []
+                    secret:
+                      type: object
+                      description: Where the password comes from. See the package README.
+                      required:
+                        - source
+                      properties:
+                        source:
+                          type: string
+                          description: |
+                            `static` reads the `<vendor>/users-def/<username>` key the operator wrote —
+                            its `password` property must be **plaintext**, never a pre-computed hash.
+                            Core computes the bcrypt hash itself; a hash written here gets hashed a
+                            second time and silently never matches.
+                          enum: ["generate", "static"]
+                        generator:
+                          type: object
+                          description: "`generate` only — copied onto the ESO `Password` generator's spec."
+                          properties:
+                            length:
+                              type: integer
+                              default: 32
+                            digits:
+                              type: integer
+                              default: 8
+                            symbols:
+                              type: integer
+                              default: 0
+                            noUpper:
+                              type: boolean
+                              default: false
+                            allowRepeat:
+                              type: boolean
+                              default: false
+                          default: {}
+                    rotation:
+                      type: object
+                      description: |
+                        Bump `generation` to regenerate (`generate`) or to re-read a changed value
+                        (`static`) — the only thing that changes the password. Editing any other
+                        field syncs on its own and leaves the password alone (the hash is re-salted,
+                        so the broker restarts once).
+                      properties:
+                        generation:
+                          type: integer
+                          minimum: 1
+                          default: 1
+                      default: {}
+            status:
+              type: object
+              properties:
+                created:
+                  type: boolean
+                  description: |
+                    True once the record has been pushed at least once.
+
+                    Absent — not false — until then. Treat absent as false.
+                ready:
+                  type: boolean
+                  description: True when the record is in sync. Equal to `created` by construction.
+                userId:
+                  type: string
+                  description: The resolved userId (the XR's own `userId`, or `username` if left unset).
+                vaultKey:
+                  type: string
+                  description: Where the record (not the password) was pushed, inside the store.

@@ -1,0 +1,16 @@
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XOIDCConnector
+metadata:
+  name: gitea
+spec:
+  parameters:
+    connectionRef:
+      name: dex
+    connectorId: gitea
+    displayName: Gitea
+    scmRef:
+      name: gitea-platform-team
+    oauthAppRef:
+      name: dex-gitea
+    orgs:
+      - name: platform-team

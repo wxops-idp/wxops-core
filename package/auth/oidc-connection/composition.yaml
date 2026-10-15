@@ -1,0 +1,111 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: xoidcconnections.auth.wxops.cloud
+  labels:
+    crossplane.io/xrd: xoidcconnections.auth.wxops.cloud
+    channel: stable
+spec:
+  compositeTypeRef:
+    apiVersion: auth.wxops.cloud/v1alpha1
+    kind: XOIDCConnection
+
+  mode: Pipeline
+  pipeline:
+    - step: patch-and-transform
+      functionRef:
+        name: function-patch-and-transform
+      input:
+        apiVersion: pt.fn.crossplane.io/v1beta1
+        kind: Resources
+        resources:
+          # Core writes no broker config: the W'xOps `dexidp` chart (wxops-idp/charts/dexidp)
+          # already renders one ExternalSecret that scans every oidc-* record and builds the
+          # broker's config.yaml. This Object only OBSERVES that ExternalSecret — provider-kubernetes
+          # never creates, updates or deletes it — so Core's only window into "did the broker get
+          # every record" is that ExternalSecret's own Ready condition. See RFC-004.
+          - name: dex-config
+            base:
+              apiVersion: kubernetes.crossplane.io/v1alpha2
+              kind: Object
+              spec:
+                managementPolicies: ["Observe"]
+                providerConfigRef:
+                  name: default
+                forProvider:
+                  manifest:
+                    apiVersion: external-secrets.io/v1
+                    kind: ExternalSecret
+                    metadata:
+                      name: placeholder
+                      namespace: placeholder
+
+            readinessChecks:
+              - type: MatchCondition
+                matchCondition:
+                  type: Ready
+                  status: "True"
+
+            patches:
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.parameters.config.externalSecretName
+                toFieldPath: spec.forProvider.manifest.metadata.name
+
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.parameters.config.namespace
+                toFieldPath: spec.forProvider.manifest.metadata.namespace
+
+              # callbackUrl is spec-only (no composed-resource data needed), but FromCompositeFieldPath
+              # always writes into dex-config (the Object), not the composite — and Object's status is
+              # typed, unlike forProvider.manifest's raw JSON. Round-trip it through metadata.annotations
+              # (always a declared ObjectMeta field) instead of status directly.
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.parameters.issuer
+                toFieldPath: metadata.annotations[auth.wxops.cloud/callback-url]
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: "%s/callback"
+
+              - type: ToCompositeFieldPath
+                fromFieldPath: metadata.annotations[auth.wxops.cloud/callback-url]
+                toFieldPath: status.callbackUrl
+
+              # ── Status write-back ──────────────────────────────────────────
+              # provider-kubernetes mirrors the observed ExternalSecret under
+              # status.atProvider.manifest, so its Ready condition is what says the broker got every
+              # record this reconcile's worth of oidc-* resources have pushed so far.
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.manifest.status.conditions[0].message
+                toFieldPath: status.message
+                policy:
+                  fromFieldPath: Optional
+
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.manifest.status.conditions[0].status
+                toFieldPath: status.created
+                policy:
+                  fromFieldPath: Optional
+                transforms:
+                  - type: match
+                    match:
+                      patterns:
+                        - type: regexp
+                          regexp: "^True$"
+                          result: true
+                      fallbackValue: false
+
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.manifest.status.conditions[0].status
+                toFieldPath: status.ready
+                policy:
+                  fromFieldPath: Optional
+                transforms:
+                  - type: match
+                    match:
+                      patterns:
+                        - type: regexp
+                          regexp: "^True$"
+                          result: true
+                      fallbackValue: false
