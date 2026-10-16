@@ -64,15 +64,19 @@ kubectl explain xtenantapps.spec.parameters --recursive # the whole tree
 
 ## Reading status
 
-Every published Kind exposes the same two fields, so a consumer can use the same polling logic for all of them:
+Every published Kind exposes the same four fields, so a consumer can use the same polling logic for all of them:
 
 | Field | Meaning |
 |---|---|
 | `status.created` | Every composed resource has been observed in the cluster at least once |
-| `status.ready` | Readiness derived from the observed composed resources, not from the `Ready` condition |
+| `status.ready` | Readiness derived from the observed composed resources, not from the `Ready` condition — and false while the last apply of a resource it depends on failed |
+| `status.synced` | False while a composed resource's last apply failed. Absent until the first reconcile |
+| `status.syncMessage` | The failing resource and the provider's message, truncated; present only while something is not synced |
 
-Three details catch integrations out:
-- **The four Gitea Kinds leave both fields absent until the first apply.** Treat absent as not ready.
+Four details catch integrations out:
+- **A failed update no longer hides behind `ready: true`.** A composed resource keeps `Ready=True` from its earlier success, so `ready` also requires its `Synced`
+  condition not to be `False`; `synced` and `syncMessage` say what failed. See [Sync state](status-contract.md#sync-state--every-package).
+- **The `scm` and `oidc` Kinds leave `created` and `ready` absent until the first apply.** Treat absent as not ready.
 - **`XTenantApp` splits readiness.** `ready` covers the workload; `dependenciesReady` covers the TLS
   certificate.
 - **Every Kind adds its own fields** (IDs, URLs, the resolved tier).

@@ -50,6 +50,7 @@ Render **three-state health, not a boolean** — this is the whole reason the sp
 | Degraded-dependencies | `ready: true && dependenciesReady: false` | **green app + amber badge** — "running; TLS still issuing". Do not render this as failure |
 | Ready | both true | green |
 | Not ready | `created: true && ready: false` | red → drill-down |
+| Sync failing | `synced: false` (with `ready: false`) | red or amber — show `syncMessage` as the reason: the resource exists but its last apply failed |
 
 Also read: `status.url` (empty = no ingress — hide the link), `namespace`, `image` (what's *actually* configured, echo for drift display).
 
@@ -75,11 +76,12 @@ Reads: `status.{ready,created}` for health; `status.clusterRef` / `clusterNamesp
 Writes: `parameters.{dbName,owner,tier,environment,extensions}`. The connection secret is **not** in status by design — point users at the Vault path
 convention, never render credentials.
 
-### Gitea resources (`XGiteaUser/Org/Team/Repository`)
+### SCM and OIDC resources (`XScm*`, `XOIDC*`)
 
-The one contract asymmetry, worth a dedicated code path: `status.created`/`ready` are **absent — not false — until the first successful Terraform apply**. Treat
-absent as "provisioning". And because outputs persist across later failures, pair `ready` with the native `Synced` condition: `ready: true` + `Synced: False` ⇒
-render "exists, but drifting / update failing", not green. Useful facts to display: `userId`, `orgName`, `repoId`, `cloneUrl`/`sshUrl`/`htmlUrl`.
+The one contract asymmetry, worth a dedicated code path: `status.created`/`ready` are **absent — not false — until the first successful apply**. Treat absent as
+"provisioning". Outputs persist across later failures, so these Kinds also publish `synced` and `syncMessage`, and `ready` is already false while the last apply
+failed: render `synced: false` as "exists, but the last update failed" with `syncMessage` as the reason, not as green. Useful facts to display: `id`, `repoId`,
+`cloneUrl`/`sshUrl`/`htmlUrl`, `org`, `clientId`, and for an `XScmConnection` the org summary (`org`, `repositories`, `teams`).
 
 ## Error UX → runbooks
 

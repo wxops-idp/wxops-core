@@ -102,7 +102,9 @@ An `output` block becomes readable at `status.atProvider.outputs.<name>` once `t
 ```
 
 `status.created`/`status.ready` are derived the same way: a regex match against that same output — present and non-empty means the resource was created. Every
-package in this repo derives readiness this way, for the reason explained in [Reading status](../api-reference/README.md#reading-status).
+package in this repo derives readiness this way, for the reason explained in [Reading status](../api-reference/README.md#reading-status). A patch cannot pick a
+condition by type, only by position, and condition order varies — so each patch-and-transform package ends with a shared `status` step (`kcl/status/main.k`) that
+reads `Synced` by type and adds `synced` / `syncMessage`, and narrows `ready` when the last apply failed. The KCL packages do the same inside `_isReady`.
 
 An output marked `sensitive = true` in the module (like `scm-oauth-app`'s `client_secret`) **never appears under `status.atProvider.outputs`** — it's routed to
 a Kubernetes Secret instead, via `writeConnectionSecretToRef`. Never write a patch trying to read a sensitive output from status; it won't be there.

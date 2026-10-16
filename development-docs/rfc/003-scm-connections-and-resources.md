@@ -214,7 +214,7 @@ spec:
     mode: managed
     org: wxops                    # the platform org
     teamName: backend
-    permission: write             # read | write | admin — on the repositories below
+    permission: write             # read | write (admin: GitHub only) — on the repositories below
     repositories: [api-service]   # names; `all` is not supported on every host, see Vendor alignment
     members: [alice, bob]         # usernames that must already exist on the host
 ---
@@ -494,8 +494,9 @@ Known limits, stated up front:
   unless something restarts them, need a rollout. Overlapping secrets would need host support that these two do not offer.
 - **The OpenTofu state is a second copy.** `provider-opentofu` keeps state as a Secret in the cluster, and that state contains the
   client secret. Vault is the tracked, rotatable copy; the state Secret is the one to keep under RBAC review.
-- **Scheduled rotation** (rotate every *N* days without a commit) could be done with a `time_rotating` trigger in the HCL. It depends
-  on how often `provider-opentofu` re-plans, so it is a spike, not part of the first cut.
+- **Scheduled rotation** (rotate every *N* days without a commit) is not planned. Rotation is the `rotation.generation` bump, whose commit is the
+  audit trail; a clock-driven trigger would replace the application with no such record, and `provider-opentofu`'s re-plan interval makes its timing
+  loose. A schedule is better run outside Core, as a job that opens a change bumping `generation`.
 - **The connection's own token** is the operator's to rotate; this RFC does not automate it.
 
 ### Migration — off `gitea-*`, and between hosts
@@ -650,8 +651,9 @@ confirmed against each provider in the same spike.
   are built here, not later. Acceptance: a throwaway **GitHub org** (free) and an **external Gitea** the
   maintainer or adopter operates; Core only needs its URL and a token.
 - [x] **Phase 2 — team, built. `scm-user` dropped from scope, not deferred.** `scm-team` ships: Gitea and GitHub `managed`/`observed`, one
-  `permission` vocabulary mapped to GitHub's five repository roles and a Gitea `units`/`units_map` preset per role (the archived `gitea-team`'s own
-  matrix, now native at provider 0.8.1 — no `null_resource`/`local-exec`, see [ADR-004](../adr/004-scm-repository-vendor-field.md)).
+  `permission` that is a repository role on GitHub (`read`/`write`/`admin`) and, on Gitea, the base level of a ten-unit `units_map` matrix that
+  `unitPermissions` overrides one unit at a time (native at provider 0.8.1 — no `null_resource`/`local-exec`, see
+  [ADR-004](../adr/004-scm-repository-vendor-field.md)); `admin` is GitHub-only there. On GitHub, `members` must already be in the org or the apply is refused.
   `members` is **usernames only** — no email modelling, matching how both providers already take membership; an email-format string still passes the
   schema. A team opts in to broker login with the label `scm.wxops.cloud/oidc-login: "true"`, which is what
   [`XOIDCConnector`](004-dex-identity-and-portal-authentication.md) generates its `groups` claim allow-list from — this is the "bundled with RFC-004"
@@ -666,10 +668,11 @@ confirmed against each provider in the same spike.
   protect, so there was nothing to migrate and no window to wait out. Archived (not deleted) in the same release that shipped
   `XScmConnection`/`XScmRepository`/`XScmOAuthApp`, per *Migration*. An adopter who **does** have a live cluster still needs the full
   orphan-first procedure before following suit. The discovery topic and an ApplicationSet SCM-generator example ship with Phase 1 or 2.
-- [ ] **Phase 5 — rotation.** `rotation.generation`, the KV v2 history, and the spike on scheduled rotation.
-- [ ] **OpenBao spike** — run Phase 1 against an OpenBao-backed `ClusterSecretStore`. Runs alongside, not after, so the store
+- [x] **Phase 5 — rotation.** `rotation.generation` and the KV v2 history. The spike on scheduled rotation was dropped, not deferred — see
+  *Rotation* above for why generation stays the only trigger.
+- [x] **OpenBao spike** — run Phase 1 against an OpenBao-backed `ClusterSecretStore`. Runs alongside, not after, so the store
   migration never blocks a phase.
-- [ ] **A host-to-host migration rehearsal** — Gitea to GitHub on a scratch pair, following *Migration*, before it is described as
+- [x] **A host-to-host migration rehearsal** — Gitea to GitHub on a scratch pair, following *Migration*, before it is described as
   supported.
 
 On acceptance, the decisions this settles are recorded as ADRs — the connection-and-`scmRef` indirection, the `XScm*` family and neutral kinds over per-vendor

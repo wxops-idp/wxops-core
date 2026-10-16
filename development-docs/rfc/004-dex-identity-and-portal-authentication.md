@@ -56,8 +56,11 @@ nothing today answers who a user is. Three gaps:
 | `XOIDCConnection`, `XOIDCConnector`, `XOIDCClient`, `XOIDCStaticPassword` and the OpenBao record each writes | Installing and operating Dex itself — the W'xOps `dexidp` chart, platform GitOps |
 | `XOIDCConnection` observing the chart's own aggregating `ExternalSecret`, and Reloader (both chart-owned) | The authorization model — Kyverno, ABAC, RBAC mapping (RFC-005) |
 | The claim contract Portal and OAuth2 Proxy rely on | Deploying OAuth2 Proxy or the Portal |
-| Rotation of client secrets | **Tenant-owned** clients (Phase 4, gated on a store-scope question below) |
+| Rotation of client secrets | **Tenant-created** clients — not supported by design: the platform team defines every client |
 | `XOIDCConnector`'s team allow-list generated from `XScmTeam` | `scm-team` itself (RFC-003 Phase 2) |
+
+The `XOIDC*` kinds are named for the protocol, and Dex is the vendor implemented first. A different broker would need its own records and chart, not a change to
+these kinds; this RFC deliberately does not generalise past Dex before a second one exists.
 
 ### Why configuration, not an operator or Dex's API
 
@@ -114,7 +117,7 @@ same connector/client record serves two readers: the chart's aggregator reads ev
 `client_id`/`client_secret` (or the client record's `secret`).
 
 External Secrets Operator documents OpenBao as supported through its Vault provider (tested upstream with ESO v0.16.1 and OpenBao v2.2.0), so the store
-definition changes and nothing else does. All records are in the platform store in this RFC by design — see *Tenant clients*.
+definition changes and nothing else does. All records are in the platform store by design, because the platform team defines every client — see *Tenant clients*.
 
 ### API surface
 
@@ -168,7 +171,7 @@ spec:
     displayName: W'xOps Portal
     redirectUris: [https://portal.example.com/auth/callback]
     public: false                # true = no secret, PKCE only, for browser-only apps
-    owner: platform              # platform only in this RFC; see Tenant clients
+    owner: platform              # platform-defined; tenants do not create clients — see Tenant clients
     secret: {source: generate}   # or {source: static} reading <vendor>/clients-def/<clientId> — no OpenTofu, no external provider; ESO's own Password generator
     rotation:
       generation: 1              # bump to rotate now
@@ -293,7 +296,7 @@ The design's failure mode is one entry breaking everyone's login, so it is defen
 2. **A rendering error leaves the last good config.** If the aggregator's template fails on a malformed record, ESO does not overwrite
    the existing Secret, so Dex keeps running the previous configuration.
 3. **A semantically bad config stalls instead of taking Dex down.** A duplicate client id or an invalid connector would crash a new Dex pod;
-   with at least two replicas and `maxUnavailable: 0`, the failing pod never becomes ready and the old pods keep serving. The change is
+   with at least two replicas and `maxUnavailable: 0` (the `dexidp` chart's Deployment, not Core's), the failing pod never becomes ready and the old pods keep serving. The change is
    stuck rather than an outage, and a stuck rollout is visible.
 4. **Dex needs persistent storage.** In-memory storage would lose in-flight logins on every restart; `kubernetes` or SQL storage does not.
 
@@ -317,10 +320,13 @@ Two properties matter to RFC-005 and are stated now:
 
 ### Tenant clients
 
-Tenant-owned clients are **out of the next release**. A tenant's OAuth2 Proxy client needs its secret readable by the tenant's namespace, but the aggregator
-must find every client under one prefix. Putting tenant records in the platform store makes the platform store readable by whatever `ExternalSecret` a tenant
-can create in a namespace that store allows; putting them in the tenant store means the aggregator crosses a store boundary the scoping exists to hold. Neither
-is settled, and both are RFC-005's territory, so Phase 4 waits on the answer (open question 3).
+**Clients are platform-defined.** The platform team chooses every client id and redirect URI, and tenants have no permission on `XOIDCClient` or any other `XOIDC*`
+kind — they work only with the resources the platform provides. A platform feature that needs a login, such as an OAuth2 Proxy in front of an application, is one
+the platform wires up by creating the client behind it. That removes the store-scope problem rather than solving it: every record lives in the platform store, the
+chart's aggregator reads one prefix, and no tenant `ExternalSecret` has to reach a store it should not.
+
+A tenant-facing way to ask for a client — for example through an SCM actions template — could be considered later, once that kind of feature exists. It is not
+planned here, and nothing in the kinds blocks it.
 
 ### Compatibility and change tier
 
@@ -382,22 +388,27 @@ which is the kind-based e2e tier and, for the next release, a manual acceptance 
 - [x] **Phase 0 — spike, mostly answered by building, not a scratch cluster.** `dataFrom.find`/`rewrite` and the fail-closed template are confirmed
   from the `dexidp` chart's own source and tests, not a live run. **Answered on a real cluster**: a generator re-ran under `OnChange` on an
   unrelated edit and `refreshInterval: "0"` never re-synced at all — hence the two-`ExternalSecret` split (see *Secrets and rotation*).
-  **Still open**: does `bcrypt` (Sprig, via ESO's template engine) produce a hash the chart accepts; does the
-  `scm.wxops.cloud/oidc-login` label selector return teams reliably at scale; does a bad config actually stall under the chart's `maxUnavailable`
-  setting. Which connector option carries team slugs is **settled**: `teamNameField: "slug"`, always requested by `XOIDCConnector` on GitHub.
+  **Also answered on a real cluster**: `bcrypt` (Sprig, via ESO's template engine) produces a hash the chart and Dex accept, and the
+  `scm.wxops.cloud/oidc-login` label selector returns the right teams for both a Gitea and a GitHub connector. Validation and rendering errors come from the
+  `dexidp` chart: its fail-closed template renders `config.yaml` through the `dex-config` `ExternalSecret`, which `XOIDCConnection` observes, while Core's own records are
+  checked by the XRD and composition before they are written. **Not tested here**: HA behaviour, including `maxUnavailable` and an invalid `bcrypt` hash, and the selector at a large team count — see open question 8. Which connector option carries team slugs is **settled**: `teamNameField: "slug"`, always requested by `XOIDCConnector` on GitHub.
 - [x] **Phase 1 — connectors.** `oidc-connection`, `oidc-connector`, with team generation from labelled `XScmTeam`s (not hand-kept Helm values, and not
-  the aggregator pattern originally proposed — the chart owns that). Implemented; cluster acceptance (a real login) still pending.
+  the aggregator pattern originally proposed — the chart owns that). Implemented, and validated on a real cluster against both Gitea and GitHub.
 - [x] **Phase 2 — the Portal's client.** `oidc-client` for `owner: platform`, confidential and public clients, manual rotation through `generation`.
   Implemented; the Portal's own registration as `wxops-portal` is for the Portal's own repository to apply.
-- [ ] **Phase 2.5 — local users.** `oidc-static-password`, not in the original plan: the bootstrap admin and break-glass accounts, needed before any
-  upstream connector exists.
-- [ ] **Phase 3 — scheduled rotation.** Superseded by the `rotation.generation` bump (see *Secrets and rotation*) for on-demand rotation; a
-  *scheduled* rotation (rotate every *N* days with no commit) is still open and would need its own mechanism, since nothing here does that today.
-- [ ] **Phase 4 — tenant clients and OAuth2 Proxy**, after the store-scope question is settled.
+- [x] **Phase 2.5 — local users.** `oidc-static-password`, not in the original plan: the bootstrap admin and break-glass accounts, needed before any
+  upstream connector exists. This is the whole local-user story — there is no separate kind; a quickstart in the repository README shows how to create one.
 - [x] **Release deliverables** for Phases 1–2.5: four packages with tests, `docs/api-reference/` pages and examples, `VERSIONS.yaml` entries, the
   README packages table, the `CLAUDE.md` package list and reference stack.
 
-ADRs recorded on acceptance of this amendment: Dex configured through Core-written OpenBao records with delivery owned by the `dexidp` chart (not an
+> [!NOTE]
+> Scheduled rotation (rotate every *N* days with no commit) was dropped from this plan rather than deferred. A secret here changes only when its
+`rotation.generation` does, and the second `ExternalSecret` records that generation next to the value: a clock-driven refresh would redraw the generator
+without it, leaving the stored password and the declared generation disagreeing, and would remove the commit that is today's audit trail of a rotation. Anyone who
+wants a schedule can run a job outside Core that opens a change bumping `generation`, which keeps both.
+
+> [!IMPORTANT]
+> ADRs recorded on acceptance of this amendment: Dex configured through Core-written OpenBao records with delivery owned by the `dexidp` chart (not an
 operator, not Dex's API, not a Core-owned aggregator); stable secrets (a client secret, a password) held in their own generation-gated
 `ExternalSecret`, separate from the record that is free to react to any field edit, rather than regenerated on a schedule.
 
@@ -407,14 +418,18 @@ operator, not Dex's API, not a Core-owned aggregator); stable secrets (a client 
    collision in principle, but was decided not to be a concern for this platform's actual topology (one org per connector today); the mitigation path if
    it ever is — a consumer-side CEL mapping, or `federated_claims.connector_id` — is noted but not built.
 2. **Token and refresh lifetimes.** They set how stale Git membership can be. What is the acceptable bound?
-3. **Tenant clients and store scope.** Where do a tenant's client records live, given the aggregator must read all of them and a tenant's
-   application must read its own? This gates Phase 4.
+3. **Tenant clients and store scope — settled.** Clients are platform-defined, so every record is in the platform store and the aggregator reads one prefix;
+   tenants never create one. A tenant-facing path (an actions template, say) is a future feature, not part of this RFC.
 4. **Restart tolerance.** Is one rolling restart per refresh interval acceptable for the expected rate of change? If a high-churn future is
    likely, the earlier CRD design is the fallback for clients only.
 5. **API server trust.** Should the Kubernetes API server accept Dex-issued tokens directly (structured authentication, as
    [`multi-cluster-proposal.md`](../core-ideas/multi-cluster-proposal.md) describes), or only the Portal? That decides how much of RFC-005 can
    lean on Kubernetes's own user info. How Dex relates to Pinniped is part of the same question and is not decided here.
-6. **Who registers clients?** Any tenant able to create an `XOIDCClient` can ask for arbitrary redirect URIs. Restricting that is an
-   authorization question for RFC-005, not this one; until tenant clients ship, only `owner: platform` is accepted.
+6. **Who registers clients? — settled.** The platform team. Tenants have no permission on `XOIDCClient`, so they cannot ask for arbitrary redirect URIs; keeping
+   the `XOIDC*` kinds out of tenant RBAC is part of RFC-005's coarse layer.
 7. **Connector escape hatch.** The connector schema exposes a small set of options per vendor. Is a free-form `extraConfig` object worth
    the risk of an invalid entry reaching Dex, or is anything beyond the schema a request for a new field?
+8. **HA, `maxUnavailable` and an invalid `bcrypt` hash.** Dex should run stateless and highly available, with its storage external to the pods. Untested, and
+   revisited when there is time to support users who hit it: how a bad config behaves across replicas under the chart's `maxUnavailable` setting, what Dex and the
+   chart do with a *non-valid* `bcrypt` hash in a static-password record (the valid case works), and how the `scm.wxops.cloud/oidc-login` selector behaves at a
+   large team count. These belong to a scale-and-failure pass of the `dexidp` chart, not to this RFC's rollout.

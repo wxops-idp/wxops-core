@@ -1,9 +1,8 @@
 # oidc-client
 
 A downstream OAuth client — an application that logs in through the broker, such as Pinniped, the
-Portal, or oauth2-proxy. `platform` only in this release — see
-[RFC-004](../../../development-docs/rfc/004-dex-identity-and-portal-authentication.md)'s open
-question on tenant-owned clients.
+Portal, or oauth2-proxy. Platform-defined: the platform team chooses every client id and redirect URI, and tenants do not create clients — see
+[RFC-004](../../../development-docs/rfc/004-dex-identity-and-portal-authentication.md#tenant-clients).
 
 ## Prerequisites
 

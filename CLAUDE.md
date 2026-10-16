@@ -10,7 +10,7 @@ W'xOps Core is the control-plane "brain" of W'xOps, built on **Crossplane v2** c
 
 | Engine | Used by | When to use |
 |---|---|---|
-| `function-patch-and-transform` | `scm-*` (`gitea-*`, `random-password` archived), `oidc-connection` | Single composed resource: an inline-HCL `Workspace`, or one wrapped `Object`. The `scm-*` packages keep **all** vendor logic in HCL — no KCL, no direct API calls |
+| `function-patch-and-transform` | `scm-*` (`gitea-*`, `random-password` archived), `oidc-connection` | Single composed resource: an inline-HCL `Workspace`, or one wrapped `Object`; each such package ends with the shared `status` step (`kcl/status/main.k`) that folds `Synced` into `ready`/`synced`/`syncMessage`. The `scm-*` packages keep **all** vendor logic in HCL — no KCL, no direct API calls |
 | `function-kcl` | `platform-database-clusters`, `tenant-database`, `tenant-app`, `oidc-static-password`, `oidc-client`, `oidc-connector` | Multi-resource, conditional branching, list comprehensions |
 
 `tenant-database` additionally uses `function-extra-resources` as a first pipeline step to discover shared clusters via label selector before the KCL step renders resources — as do all three `oidc-*` KCL packages, to read their `XOIDCConnection` (and, for `oidc-connector`, the `XScmConnection`, `XScmOAuthApp` and every labelled `XScmTeam`) by the `crossplane.io/composite` label Crossplane stamps on every root XR with its own name — no user-written discovery label needed, unlike `tenant-database`'s pool selector.

@@ -62,7 +62,7 @@ the reasoning stays discoverable without depending on anyone's memory of the con
 | [`TEMPLATE.md`](adr/TEMPLATE.md) | Copy this to start a new one |
 | [001 — Package channel label](adr/001-package-channel-label.md) | `stable`/`nightly` over a guardrailed rollout system, and why |
 | [002 — Three API groups](adr/002-three-api-groups.md) | `scm`, `auth`, `platform` by trust boundary, and replacing rather than converting `gitea-*` |
-| [004 — `scm-repository`'s vendor field](adr/004-scm-repository-vendor-field.md) | Why one kind in the `scm` family repeats `vendor` from its connection — a Terraform provider can't be made conditional |
+| [004 — `scm-repository`'s vendor field](adr/004-scm-repository-vendor-field.md) | Why the `scm` kinds that run a Terraform provider (`scm-repository`, `scm-team`, `scm-oauth-app`) repeat `vendor` from their connection — a Terraform provider can't be made conditional |
 
 ### RFC
 
@@ -115,7 +115,7 @@ by hand:** update the row in the same pull request that changes its state. Where
 | `scm-team` | `XScmTeam` | A team and its membership on Gitea or GitHub, one OpenTofu module | 🔶 built, unreleased | [ref](../docs/api-reference/scm-team.md) | [RFC-003](rfc/003-scm-connections-and-resources.md) · [ADR-004](adr/004-scm-repository-vendor-field.md) | Cluster proof; GitLab; the recommended per-org team layout |
 | `oidc-connection` | `XOIDCConnection` | Observes the `dexidp` chart's config render, publishes the remote-key prefix and callback URL | 🔶 built, unreleased | [ref](../docs/api-reference/oidc-connection.md) | [RFC-004](rfc/004-dex-identity-and-portal-authentication.md) | Cluster proof against a real `dexidp` chart install |
 | `oidc-static-password` | `XOIDCStaticPassword` | A local broker user — bootstrap admin, break-glass — bcrypt hash computed in-template | 🔶 built, unreleased | [ref](../docs/api-reference/oidc-static-password.md) | [RFC-004](rfc/004-dex-identity-and-portal-authentication.md) | Cluster proof: `bcrypt` via ESO's Sprig-backed template engine |
-| `oidc-client` | `XOIDCClient` | A downstream OAuth client — the Portal, Pinniped, oauth2-proxy | 🔶 built, unreleased | [ref](../docs/api-reference/oidc-client.md) | [RFC-004](rfc/004-dex-identity-and-portal-authentication.md) | Tenant-owned clients (store-scope question) |
+| `oidc-client` | `XOIDCClient` | A downstream OAuth client — the Portal, Pinniped, oauth2-proxy | 🔶 built, unreleased | [ref](../docs/api-reference/oidc-client.md) | [RFC-004](rfc/004-dex-identity-and-portal-authentication.md) | Tenant-created clients — by design, platform-defined |
 | `oidc-connector` | `XOIDCConnector` | An upstream Git vendor connector, team allow-list generated from labelled `XScmTeam`s | 🔶 built, unreleased | [ref](../docs/api-reference/oidc-connector.md) | [RFC-003](rfc/003-scm-connections-and-resources.md) · [RFC-004](rfc/004-dex-identity-and-portal-authentication.md) | Cluster proof: a real login with `groups` carrying a generated team |
 | *API contract* | all | `status.created`/`ready` on every package; `v1alpha1`, additive-only | ✅ | [Status contract](../docs/api-reference/status-contract.md) | [A released XRD only grows](development/releasing.md#a-released-xrd-only-grows) | Promotion is an identical-schema stability label, at the OSS release ([Notes and warnings](_archives/ROADMAP.md#notes-and-warnings)) |
 
