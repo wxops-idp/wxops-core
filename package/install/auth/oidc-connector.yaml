@@ -1,0 +1,8 @@
+apiVersion: pkg.crossplane.io/v1
+kind: Configuration
+metadata:
+  name: wxops-core-oidc-connector
+spec:
+  package: ghcr.io/wxops-idp/wxops-core/oidc-connector:release-2026-10-16
+  packagePullPolicy: IfNotPresent
+  revisionActivationPolicy: Automatic

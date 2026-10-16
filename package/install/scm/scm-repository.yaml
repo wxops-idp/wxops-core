@@ -3,6 +3,6 @@ kind: Configuration
 metadata:
   name: wxops-core-scm-repository
 spec:
-  package: ghcr.io/wxops-idp/wxops-core/scm-repository:release-2026-10-09
+  package: ghcr.io/wxops-idp/wxops-core/scm-repository:release-2026-10-16
   packagePullPolicy: IfNotPresent
   revisionActivationPolicy: Automatic

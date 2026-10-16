@@ -13,3 +13,4 @@ resources:
   # and the manifest inside it — see .github/scripts/release-state.py.
   - platform/
   - scm/
+  - auth/

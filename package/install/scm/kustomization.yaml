@@ -4,3 +4,4 @@ resources:
   - scm-connection.yaml
   - scm-repository.yaml
   - scm-oauth-app.yaml
+  - scm-team.yaml

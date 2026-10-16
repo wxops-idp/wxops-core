@@ -19,6 +19,27 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 > latest state.
 
 ---
+## [release-2026-10-16] — 2026-10-16
+
+### CI/CD
+
+- **ci**: Update gen readme script and move scripts out gitea to github [skip ci] ([`a86c6c3`](https://github.com/wxops-idp/wxops-core/commit/a86c6c31fb6cf88b348fe5747ad5be77610737b4))
+
+
+### Documentation
+
+- Record sync state, platform-defined OIDC clients, dropped scheduled rotation and masked finished rollout for RFC-007 ([`d6e1e25`](https://github.com/wxops-idp/wxops-core/commit/d6e1e25e1c8d6d22a6c15deb3e8e5f10b603750f))
+
+
+### Features
+
+- **scm, auth, platform**: Implement sync and sync message for packages, mock tests and documentation for them, and update new vendor for scmoauthapp ([`bcc6046`](https://github.com/wxops-idp/wxops-core/commit/bcc60462e0b96393c89f17802429940b5eebd675))
+- **scm,auth**: Introduce oidc-* for auth groups and introduce new team for scm groups ([`e713a5d`](https://github.com/wxops-idp/wxops-core/commit/e713a5d42fd19109468e5ab058c60e4408f9e027))
+
+
+
+📖 [API reference](https://github.com/wxops-idp/wxops-core/tree/release-2026-10-16/docs) · [`VERSIONS.yaml`](https://github.com/wxops-idp/wxops-core/blob/release-2026-10-16/VERSIONS.yaml)
+🔍 [Diff vs release-2026-10-09](https://github.com/wxops-idp/wxops-core/compare/release-2026-10-09...release-2026-10-16)
 ## [release-2026-10-09] — 2026-10-09
 
 ### CI/CD
@@ -304,6 +325,7 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 
 📖 [API reference](https://github.com/wxops-idp/wxops-core/tree/v0.1.0/docs) · [`VERSIONS.yaml`](https://github.com/wxops-idp/wxops-core/blob/v0.1.0/VERSIONS.yaml)
 ---
+[release-2026-10-16]: https://github.com/wxops-idp/wxops-core/releases/tag/release-2026-10-16
 [release-2026-10-09]: https://github.com/wxops-idp/wxops-core/releases/tag/release-2026-10-09
 [release-2026-09-16]: https://github.com/wxops-idp/wxops-core/releases/tag/release-2026-09-16
 [0.4.0]: https://github.com/wxops-idp/wxops-core/releases/tag/v0.4.0
@@ -322,5 +344,5 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 [0.2.0]: https://github.com/wxops-idp/wxops-core/releases/tag/v0.2.0
 [0.1.1]: https://github.com/wxops-idp/wxops-core/releases/tag/v0.1.1
 [0.1.0]: https://github.com/wxops-idp/wxops-core/releases/tag/v0.1.0
-[Unreleased]: https://github.com/wxops-idp/wxops-core/compare/release-2026-10-09...HEAD
+[Unreleased]: https://github.com/wxops-idp/wxops-core/compare/release-2026-10-16...HEAD
 

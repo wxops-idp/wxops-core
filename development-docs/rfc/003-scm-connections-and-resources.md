@@ -2,7 +2,7 @@
 
 ## Status
 <!-- Draft | In review | Accepted | Declined | Withdrawn | Implemented — and the GitHub issue that carries the discussion, e.g. "Draft · #42" -->
-Implemented (Phases 1–2)
+Implemented (Phases 1–2, 4–5)
 
 > [!NOTE]
 > Phase 1 shipped: `scm-connection`, `scm-repository` and `scm-oauth-app`, Gitea and GitHub, `managed`/`observed` where each vendor supports it. Phase 2

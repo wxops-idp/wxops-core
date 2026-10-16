@@ -47,17 +47,17 @@ actually executes underneath (HCL run in-cluster against a Gitea or GitHub provi
 <!-- packages-table-start -->
 | Package | Kind | Group | API Versions | Last changed in |
 |---|---|---|---|---|
-| [`platform-database-clusters`](package/platform/platform-database-clusters/) | `XPlatformDatabaseCluster` | `platform.wxops.cloud` | `v1alpha1` | `release-2026-10-09` |
-| [`tenant-database`](package/platform/tenant-database/) | `XTenantDatabase` | `platform.wxops.cloud` | `v1alpha1` | `release-2026-10-09` |
-| [`tenant-app`](package/platform/tenant-app/) | `XTenantApp` | `platform.wxops.cloud` | `v1alpha1` | `release-2026-10-09` |
-| [`scm-connection`](package/scm/connection/) | `XScmConnection` | `scm.wxops.cloud` | `v1alpha1` | `release-2026-10-09` |
-| [`scm-repository`](package/scm/repository/) | `XScmRepository` | `scm.wxops.cloud` | `v1alpha1` | `release-2026-10-09` |
-| [`scm-oauth-app`](package/scm/oauth-app/) | `XScmOAuthApp` | `scm.wxops.cloud` | `v1alpha1` | `release-2026-10-09` |
-| [`scm-team`](package/scm/team/) | `XScmTeam` | `scm.wxops.cloud` | `v1alpha1` | `unreleased` |
-| [`oidc-connection`](package/auth/oidc-connection/) | `XOIDCConnection` | `auth.wxops.cloud` | `v1alpha1` | `unreleased` |
-| [`oidc-static-password`](package/auth/oidc-static-password/) | `XOIDCStaticPassword` | `auth.wxops.cloud` | `v1alpha1` | `unreleased` |
-| [`oidc-client`](package/auth/oidc-client/) | `XOIDCClient` | `auth.wxops.cloud` | `v1alpha1` | `unreleased` |
-| [`oidc-connector`](package/auth/oidc-connector/) | `XOIDCConnector` | `auth.wxops.cloud` | `v1alpha1` | `unreleased` |
+| [`platform-database-clusters`](package/platform/platform-database-clusters/) | `XPlatformDatabaseCluster` | `platform.wxops.cloud` | `v1alpha1` | `release-2026-10-16` |
+| [`tenant-database`](package/platform/tenant-database/) | `XTenantDatabase` | `platform.wxops.cloud` | `v1alpha1` | `release-2026-10-16` |
+| [`tenant-app`](package/platform/tenant-app/) | `XTenantApp` | `platform.wxops.cloud` | `v1alpha1` | `release-2026-10-16` |
+| [`scm-connection`](package/scm/connection/) | `XScmConnection` | `scm.wxops.cloud` | `v1alpha1` | `release-2026-10-16` |
+| [`scm-repository`](package/scm/repository/) | `XScmRepository` | `scm.wxops.cloud` | `v1alpha1` | `release-2026-10-16` |
+| [`scm-oauth-app`](package/scm/oauth-app/) | `XScmOAuthApp` | `scm.wxops.cloud` | `v1alpha1` | `release-2026-10-16` |
+| [`scm-team`](package/scm/team/) | `XScmTeam` | `scm.wxops.cloud` | `v1alpha1` | `release-2026-10-16` |
+| [`oidc-connection`](package/auth/oidc-connection/) | `XOIDCConnection` | `auth.wxops.cloud` | `v1alpha1` | `release-2026-10-16` |
+| [`oidc-static-password`](package/auth/oidc-static-password/) | `XOIDCStaticPassword` | `auth.wxops.cloud` | `v1alpha1` | `release-2026-10-16` |
+| [`oidc-client`](package/auth/oidc-client/) | `XOIDCClient` | `auth.wxops.cloud` | `v1alpha1` | `release-2026-10-16` |
+| [`oidc-connector`](package/auth/oidc-connector/) | `XOIDCConnector` | `auth.wxops.cloud` | `v1alpha1` | `release-2026-10-16` |
 <!-- packages-table-end -->
 
 > [!NOTE]

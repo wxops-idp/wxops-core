@@ -43,9 +43,9 @@ problem statement* → *Motivation*.
 | RFC | Title | Status |
 |---|---|---|
 | [002](002-migrate-terraform-to-opentofu.md) | Migrate the Workspace engine from Terraform to OpenTofu | Implemented |
-| [003](003-scm-connections-and-resources.md) | SCM connections and resources — Gitea, GitHub and GitLab behind one API, with Vault-tracked credentials | Implemented (Phases 1–2) |
-| [004](004-dex-identity-and-portal-authentication.md) | Dex as the identity provider — Core-rendered configuration, OpenBao-held secrets, Portal authentication | Accepted |
+| [003](003-scm-connections-and-resources.md) | SCM connections and resources — Gitea, GitHub and GitLab behind one API, with Vault-tracked credentials | Implemented (Phases 1–2, 4–5) |
+| [004](004-dex-identity-and-portal-authentication.md) | Dex as the identity provider — Core-rendered configuration, OpenBao-held secrets, Portal authentication | Implemented (Phases 0–2.5) |
 | [005](005-git-mapped-authorization.md) | Authorization mapped one-to-one to Git — RBAC for who may act, Kyverno ABAC for on what | Draft |
 | [006](006-cloudflare-r2-object-storage-and-backup.md) | Cloudflare R2 as the first third-party service — provisioned backup and object storage | Draft |
-| [007](007-package-layout-by-api-group.md) | Package layout by API group, with a Kustomization per category | Accepted |
+| [007](007-package-layout-by-api-group.md) | Package layout by API group, with a Kustomization per category | Implemented |
 | [008](008-openbao-as-a-platform-api.md) | The secret store as a platform API — OpenBao mounts, policies and access as resources | Draft |

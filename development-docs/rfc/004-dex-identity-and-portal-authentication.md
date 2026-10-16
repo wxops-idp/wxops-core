@@ -2,10 +2,10 @@
 
 ## Status
 <!-- Draft | In review | Accepted | Declined | Withdrawn | Implemented — and the GitHub issue that carries the discussion, e.g. "Draft · #42" -->
-Accepted
+Implemented (Phases 0–2.5)
 
 > [!NOTE]
-> **Amended, implementation underway.** The design below is unchanged in its core argument — configuration, not an operator or Dex's API; OpenBao as
+> **Amended, implemented.** The design below is unchanged in its core argument — configuration, not an operator or Dex's API; OpenBao as
 > the record; rotation driven by a refresh/generation, not scheduled; the claim contract and rollout-safety layers. Two things changed once real
 > building started:
 >
