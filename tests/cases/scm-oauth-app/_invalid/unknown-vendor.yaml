@@ -1,0 +1,15 @@
+# expect: vendor
+# expect: is not one of
+#
+# Only gitea and github have a module; a third vendor must be added deliberately (a new match arm
+# and its own module), not typed into an XR and silently given an empty Workspace.
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmOAuthApp
+metadata:
+  name: bad-vendor
+spec:
+  parameters:
+    scmRef:
+      name: gitea-internal
+    vendor: gitlab
+    appName: dex

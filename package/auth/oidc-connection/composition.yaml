@@ -1,0 +1,176 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: xoidcconnections.auth.wxops.cloud
+  labels:
+    crossplane.io/xrd: xoidcconnections.auth.wxops.cloud
+    channel: stable
+spec:
+  compositeTypeRef:
+    apiVersion: auth.wxops.cloud/v1alpha1
+    kind: XOIDCConnection
+
+  mode: Pipeline
+  pipeline:
+    - step: patch-and-transform
+      functionRef:
+        name: function-patch-and-transform
+      input:
+        apiVersion: pt.fn.crossplane.io/v1beta1
+        kind: Resources
+        resources:
+          # Core writes no broker config: the W'xOps `dexidp` chart (wxops-idp/charts/dexidp)
+          # already renders one ExternalSecret that scans every oidc-* record and builds the
+          # broker's config.yaml. This Object only OBSERVES that ExternalSecret — provider-kubernetes
+          # never creates, updates or deletes it — so Core's only window into "did the broker get
+          # every record" is that ExternalSecret's own Ready condition. See RFC-004.
+          - name: dex-config
+            base:
+              apiVersion: kubernetes.crossplane.io/v1alpha2
+              kind: Object
+              spec:
+                managementPolicies: ["Observe"]
+                providerConfigRef:
+                  name: default
+                forProvider:
+                  manifest:
+                    apiVersion: external-secrets.io/v1
+                    kind: ExternalSecret
+                    metadata:
+                      name: placeholder
+                      namespace: placeholder
+
+            readinessChecks:
+              - type: MatchCondition
+                matchCondition:
+                  type: Ready
+                  status: "True"
+              - type: MatchCondition
+                matchCondition:
+                  type: Synced
+                  status: "True"
+
+            patches:
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.parameters.config.externalSecretName
+                toFieldPath: spec.forProvider.manifest.metadata.name
+
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.parameters.config.namespace
+                toFieldPath: spec.forProvider.manifest.metadata.namespace
+
+              # callbackUrl is spec-only (no composed-resource data needed), but FromCompositeFieldPath
+              # always writes into dex-config (the Object), not the composite — and Object's status is
+              # typed, unlike forProvider.manifest's raw JSON. Round-trip it through metadata.annotations
+              # (always a declared ObjectMeta field) instead of status directly.
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.parameters.issuer
+                toFieldPath: metadata.annotations[auth.wxops.cloud/callback-url]
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: "%s/callback"
+
+              - type: ToCompositeFieldPath
+                fromFieldPath: metadata.annotations[auth.wxops.cloud/callback-url]
+                toFieldPath: status.callbackUrl
+
+              # ── Status write-back ──────────────────────────────────────────
+              # provider-kubernetes mirrors the observed ExternalSecret under
+              # status.atProvider.manifest, so its Ready condition is what says the broker got every
+              # record this reconcile's worth of oidc-* resources have pushed so far.
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.manifest.status.conditions[0].message
+                toFieldPath: status.message
+                policy:
+                  fromFieldPath: Optional
+
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.manifest.status.conditions[0].status
+                toFieldPath: status.created
+                policy:
+                  fromFieldPath: Optional
+                transforms:
+                  - type: match
+                    match:
+                      patterns:
+                        - type: regexp
+                          regexp: "^True$"
+                          result: true
+                      fallbackValue: false
+
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.manifest.status.conditions[0].status
+                toFieldPath: status.ready
+                policy:
+                  fromFieldPath: Optional
+                transforms:
+                  - type: match
+                    match:
+                      patterns:
+                        - type: regexp
+                          regexp: "^True$"
+                          result: true
+                      fallbackValue: false
+
+    # Last step: fold each observed composed resource's Synced state into the XR status, so ready
+    # reflects the last reconcile and not the last success. Source is kcl/status/main.k, embedded by
+    # make kcl-sync — do not edit it here.
+    - step: status
+      functionRef:
+        name: function-kcl
+      input:
+        apiVersion: krm.kcl.dev/v1alpha1
+        kind: KCLInput
+        metadata:
+          name: status
+        spec:
+          source: |
+            """
+            status — shared last step of the patch-and-transform packages.
+
+            Writes what the provisioned resources actually report back into the XR's status: a composed
+            Workspace or Object whose last apply failed keeps Ready=True from the earlier success, so the
+            package's own `ready` (derived from outputs) would otherwise stay true.
+
+            Adds `synced` and `syncMessage`, and clears `ready` while any gating resource is not Synced.
+            Resources named in `_informational` are reported in `syncMessage` but never gate.
+            """
+
+            oxr = option("params").oxr
+            dxr = option("params").dxr or {}
+            _ocds = option("params").ocds or {}
+
+            _get = lambda d: any, k: str, default: any -> any {
+                _safe = d or {}
+                _safe[k] if k in _safe else default
+            }
+
+            # Composed resources that are informational: a failure is shown, but never gates ready or synced.
+            _informational = ["inspect"]
+
+            _failures = [
+                {name = n, message = _get(c, "message", _get(c, "reason", "not synced"))}
+                for n, ocd in _ocds
+                for c in _get(_get(_get(ocd, "Resource", {}), "status", {}), "conditions", [])
+                if _get(c, "type", "") == "Synced" and _get(c, "status", "") == "False"
+            ]
+            _gating = [f for f in _failures if f.name not in _informational]
+
+            _synced = len(_gating) == 0
+            _first = _failures[0] if _failures else {}
+            _msg = (_first.name + ": " + _first.message)[:400] if _failures else ""
+            _more = " (+" + str(len(_failures) - 1) + " more)" if len(_failures) > 1 else ""
+
+            _dstatus = _get(dxr, "status", {}) or {}
+
+            # Nothing observed yet means nothing to report: `synced` stays absent until the first reconcile, and
+            # `ready` is only narrowed when the package already set it — absent stays absent, never a bare false.
+            _dxr = {
+                apiVersion = oxr.apiVersion
+                kind = oxr.kind
+                status = _dstatus | ({synced = _synced} if _ocds else {}) | ({ready = _dstatus.ready and _synced} if _get(_dstatus, "ready", None) != None and _ocds else {}) | ({syncMessage = _msg + _more} if _failures else {})
+            }
+
+            items = [_dxr]

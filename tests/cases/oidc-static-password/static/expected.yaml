@@ -1,0 +1,116 @@
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XOIDCStaticPassword
+metadata:
+  name: admin
+spec:
+  crossplane:
+    resourceRefs:
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: fc4c4657-push-record
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: fc4c4657-user-es
+status:
+  conditions:
+    - reason: WatchCircuitClosed
+      status: 'True'
+      type: Responsive
+    - reason: ReconcileSuccess
+      status: 'True'
+      type: Synced
+    - message: 'Unready resources: fc4c4657-push-record, fc4c4657-user-es'
+      reason: Creating
+      status: 'False'
+      type: Ready
+  created: false
+  ready: false
+  userId: admin
+  vaultKey: dex/users/admin
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: fc4c4657-push-record
+  labels:
+    crossplane.io/composite: admin
+  name: fc4c4657-push-record
+  ownerReferences:
+    - apiVersion: auth.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XOIDCStaticPassword
+      name: admin
+      uid: fc4c4657-ee2e-5261-b5c3-f2b77d503ef4
+spec:
+  forProvider:
+    manifest:
+      apiVersion: external-secrets.io/v1alpha1
+      kind: PushSecret
+      metadata:
+        name: fc4c4657-user-es-push-record
+        namespace: crossplane-system
+      spec:
+        data:
+          - match:
+              remoteRef:
+                remoteKey: dex/users/admin
+              secretKey: record
+        deletionPolicy: Delete
+        refreshInterval: 1m
+        secretStoreRefs:
+          - kind: ClusterSecretStore
+            name: vault-platform
+        selector:
+          secret:
+            name: oidc-fc4c4657-user-creds
+  providerConfigRef:
+    name: default
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: fc4c4657-user-es
+  labels:
+    crossplane.io/composite: admin
+  name: fc4c4657-user-es
+  ownerReferences:
+    - apiVersion: auth.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XOIDCStaticPassword
+      name: admin
+      uid: fc4c4657-ee2e-5261-b5c3-f2b77d503ef4
+spec:
+  forProvider:
+    manifest:
+      apiVersion: external-secrets.io/v1
+      kind: ExternalSecret
+      metadata:
+        name: fc4c4657-user-es
+        namespace: crossplane-system
+      spec:
+        data:
+          - remoteRef:
+              key: dex/users-def/admin
+              property: password
+            secretKey: password
+        refreshInterval: '0'
+        refreshPolicy: OnChange
+        secretStoreRef:
+          kind: ClusterSecretStore
+          name: vault-platform
+        target:
+          creationPolicy: Owner
+          name: oidc-fc4c4657-user-creds
+          template:
+            data:
+              record: '{"email":"admin@wxops.local","username":"admin","name":"Platform admin","userID":"admin","groups":"[\"platform-team:Owners\"]","hash":"{{ .password | bcrypt }}"}'
+            engineVersion: v2
+            metadata:
+              annotations:
+                auth.wxops.cloud/generation: '1'
+  providerConfigRef:
+    name: default

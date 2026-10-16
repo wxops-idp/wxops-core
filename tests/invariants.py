@@ -118,6 +118,47 @@ def workspace_uses_opentofu(docs, ctx):
     ]
 
 
+@rule("scm-module-no-direct-api",
+      "RFC-003: every scm-* action goes through a Terraform provider, never a direct API call. "
+      "An `http` data source, `null_resource` or `local-exec` provisioner is exactly how the "
+      "archived gitea-team (provider 0.7, no repo.actions/repo.packages units) had to reach the "
+      "Gitea API directly — scm-team's provider upgrade (0.8.1, native units_map) is what removes "
+      "that need; this rule keeps it removed.")
+def scm_module_no_direct_api(docs, ctx):
+    if not str(ctx.get("package", "")).startswith("scm-"):
+        return []
+    bad = []
+    for d in _composed(docs):
+        if d.get("kind") != "Workspace":
+            continue
+        module = str(((d.get("spec") or {}).get("forProvider") or {}).get("module", ""))
+        # Matched as HCL block syntax, not a bare substring — scm-team's own README and comments
+        # mention "null_resource" in prose (explaining what the archived gitea-team no longer
+        # needs), which a bare substring search would wrongly flag.
+        for needle in ('provisioner "local-exec"', 'resource "null_resource"', 'data "http"'):
+            if needle in module:
+                bad.append(f"{_name(d)}: module contains {needle!r}")
+    return bad
+
+
+@rule("scm-team-members-gated-on-org",
+      "GitHub only sends an invitation for a user outside the org and leaves the membership "
+      "pending, so a mistyped member would neither fail nor take effect: the scm-team GitHub module "
+      "must refuse a username that is not already in the org (the non_org_members precondition). "
+      "Gitea is deliberately exempt — adding a user to a team is how they join the org there.")
+def scm_team_members_gated(docs, ctx):
+    if ctx.get("package") != "scm-team":
+        return []
+    bad = []
+    for d in _composed(docs):
+        if d.get("kind") != "Workspace":
+            continue
+        module = str(((d.get("spec") or {}).get("forProvider") or {}).get("module", ""))
+        if 'resource "github_team_membership"' in module and "length(local.non_org_members) == 0" not in module:
+            bad.append(f"{_name(d)}: manages GitHub team membership without the org-member precondition")
+    return bad
+
+
 SENSITIVE_HINTS = ("password", "secret", "token", "credential", "privatekey")
 
 
@@ -353,9 +394,17 @@ def pushsecret_deletion_policy(docs, ctx):
       "Secret that does not exist under the name it expects.")
 def externalsecret_target(docs, ctx):
     bad = []
-    for name, m in _of_kind(docs, "ExternalSecret"):
+    for d in _composed(docs):
+        m = _wrapped(d)
+        if not m or m.get("kind") != "ExternalSecret":
+            continue
+        # managementPolicies: ["Observe"] (oidc-connection) never creates the target Secret at
+        # all — it's reading someone else's ExternalSecret for its own Ready condition, so there
+        # is no Secret name for a workload to expect in the first place.
+        if (d.get("spec") or {}).get("managementPolicies") == ["Observe"]:
+            continue
         if not ((m.get("spec") or {}).get("target") or {}).get("name"):
-            bad.append(f"{name}: no spec.target.name")
+            bad.append(f"{_name(d)}: no spec.target.name")
     return bad
 
 

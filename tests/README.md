@@ -180,6 +180,7 @@ $EDITOR tests/cases/tenant-app/my-case/xr.yaml
 # optional: mock observed state so readiness derivation is exercised
 python3 tests/lib/mkobserved.py tenant-app my-case
 python3 tests/lib/mkobserved.py tenant-app my-case --unready certificate
+python3 tests/lib/mkobserved.py tenant-app my-case --unsynced certificate   # Ready stays True, Synced=False
 
 make test-update && git diff tests/ && make test
 ```

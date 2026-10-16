@@ -10,10 +10,10 @@ W'xOps Core is the control-plane "brain" of W'xOps, built on **Crossplane v2** c
 
 | Engine | Used by | When to use |
 |---|---|---|
-| `function-patch-and-transform` | `scm-*` (`gitea-*`, `random-password` archived) | Single composed resource: an inline-HCL `Workspace`, or one wrapped `Object`. The `scm-*` packages keep **all** vendor logic in HCL — no KCL, no direct API calls |
-| `function-kcl` | `platform-database-clusters`, `tenant-database`, `tenant-app` | Multi-resource, conditional branching, list comprehensions |
+| `function-patch-and-transform` | `scm-*` (`gitea-*`, `random-password` archived), `oidc-connection` | Single composed resource: an inline-HCL `Workspace`, or one wrapped `Object`; each such package ends with the shared `status` step (`kcl/status/main.k`) that folds `Synced` into `ready`/`synced`/`syncMessage`. The `scm-*` packages keep **all** vendor logic in HCL — no KCL, no direct API calls |
+| `function-kcl` | `platform-database-clusters`, `tenant-database`, `tenant-app`, `oidc-static-password`, `oidc-client`, `oidc-connector` | Multi-resource, conditional branching, list comprehensions |
 
-`tenant-database` additionally uses `function-extra-resources` as a first pipeline step to discover shared clusters via label selector before the KCL step renders resources.
+`tenant-database` additionally uses `function-extra-resources` as a first pipeline step to discover shared clusters via label selector before the KCL step renders resources — as do all three `oidc-*` KCL packages, to read their `XOIDCConnection` (and, for `oidc-connector`, the `XScmConnection`, `XScmOAuthApp` and every labelled `XScmTeam`) by the `crossplane.io/composite` label Crossplane stamps on every root XR with its own name — no user-written discovery label needed, unlike `tenant-database`'s pool selector.
 
 ### KCL source management
 
@@ -44,22 +44,35 @@ Documentation shows the full logical path (e.g. `tenants/{owner}/databases/{dbNa
 
 ## Packages
 
-Six Crossplane Configuration packages:
+Eleven Crossplane Configuration packages:
 
 | Package | Kind | Composition |
 |---|---|---|
 | `platform-database-clusters` | `XPlatformDatabaseCluster` | function-kcl |
 | `tenant-database` | `XTenantDatabase` | function-extra-resources + function-kcl |
 | `tenant-app` | `XTenantApp` | function-kcl |
-| `scm-connection` | `XScmConnection` | patch-and-transform + ESO `ExternalSecret` (no Workspace) |
+| `scm-connection` | `XScmConnection` | patch-and-transform + ESO `ExternalSecret` + a read-only inspection `Workspace` (data sources only; never gates `ready`) |
 | `scm-repository` | `XScmRepository` | patch-and-transform + inline HCL, one module for every vendor |
 | `scm-oauth-app` | `XScmOAuthApp` | patch-and-transform + inline HCL + ESO `PushSecret` |
+| `scm-team` | `XScmTeam` | patch-and-transform + inline HCL, one module for every vendor |
+| `oidc-connection` | `XOIDCConnection` | patch-and-transform + `Object` observing the broker's own config `ExternalSecret` (no Workspace, writes nothing) |
+| `oidc-static-password` | `XOIDCStaticPassword` | function-extra-resources + function-kcl + ESO `Password` generator/`ExternalSecret`/`PushSecret` |
+| `oidc-client` | `XOIDCClient` | function-extra-resources + function-kcl + ESO `Password` generator/`ExternalSecret`/`PushSecret` |
+| `oidc-connector` | `XOIDCConnector` | function-extra-resources + function-kcl + ESO `ExternalSecret`/`PushSecret` |
 
 **Archived, not deleted** — `gitea-user`/`-org`/`-team`/`-repository` (`XGiteaUser`/`XGiteaOrg`/`XGiteaTeam`/`XGiteaRepository`, all
 patch-and-transform + inline HCL) and the `random-password` utility (`XRandomPassword`): no cluster ever ran them, every active
 package now runs on OpenTofu, and `scm-*` replaces what they did. Source lives on at `package/platform/archives/<name>/`, tests at
 `tests/cases/_archives/<name>/`, docs at `docs/api-reference/_archives/<name>.md` — none of it runs in `make test`/`build`/`release`.
 See `VERSIONS.yaml`'s comment above `packages:` and [RFC-003](development-docs/rfc/003-scm-connections-and-resources.md).
+
+The four `oidc-*` packages (RFC-004) are **records only**: each writes one OpenBao record under its
+`XOIDCConnection`'s remote-key prefix (`<vendor>/connectors/...`, `<vendor>/clients/...`,
+`<vendor>/users/...`, `<vendor>/users-def/...`). None of them render a broker's config, install a
+broker, or restart one — that is the W'xOps [`dexidp` chart](https://github.com/wxops-idp/charts/tree/main/dexidp)'s
+job, outside this repo. `oidc-connector`'s per-org team list is **generated**, not hand-maintained:
+every `XScmTeam` labelled `scm.wxops.cloud/oidc-login: "true"`, bound to the same `XScmConnection`
+and in a listed org, contributes its `status.dexTeam` automatically.
 
 Served XRD API versions, and the release each package last changed in, are tracked in
 `VERSIONS.yaml`. Releases are named by date (`release-YYYY-MM-DD`); compatibility is the API
@@ -68,11 +81,12 @@ version, not the release name — see [`release-notes/README.md`](release-notes/
 ## Directory layout
 
 - `package/<group>/<name>/` — `xrd.yaml`, `composition.yaml`, `crossplane.yaml`, `kustomization.yaml`, `README.md`.
-  The group is the API group the package's kinds serve (`platform`, and `scm`/`auth` as they land) — see
+  The group is the API group the package's kinds serve (`platform`, `scm`, `auth`) — see
   [ADR-002](development-docs/adr/002-three-api-groups.md) and [RFC-007](development-docs/rfc/007-package-layout-by-api-group.md).
   **`VERSIONS.yaml` is the only package list**: each entry carries `group` and `path`, and `tests/lib/packages.py`
   is the one resolver. Adding a package is a `VERSIONS.yaml` entry plus an entry in `package/dev/kustomization.yaml`;
-  no Makefile, script, workflow or test list needs editing.
+  no Makefile, script, workflow or test list needs editing — except `kcl-sync.py`'s own `KCL_PACKAGES`
+  list for a `function-kcl` package, since it embeds `kcl/{pkg}/main.k` by name, not by discovery.
 - `package/install/<group>/` — production OCI registry-based install (`Configuration` resources, auto-bumped by CI)
 - `package/dev/` — development install (applies XRDs + Compositions directly)
 - `providers/` — shared provider/function installs and `ProviderConfig` (apply once per cluster)
@@ -183,9 +197,13 @@ When adding new capabilities:
 
 Start simple before reaching for advanced patterns.
 
-Every XRD must expose `status.created` and `status.ready`. The portal polls
-those; the native `type: Ready` condition is unreliable on Crossplane v2.3 with
-function-kcl v0.12.1, so readiness is derived from `ocds` instead. Compositions
+Every XRD must expose `status.created`, `status.ready`, `status.synced` and
+`status.syncMessage`. The portal polls those; the native `type: Ready` condition is
+unreliable on Crossplane v2.3 with function-kcl v0.12.1, so readiness is derived from
+`ocds` instead. A composed resource keeps `Ready=True` after a failed update, so
+readiness also requires `Synced` not `False`: the KCL packages do it in `_isReady`, and
+the patch-and-transform packages end with a shared `status` step (`kcl/status/main.k`,
+embedded by `make kcl-sync`). Compositions
 must never emit Kubernetes RBAC — see [`development-docs/_archives/ROADMAP.md`](development-docs/_archives/ROADMAP.md) *Decided and
 rejected*; the composition creates the ServiceAccount and publishes its name in
 status, and the GitOps repo binds a `Role` to it.
@@ -298,4 +316,7 @@ release commit. Gitea no longer publishes.
 | function-extra-resources | v0.3.0 |
 | function-patch-and-transform | v0.10.7 |
 | function-go-templating (archived, unused) | v0.12.2 |
-| Gitea Terraform provider | ~> 0.7.0 |
+| Gitea Terraform provider (`go-gitea/gitea`) | ~> 0.8 |
+| GitHub Terraform provider (`integrations/github`) | ~> 6.13 |
+| External Secrets Operator (ESO) | — (not a Crossplane provider; its CRDs and generator are consumed via `provider-kubernetes` `Object`s) |
+| W'xOps `dexidp` chart ([`wxops-idp/charts/dexidp`](https://github.com/wxops-idp/charts/tree/main/dexidp)) | — (not installed by this repo; owns the broker's config render — see RFC-004) |

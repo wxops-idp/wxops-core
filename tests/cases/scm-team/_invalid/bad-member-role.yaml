@@ -1,0 +1,17 @@
+# expect: parameters.members.0.role
+# expect: is not one of
+#
+# Only member and maintainer exist — GitHub's own two team-membership roles.
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmTeam
+metadata:
+  name: bad-member-role
+spec:
+  parameters:
+    scmRef:
+      name: gitea-internal
+    vendor: gitea
+    teamName: developers
+    members:
+      - username: alice
+        role: owner

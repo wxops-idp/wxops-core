@@ -1,0 +1,372 @@
+"""
+XOIDCStaticPassword — KCL composition source.
+
+A local broker user: the bootstrap admin, or a break-glass account. No Git membership backs this
+record, so `groups` is whatever the XR says, not derived from any XScmTeam — see the package README.
+
+Inputs (via option("params").oxr.spec.parameters):
+  connectionRef.name   string   The XOIDCConnection this user belongs to.
+  email                string   Sign-in identifier, per the broker's own contract.
+  username             string   Display login; also this resource's own identifier — the remote key
+                                 is <vendor>/users/{username} (and <vendor>/users-def/{username}).
+  displayName          string   Optional "name" claim. Default "".
+  userId               string   Defaults to username — deterministic, never random.
+  groups               [string] Claim groups. Default [].
+  secret.source        string   "generate" (ESO Password generator) or "static" (operator writes
+                                 <vendor>/users-def/{username} property "password" first).
+  secret.generator     object   generate only: length/digits/symbols/noUpper/allowRepeat.
+  rotation.generation  int      Bump to regenerate (generate) or re-read (static).
+
+Design — two ExternalSecrets, because ESO refreshes one ExternalSecret atomically (every data/dataFrom
+entry, the whole template), and a generator or bcrypt's random salt redraws on every refresh:
+
+  ESO1 (oidc-pwd-es, generate only) owns the SECRET. Password generator -> {password, generation}
+  -> its own PushSecret -> <vendor>/users-def/{username}. Refresh: Periodic with a 99999h interval, so
+  nothing but a change to its own top-level metadata.annotations can refresh it — ESO compares
+  GetResourceVersion() = "<generation>-<hash(annotations, labels)>", and `force-sync` below changes
+  only when rotation.generation does. (A timestamp would change on every reconcile of this XR and
+  regenerate constantly; the generation number only changes when a human bumps it.)
+
+  ESO2 (oidc-user-es, both modes) owns the RECORD. It reads `password` from
+  <vendor>/users-def/{username} through a plain data[].remoteRef — the same path whether a generator
+  (generate) or the operator (static) put it there — computes `{{ .password | bcrypt }}` itself
+  (Sprig via ESO's v2 engine; output starts "$2a$", which the dexidp chart requires) and pushes the
+  record. refreshPolicy: OnChange, so any field edit (groups, email...) syncs on its own without
+  touching the generator. Accepted cost: bcrypt re-salts on every such edit, so dex-config changes and
+  the broker restarts once; the password itself never changes. The secret never appears in this
+  resource's spec — it only ever flows through a fetched template variable.
+
+  generate only: ESO2 also reads `generation` from users-def and fails its own render until it equals
+  rotation.generation. A bump re-triggers ESO1 and ESO2 together; without the gate ESO2 could read
+  users-def before ESO1's push lands and settle on the stale value.
+
+Composed resources:
+  oidc-pwd-gen      generators.external-secrets.io/v1alpha1  Password        — generate only.
+  oidc-pwd-es       external-secrets.io/v1                   ExternalSecret  — ESO1, generate only.
+  oidc-push-pwd     external-secrets.io/v1alpha1              PushSecret     — ESO1 -> <vendor>/users-def/{username}.
+  oidc-user-es      external-secrets.io/v1                   ExternalSecret  — ESO2, renders the record.
+  oidc-push-record  external-secrets.io/v1alpha1              PushSecret     — <vendor>/users/{username}.
+"""
+
+oxr = option("params").oxr
+params = oxr.spec.parameters
+uid = oxr.metadata.uid
+short = uid[:8:]
+
+_get = lambda d: any, k: str, default: any -> any {
+    _safe = d or {}
+    _safe[k] if k in _safe else default
+}
+
+# ── The connection, fetched by function-extra-resources ─────────────────────
+# Selected by the "crossplane.io/composite" label Crossplane stamps on every root XR with its own
+# name (see internal/controller/apiextensions/composite/api.go, APINamingConfigurator) — no
+# user-written label needed, unlike the tenant-database discovery pattern this otherwise follows.
+_ctxExtras = option("params").ctx["apiextensions.crossplane.io/extra-resources"] or {}
+_connList = _ctxExtras.connections or []
+_conn = _connList[0] if _connList else {}
+_connParams = _get(_get(_conn, "spec", {}), "parameters", {})
+vendor = _get(_connParams, "vendor", "dex")
+storeName = _get(_get(_connParams, "secretStoreRef", {}), "name", "vault-platform")
+
+email = params.email
+username = params.username
+displayName = _get(params, "displayName", "")
+_userIdParam = _get(params, "userId", "")
+userId = _userIdParam if _userIdParam else username
+groups = _get(params, "groups", [])
+generation = _get(_get(params, "rotation", {}), "generation", 1)
+
+secretCfg = _get(params, "secret", {})
+source = _get(secretCfg, "source", "generate")
+isGenerate = source == "generate"
+gen = _get(secretCfg, "generator", {})
+
+genName = short + "-pwd-gen"
+pwdEsName = short + "-pwd-es"
+pwdDefSecretName = "oidc-" + short + "-pwd-def"
+esName = short + "-user-es"
+esSecretName = "oidc-" + short + "-user-creds"
+recordKey = vendor + "/users/" + username
+pwdDefKey = vendor + "/users-def/" + username
+
+# generate only: ESO2 must not settle on a users-def value from before the latest rotation. A bump
+# re-triggers ESO1 and ESO2 together, so ESO2 can render before ESO1's push lands — fail the render
+# (a sync error: nothing recorded as synced, retried with backoff) until users-def carries the
+# generation this XR asks for. static has no gate: the operator writes users-def, then bumps.
+_genGate = ('{{ if ne .generation "' + str(generation) + '" }}{{ fail "waiting for ' + pwdDefKey + ' generation ' + str(generation) + '" }}{{ end }}') if isGenerate else ""
+
+# A hand-rolled JSON literal, not a generic encoder: every value here is either a path segment
+# already validated by the XRD's own pattern (username) or free text the operator controls
+# (email, displayName, groups) — same trust level as every other inline-template record in this
+# repo. A value containing a literal `"` would break this, same caveat as scm-*'s Format-based
+# tfvars bodies.
+_groupsJson = "[" + ", ".join(['"' + g + '"' for g in groups]) + "]"
+
+# groups is an array — ESO's Vault provider panics comparing an existing array top-level value with
+# property empty (maps.Equal — see providers/v1/vault/client_push.go) on every push after the
+# first. Embedded below as an escaped STRING, not a native array, so every top-level field of the
+# pushed record is a plain string — safe to push in one call, one KV version, instead of a second
+# PushSecret entry (which also means a second, separate version). The dexidp chart already
+# un-stringifies it if it arrives this way.
+_recordJson = '{"email":"' + email + '","username":"' + username + '","name":"' + displayName + '","userID":"' + userId + '","groups":"' + _groupsJson.replace('"', '\\"') + '","hash":"{{ .password | bcrypt }}"}'
+
+# ── Observed state (keyed by Object name) — same idiom as tenant-database ───
+_ocds = option("params").ocds or {}
+# A composed resource whose last apply failed keeps Ready=True from the earlier success, so Ready
+# alone cannot say the apply worked: Synced is the condition the provider sets False.
+_syncConds = lambda name: str -> [any] {
+    _res = _get(_get(_ocds, name, {}), "Resource", {})
+    [c for c in _get(_get(_res, "status", {}), "conditions", []) if _get(c, "type", "") == "Synced" and _get(c, "status", "") == "False"]
+}
+_syncFailed = lambda name: str -> bool {
+    len(_syncConds(name)) > 0
+}
+_isReady = lambda name: str -> bool {
+    _ocd = _ocds[name] if name in _ocds else {}
+    _res = _get(_ocd, "Resource", {})
+    _conds = _get(_get(_res, "status", {}), "conditions", [])
+    len([c for c in _conds if _get(c, "type", "") == "Ready" and _get(c, "status", "") == "True"]) > 0 and not _syncFailed(name)
+}
+
+# ── ESO Password generator (generate only) ──────────────────────────────────
+_pwd_gen = {
+    apiVersion = "kubernetes.crossplane.io/v1alpha2"
+    kind = "Object"
+    metadata = {
+        name = short + "-pwd-gen"
+        annotations = {
+            "crossplane.io/composition-resource-name" = "oidc-pwd-gen"
+        } | ({"krm.kcl.dev/ready" = "True"} if _isReady(short + "-pwd-gen") else {})
+    }
+    spec = {
+        providerConfigRef = {name = "default"}
+        forProvider = {
+            manifest = {
+                apiVersion = "generators.external-secrets.io/v1alpha1"
+                kind = "Password"
+                metadata = {name = genName, namespace = "crossplane-system"}
+                spec = {
+                    length = _get(gen, "length", 32)
+                    digits = _get(gen, "digits", 8)
+                    symbols = _get(gen, "symbols", 0)
+                    symbolCharacters = ""
+                    noUpper = _get(gen, "noUpper", False)
+                    allowRepeat = _get(gen, "allowRepeat", False)
+                }
+            }
+        }
+    }
+}
+
+# ── ESO1: the secret — generator -> {password, generation}, generate only ───
+# Periodic with a 99999h interval: with an interval > 0 shouldRefreshPeriodic() skips the `interval
+# <= 0 -> never` early-exit and compares SyncedResourceVersion with GetResourceVersion(), so a
+# changed top-level annotation refreshes it at once; 99999h is only the backstop. `force-sync` is
+# just an arbitrary annotation key here — ESO has no special handling for it — carrying
+# rotation.generation: it changes when (and only when) a human bumps the generation. Not a
+# timestamp: KCL re-renders on every reconcile, a time-based value would regenerate constantly.
+# One key, `def`, holds both values as a JSON document so the PushSecret below writes them in a
+# single call (one KV version) with property empty; toJson only quotes/escapes the password for that
+# transport — OpenBao stores the raw string.
+_pwd_es = {
+    apiVersion = "kubernetes.crossplane.io/v1alpha2"
+    kind = "Object"
+    metadata = {
+        name = short + "-pwd-es"
+        annotations = {
+            "crossplane.io/composition-resource-name" = "oidc-pwd-es"
+        } | ({"krm.kcl.dev/ready" = "True"} if _isReady(short + "-pwd-es") else {})
+    }
+    spec = {
+        providerConfigRef = {name = "default"}
+        forProvider = {
+            manifest = {
+                apiVersion = "external-secrets.io/v1"
+                kind = "ExternalSecret"
+                metadata = {
+                    name = pwdEsName
+                    namespace = "crossplane-system"
+                    annotations = {"force-sync" = str(generation)}
+                }
+                spec = {
+                    refreshPolicy = "Periodic"
+                    refreshInterval = "99999h"
+                    dataFrom = [{
+                        sourceRef = {
+                            generatorRef = {
+                                apiVersion = "generators.external-secrets.io/v1alpha1"
+                                kind = "Password"
+                                name = genName
+                            }
+                        }
+                    }]
+                    target = {
+                        name = pwdDefSecretName
+                        creationPolicy = "Owner"
+                        template = {
+                            engineVersion = "v2"
+                            data = {def = '{"password":{{ .password | toJson }},"generation":"' + str(generation) + '"}'}
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+# ── ESO2: the record. Always reads the password from users-def (a generator wrote it there in
+# generate mode, the operator in static mode) — never the generator itself. ───────────────────────
+_source_block = {
+    secretStoreRef = {name = storeName, kind = "ClusterSecretStore"}
+    data = [{
+        secretKey = "password"
+        remoteRef = {key = pwdDefKey, property = "password"}
+    }] + ([{
+        secretKey = "generation"
+        remoteRef = {key = pwdDefKey, property = "generation"}
+    }] if isGenerate else [])
+}
+
+_user_es = {
+    apiVersion = "kubernetes.crossplane.io/v1alpha2"
+    kind = "Object"
+    metadata = {
+        name = short + "-user-es"
+        annotations = {
+            "crossplane.io/composition-resource-name" = "oidc-user-es"
+        } | ({"krm.kcl.dev/ready" = "True"} if _isReady(short + "-user-es") else {})
+    }
+    spec = {
+        providerConfigRef = {name = "default"}
+        forProvider = {
+            manifest = {
+                apiVersion = "external-secrets.io/v1"
+                kind = "ExternalSecret"
+                metadata = {name = esName, namespace = "crossplane-system"}
+                spec = {
+                    # OnChange reacts to this resource's own spec changing (any field edit, a
+                    # generation bump) and ignores refreshInterval — the default policy at
+                    # interval "0" never re-syncs once synced (confirmed live). Safe now: this
+                    # resource has no generator, so a refresh only re-reads users-def.
+                    refreshPolicy = "OnChange"
+                    refreshInterval = "0"
+                } | _source_block | {
+                    target = {
+                        name = esSecretName
+                        creationPolicy = "Owner"
+                        template = {
+                            engineVersion = "v2"
+                            metadata = {annotations = {"auth.wxops.cloud/generation" = str(generation)}}
+                            data = {record = _genGate + _recordJson}
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+# ── PushSecret: the record, always ──────────────────────────────────────────
+_push_record = {
+    apiVersion = "kubernetes.crossplane.io/v1alpha2"
+    kind = "Object"
+    metadata = {
+        name = short + "-push-record"
+        annotations = {
+            "crossplane.io/composition-resource-name" = "oidc-push-record"
+        } | ({"krm.kcl.dev/ready" = "True"} if _isReady(short + "-push-record") else {})
+    }
+    spec = {
+        providerConfigRef = {name = "default"}
+        forProvider = {
+            manifest = {
+                apiVersion = "external-secrets.io/v1alpha1"
+                kind = "PushSecret"
+                metadata = {name = esName + "-push-record", namespace = "crossplane-system"}
+                spec = {
+                    # PushSecret has no OnChange/watch equivalent — refreshInterval is its only timing
+                    # lever (confirmed: it watches only the PushSecret CR itself, never the source
+                    # Secret). Matched to the dexidp chart's own aggregator scan interval (1m) so a
+                    # push lands before the chart's next scan, not up to an hour later.
+                    refreshInterval = "1m"
+                    deletionPolicy = "Delete"
+                    secretStoreRefs = [{name = storeName, kind = "ClusterSecretStore"}]
+                    selector = {secret = {name = esSecretName}}
+                    data = [{
+                        match = {
+                            secretKey = "record"
+                            remoteRef = {remoteKey = recordKey}
+                        }
+                    }]
+                }
+            }
+        }
+    }
+}
+
+# ── PushSecret: the plaintext, generate only ────────────────────────────────
+_push_pwd = {
+    apiVersion = "kubernetes.crossplane.io/v1alpha2"
+    kind = "Object"
+    metadata = {
+        name = short + "-push-pwd"
+        annotations = {
+            "crossplane.io/composition-resource-name" = "oidc-push-pwd"
+        } | ({"krm.kcl.dev/ready" = "True"} if _isReady(short + "-push-pwd") else {})
+    }
+    spec = {
+        providerConfigRef = {name = "default"}
+        forProvider = {
+            manifest = {
+                apiVersion = "external-secrets.io/v1alpha1"
+                kind = "PushSecret"
+                metadata = {name = esName + "-push-pwd", namespace = "crossplane-system"}
+                spec = {
+                    # Same PushSecret-has-no-watch reasoning as the record push above.
+                    refreshInterval = "1m"
+                    deletionPolicy = "Delete"
+                    secretStoreRefs = [{name = storeName, kind = "ClusterSecretStore"}]
+                    selector = {secret = {name = pwdDefSecretName}}
+                    # Property empty is correct here: `def` is a JSON document of scalars
+                    # ({password, generation}), so ESO unmarshals it and writes both as top-level
+                    # keys of users-def in one call, one KV version. (A raw string would need a
+                    # property — it fails json.Unmarshal otherwise.)
+                    data = [{
+                        match = {
+                            secretKey = "def"
+                            remoteRef = {remoteKey = pwdDefKey}
+                        }
+                    }]
+                }
+            }
+        }
+    }
+}
+
+# ── dxr update — status write-back ──────────────────────────────────────────
+_composedNames = [short + "-user-es", short + "-push-record"] + ([short + "-pwd-gen", short + "-pwd-es", short + "-push-pwd"] if isGenerate else [])
+_created = len([n for n in _composedNames if n not in _ocds]) == 0
+_ready = _isReady(short + "-user-es") and _isReady(short + "-push-record") and ((_isReady(short + "-pwd-es") and _isReady(short + "-push-pwd")) if isGenerate else True)
+
+# ── Sync state ──────────────────────────────────────────────────────────────
+# `synced` follows the same resources `ready` does; a failure on any other composed resource is still
+# shown in `syncMessage` without gating anything.
+_gatingNames = [short + "-user-es", short + "-push-record"] + ([short + "-pwd-es", short + "-push-pwd"] if isGenerate else [])
+_syncFailures = [n + ": " + _get(_syncConds(n)[0], "message", _get(_syncConds(n)[0], "reason", "not synced")) for n in _ocds if _syncFailed(n)]
+_synced = len([n for n in _gatingNames if _syncFailed(n)]) == 0
+_syncMessage = (_syncFailures[0] + (" (+" + str(len(_syncFailures) - 1) + " more)" if len(_syncFailures) > 1 else ""))[:400] if _syncFailures else ""
+_syncStatus = ({"synced" = _synced} if _ocds else {}) | ({"syncMessage" = _syncMessage} if _syncFailures else {})
+
+_dxr = {
+    apiVersion = "auth.wxops.cloud/v1alpha1"
+    kind = "XOIDCStaticPassword"
+    status = {
+        created = _created
+        ready = _ready
+        userId = userId
+        vaultKey = recordKey
+    } | _syncStatus
+}
+
+items = [_dxr] + ([_pwd_gen, _pwd_es] if isGenerate else []) + [_user_es, _push_record] + ([_push_pwd] if isGenerate else [])

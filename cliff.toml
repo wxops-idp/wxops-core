@@ -116,7 +116,8 @@ commit_parsers = [
 # Package-level scopes — these keep per-package history filterable.
 # Valid scopes: gitea-user, gitea-org, gitea-team, gitea-repository,
 #               platform-database-clusters, tenant-database, tenant-app,
-#               random-password, scm-connection, scm-repository, scm-oauth-app,
+#               random-password, scm-connection, scm-repository, scm-oauth-app, scm-team,
+#               oidc-connection, oidc-static-password, oidc-client, oidc-connector,
 #               ci, providers, docs
 protect_breaking_commits = true
 filter_commits = false

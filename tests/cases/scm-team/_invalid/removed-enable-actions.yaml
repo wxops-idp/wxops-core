@@ -1,0 +1,14 @@
+# expect: enableActions
+# enableActions / actionsReadOnly / enablePackages / packagesReadOnly are gone: list `actions` or
+# `packages` in units, or set a per-unit level with unitPermissions.
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmTeam
+metadata:
+  name: removed-field
+spec:
+  parameters:
+    scmRef:
+      name: gitea-internal
+    vendor: gitea
+    teamName: Developers
+    enableActions: true

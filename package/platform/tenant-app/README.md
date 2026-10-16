@@ -85,6 +85,21 @@ full set of optional fields (`serviceAccount`, `securityContext`,
 [`docs/api-reference/tenant-app.md`](../../../docs/api-reference/tenant-app.md) for the complete
 `spec.parameters` reference and the Golden Path Contract.
 
+## Status
+
+| Field | Description |
+|---|---|
+| `created` | True when all expected cluster resources (Deployment, Service, Ingress) have been observed in the cluster at least once. |
+| `ready` | True when all core cluster resources (Deployment, Service, Ingress) report Ready. |
+| `dependenciesReady` | True when composed resources that do not gate the workload itself, but do gate the app being usable end-to-end, report Ready. |
+| `darlane` | Observed state of the Darlane debug twin. |
+| `url` | Application URL derived from ingress.host (https:// when tls.enabled, http:// otherwise). |
+| `namespace` | Kubernetes namespace where the app is deployed. |
+| `image` | Container image currently configured for the deployment. |
+| `synced` / `syncMessage` | `synced` is false while a composed resource's last apply failed (its `Ready` can stay True from the earlier success); `syncMessage` is the provider's message, truncated. Absent until the first reconcile |
+
+Full reference: [`docs/api-reference/tenant-app.md`](../../../docs/api-reference/tenant-app.md#status).
+
 ## Relation to other packages
 
 ```

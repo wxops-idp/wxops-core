@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-kcl-sync.py — embed kcl/{pkg}/main.k into package/{pkg}/composition.yaml
+kcl-sync.py — embed kcl/{pkg}/main.k (and the shared kcl/status/main.k) into composition.yaml
 
 The kcl/ directory is the authoritative source for KCL logic.
 This script re-indents main.k and splices it into the spec.source block
@@ -30,7 +30,15 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT / "tests" / "lib"))
 import packages as P  # noqa: E402
 
-KCL_PACKAGES = ["platform-database-clusters", "tenant-database", "tenant-app"]
+KCL_PACKAGES = [
+    "platform-database-clusters", "tenant-database", "tenant-app",
+    "oidc-static-password", "oidc-client", "oidc-connector",
+]
+
+# Patch-and-transform packages whose last pipeline step is the shared kcl/status/main.k. Each
+# composition holds a copy, embedded the same way; the step is always the file's last block.
+STATUS_PACKAGES = ["scm-connection", "scm-repository", "scm-oauth-app", "scm-team", "oidc-connection"]
+STATUS_SOURCE = ROOT / "kcl" / "status" / "main.k"
 
 # The YAML block scalar marker as it appears in composition.yaml.
 # 10 spaces + "source: |" matches the nesting depth of KCLInput.spec.source.
@@ -48,11 +56,11 @@ def build_indented_source(kcl_text: str) -> str:
 
 
 def sync_package(pkg: str, check_only: bool = False) -> bool:
-    src_file = ROOT / "kcl" / pkg / "main.k"
+    src_file = STATUS_SOURCE if pkg in STATUS_PACKAGES else ROOT / "kcl" / pkg / "main.k"
     comp_file = P.path(pkg) / "composition.yaml"
 
     if not src_file.exists():
-        print(f"  skip  {pkg}: kcl/{pkg}/main.k not found")
+        print(f"  skip  {pkg}: {src_file.relative_to(ROOT)} not found")
         return True
 
     kcl_text = src_file.read_text()
@@ -70,7 +78,7 @@ def sync_package(pkg: str, check_only: bool = False) -> bool:
 
     if check_only:
         if new_text != comp_text:
-            print(f"  DRIFT {pkg}: composition.yaml is out of sync with kcl/{pkg}/main.k")
+            print(f"  DRIFT {pkg}: composition.yaml is out of sync with {src_file.relative_to(ROOT)}")
             print(f"         Run: make kcl-sync")
             return False
         print(f"  ok    {pkg}")
@@ -84,12 +92,13 @@ def sync_package(pkg: str, check_only: bool = False) -> bool:
 def main() -> int:
     args = sys.argv[1:]
     check_only = "--check" in args
-    targets = [a for a in args if not a.startswith("--")] or KCL_PACKAGES
+    known = KCL_PACKAGES + STATUS_PACKAGES
+    targets = [a for a in args if not a.startswith("--")] or known
 
     ok = True
     for pkg in targets:
-        if pkg not in KCL_PACKAGES:
-            print(f"  unknown package: {pkg} (known: {', '.join(KCL_PACKAGES)})", file=sys.stderr)
+        if pkg not in known:
+            print(f"  unknown package: {pkg} (known: {', '.join(known)})", file=sys.stderr)
             ok = False
             continue
         if not sync_package(pkg, check_only=check_only):

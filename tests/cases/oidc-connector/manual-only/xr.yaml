@@ -1,0 +1,17 @@
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XOIDCConnector
+metadata:
+  name: github
+spec:
+  parameters:
+    connectionRef:
+      name: dex
+    connectorId: github
+    displayName: GitHub
+    scmRef:
+      name: github-wxops-idp
+    oauthAppRef:
+      name: dex-github
+    orgs:
+      - name: wxops-idp
+        teams: [platform]

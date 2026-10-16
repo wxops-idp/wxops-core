@@ -1,0 +1,29 @@
+# Fixture for `crossplane composition render --required-resources`.
+#
+# tenant-database's first pipeline step (function-extra-resources) discovers the
+# shared cluster pool by label selector. An offline render has no cluster to
+# discover from, so without this file the composition's own guard fires:
+#
+#   tier: shared requires at least one XPlatformDatabaseCluster with
+#   shared: true and environment: dev
+#
+# That assertion is correct behaviour, not a bug — it just makes the package
+# unrenderable offline unless the pool is supplied here.
+#
+# The label must match the `wxops.cloud/managed-by` selector in
+# package/platform/tenant-database/composition.yaml. KCL reads shared/environment/
+# clusterName/namespace from status first and falls back to spec.parameters
+# (see _clusterShared / _clusterEnv in kcl/tenant-database/main.k), so a
+# spec-only fixture is sufficient and avoids restating status here.
+apiVersion: platform.wxops.cloud/v1alpha1
+kind: XPlatformDatabaseCluster
+metadata:
+  name: cluster-a
+  labels:
+    wxops.cloud/managed-by: platform-database-clusters
+spec:
+  parameters:
+    clusterName: cluster-a
+    namespace: cnpg-system
+    shared: true
+    environment: dev

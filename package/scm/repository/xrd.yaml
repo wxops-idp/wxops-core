@@ -62,6 +62,11 @@ spec:
                         deletes it. In `observed` mode the creation fields below are not applied.
                       enum: ["managed", "observed"]
                       default: managed
+                      # A transition rule: evaluated on update, against the stored value. Without it a
+                      # one-word edit takes count from 1 to 0 and the apply destroys the host object.
+                      x-kubernetes-validations:
+                        - rule: "self == oldSelf"
+                          message: "mode is immutable: switching managed -> observed would make OpenTofu destroy the repository on the host (the resources are count = managed ? 1 : 0). Delete and recreate the XR instead; retain: true (the default) leaves the repository in place."
                     repoName:
                       type: string
                       description: Repository name. Immutable in practice — renaming creates a new repository.
@@ -121,7 +126,21 @@ spec:
                     skipped while its source path does not exist. Treat absent as false.
                 ready:
                   type: boolean
-                  description: True when the repository exists. Equal to `created` by construction.
+                  description: |
+                    True when the repository exists **and** its last apply succeeded: `created` and
+                    `synced`. A failed update leaves the repository in place, so `created` stays true
+                    while `ready` goes false.
+                synced:
+                  type: boolean
+                  description: |
+                    False while a provisioned resource's last apply failed — the host (or the secret
+                    store) rejected something. `syncMessage` says what. Absent until the first
+                    reconcile.
+                syncMessage:
+                  type: string
+                  description: |
+                    The failing resource and the provider's own message, truncated; present only while
+                    something is not Synced. The full error is on that resource's `Synced` condition.
                 exists:
                   type: boolean
                   description: |

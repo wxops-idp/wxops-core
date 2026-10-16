@@ -1,0 +1,21 @@
+# Same team as gitea-managed, observed healthy: Ready and Synced both True, so ready stays true.
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmTeam
+metadata:
+  name: rocket-team-developers
+  labels:
+    wxops.cloud/owner: rocket-team
+spec:
+  parameters:
+    scmRef:
+      name: gitea-internal
+    vendor: gitea
+    teamName: Developers
+    description: Rocket squad developers
+    permission: write
+    repositories: [rocket-api]
+    includeAllRepositories: false
+    canCreateRepos: true
+    members:
+      - username: alice
+      - username: bob

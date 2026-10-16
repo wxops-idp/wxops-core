@@ -110,12 +110,76 @@ spec:
                 ready:
                   type: boolean
                   description: |
-                    True when the credential Secret is in sync. Equal to `created` by construction:
-                    a connection either has its Secret or it does not. The token is never verified
-                    against the host — only a resource using the connection can prove that.
+                    True when the credential Secret is in sync: `created` and `synced`. The token is
+                    never verified against the host by this field — `org` below is what shows it
+                    reaches the org.
+                synced:
+                  type: boolean
+                  description: |
+                    False while a provisioned resource's last apply failed — the host (or the secret
+                    store) rejected something. `syncMessage` says what. Absent until the first
+                    reconcile.
+                syncMessage:
+                  type: string
+                  description: |
+                    The failing resource and the provider's own message, truncated; present only while
+                    something is not Synced. The org inspection is informational: its failure is shown
+                    here but does not make `synced` false or `ready` false.
                 secretName:
                   type: string
                   description: |
                     The Secret every consumer's Workspace reads as `varFiles`. Always
                     `scm-connection-<name>` in `crossplane-system`; published so the name is
                     discoverable rather than conventional.
+                org:
+                  type: object
+                  description: |
+                    What the token can see of the connection's `org`, read-only. Absent for the user layer
+                    (no `org`) and until the first successful read — this never gates `ready`. A missing
+                    org, or a token with no access to it, fails the read, so these fields stay absent
+                    rather than reporting `exists: false`; the cause is on the `inspect` Workspace.
+                  properties:
+                    exists:
+                      type: boolean
+                      description: True once the org has been read. Never reported as false — see above.
+                    name:
+                      type: string
+                      description: The org's own name as the host reports it.
+                    id:
+                      type: string
+                      description: The host's numeric id for the org.
+                    url:
+                      type: string
+                      description: |
+                        The org's web address, derived from `baseUrl` — `<baseUrl>/<org>` on Gitea,
+                        `https://github.com/<org>` or the Enterprise host on GitHub.
+                repositories:
+                  type: object
+                  description: |
+                    The org's repositories as this token sees them (archived ones included). Names only —
+                    the detail of one is on its own `XScmRepository`.
+                  properties:
+                    count:
+                      type: integer
+                      description: How many repositories, exact.
+                    names:
+                      type: array
+                      description: Sorted repository names, at most the first 50.
+                      items:
+                        type: string
+                teams:
+                  type: object
+                  description: |
+                    The org's teams as this token sees them. Names only — the detail of one is on its own
+                    `XScmTeam`. Gitea only lists teams to a token whose user is a member of the org.
+                  properties:
+                    count:
+                      type: integer
+                      description: How many teams, exact.
+                    names:
+                      type: array
+                      description: |
+                        Sorted team names, at most the first 50. A GitHub team is named by its slug —
+                        the same form `XScmTeam` reports as `dexTeam`.
+                      items:
+                        type: string

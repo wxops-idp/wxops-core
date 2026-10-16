@@ -50,6 +50,11 @@ scope](development-docs/_archives/ROADMAP.md#out-of-scope--what-wxops-core-is-no
 | [`scm-connection`](package/scm/connection/) | `XScmConnection` | `scm.wxops.cloud` | `v1alpha1` | `release-2026-10-09` |
 | [`scm-repository`](package/scm/repository/) | `XScmRepository` | `scm.wxops.cloud` | `v1alpha1` | `release-2026-10-09` |
 | [`scm-oauth-app`](package/scm/oauth-app/) | `XScmOAuthApp` | `scm.wxops.cloud` | `v1alpha1` | `release-2026-10-09` |
+| [`scm-team`](package/scm/team/) | `XScmTeam` | `scm.wxops.cloud` | `v1alpha1` | `unreleased` |
+| [`oidc-connection`](package/auth/oidc-connection/) | `XOIDCConnection` | `auth.wxops.cloud` | `v1alpha1` | `unreleased` |
+| [`oidc-static-password`](package/auth/oidc-static-password/) | `XOIDCStaticPassword` | `auth.wxops.cloud` | `v1alpha1` | `unreleased` |
+| [`oidc-client`](package/auth/oidc-client/) | `XOIDCClient` | `auth.wxops.cloud` | `v1alpha1` | `unreleased` |
+| [`oidc-connector`](package/auth/oidc-connector/) | `XOIDCConnector` | `auth.wxops.cloud` | `v1alpha1` | `unreleased` |
 <!-- packages-table-end -->
 
 > [!NOTE]

@@ -1,0 +1,13 @@
+# expect: parameters.units
+# `repo.code` is the provider's name for the unit; the XR takes the bare name and Core adds the prefix.
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmTeam
+metadata:
+  name: bad-unit-prefix
+spec:
+  parameters:
+    scmRef:
+      name: gitea-internal
+    vendor: gitea
+    teamName: Developers
+    units: [repo.code]

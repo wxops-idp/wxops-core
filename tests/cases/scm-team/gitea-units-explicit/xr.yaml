@@ -1,0 +1,14 @@
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmTeam
+metadata:
+  name: rocket-team-auditors
+spec:
+  parameters:
+    scmRef:
+      name: gitea-internal
+    vendor: gitea
+    teamName: Auditors
+    permission: read
+    # The same ten, spelled out — `all` (see gitea-units-all) is the shorthand for exactly this.
+    units: [code, issues, ext_issues, wiki, ext_wiki, pulls, releases, projects, actions, packages]
+    repositories: [rocket-api]

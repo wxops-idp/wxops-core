@@ -119,10 +119,14 @@ A package lives at `package/<group>/<name>/`, where the group is the API group i
 - [ ] `VERSIONS.yaml` entry: `group`, `path`, `api.served`/`api.storage`, `description`, and
       `package.current: unreleased`. No `package/install/` manifest — `make release` writes it on the first
       release — then `make readme-sync`
-- [ ] `package/<group>/<name>/xrd.yaml` — schema-first, minimal, **with `status.created` and `status.ready`**
+- [ ] `package/<group>/<name>/xrd.yaml` — schema-first, minimal, **with `status.created`, `status.ready`, `status.synced` and `status.syncMessage`** (`make test-xrd` fails without the last two)
 - [ ] `package/<group>/<name>/composition.yaml`
 - [ ] `kcl/<name>/main.k` + `kcl.mod` if using function-kcl, then `make kcl-sync` (and add the name to
-      `KCL_PACKAGES` in [`.gitea/scripts/kcl-sync.py`](.gitea/scripts/kcl-sync.py))
+      `KCL_PACKAGES` in [`.gitea/scripts/kcl-sync.py`](.gitea/scripts/kcl-sync.py)). Make `_isReady` require `Synced` not `False` and add the sync status, as the
+      existing KCL packages do
+- [ ] **A patch-and-transform package** ends its pipeline with the shared `status` step (copy it from `package/scm/team/composition.yaml`), is listed in
+      `STATUS_PACKAGES` in the same script, and depends on `function-kcl` in its `crossplane.yaml`; its Workspace and Object resources need `Ready` and `Synced`
+      readiness checks
 - [ ] `package/<group>/<name>/crossplane.yaml`, `kustomization.yaml` (just `xrd.yaml` + `composition.yaml`), `README.md`
 - [ ] `package/dev/kustomization.yaml` — add `../<group>/<name>`; nothing generates this file
 - [ ] `examples/<name>/xr.yaml`
@@ -175,6 +179,7 @@ cp examples/<pkg>/xr.yaml tests/cases/<pkg>/baseline/xr.yaml
    ```bash
    cp -r tests/cases/<pkg>/baseline tests/cases/<pkg>/degraded
    python3 tests/lib/mkobserved.py <pkg> degraded --unready <name-substring>
+   python3 tests/lib/mkobserved.py <pkg> sync-failed --unsynced <name-substring>   # a later apply failed: Ready stays True, Synced=False
    ```
 
 Then add **one case per conditional branch** the composition has — every

@@ -1,0 +1,22 @@
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmTeam
+metadata:
+  name: rocket-team-developers
+  labels:
+    wxops.cloud/owner: rocket-team
+spec:
+  parameters:
+    scmRef:
+      name: github-wxops-idp
+    vendor: github
+    teamName: developers
+    description: Rocket squad developers
+    permission: write
+    repositories: [rocket-api]
+    privacy: secret
+    parentTeamId: "42"
+    notificationSetting: notifications_disabled
+    members:
+      - username: alice
+        role: maintainer
+      - username: bob

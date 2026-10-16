@@ -8,12 +8,31 @@ field-by-field detail with rationale; this page exists so a portal engineer does
 
 **Poll `status.ready` / `status.created`, never the native `type: Ready` condition.** Crossplane v2.3 with function-kcl v0.12.1 leaves that condition unreliable
 (see [`CLAUDE.md`](../../CLAUDE.md) — Testing) — every KCL-based package derives its own `ready`/`created` from observed composed-resource state instead; each
-package's status section below has the exact derivation. All seven packages now expose the same two field names, so the polling logic is identical across
+package's status section below has the exact derivation. Every package now exposes the same two field names, so the polling logic is identical across
 packages — only the extra fields differ.
+
+## Sync state — every package
+
+`ready` answers "is it there", and it used to answer nothing about the *last apply*: a composed Workspace or Object whose update failed keeps `Ready=True`
+from the earlier success, so an XR could read `ready: true` while its resource was erroring. Every package now also reports:
+
+| Field | Meaning |
+|---|---|
+| `synced` | `false` while a composed resource that `ready` depends on failed its last apply. **Absent** until the first reconcile. |
+| `syncMessage` | `<resource>: <provider message>`, truncated to ~400 characters, with `(+N more)` when several fail. Present only while something is not synced. The full error is on that resource's `Synced` condition. |
+
+`ready` is narrowed accordingly: where it was already set, it is also `false` while a gating resource is not synced, and the XR's native `Ready` shows
+`Unready resources: <name>`. Two things to know when reading it:
+
+- **Informational resources do not gate.** A resource a package deliberately leaves out of `ready` (the credential pushes in `tenant-database` and
+  `platform-database-clusters`, the org inspection in `scm-connection`) still appears in `syncMessage`, but leaves `synced` and `ready` alone.
+- **Absent stays absent.** A package whose `ready` is absent-until-apply keeps it absent; `synced` is also absent until something has been observed.
+
+Poll `ready` for "usable", `synced` for "the last apply worked", and show `syncMessage` to a human.
 
 ## API version
 
-**All seven XRDs serve `v1alpha1` only.** This is a decision, not an oversight — recorded in [`VERSIONS.yaml`](../../VERSIONS.yaml). Every Phase 0 change is
+**Every XRD serves `v1alpha1` only.** This is a decision, not an oversight — recorded in [`VERSIONS.yaml`](../../VERSIONS.yaml). Every Phase 0 change is
 additive, so nothing forced a bump; promotion to `v1beta1` is deferred to [release readiness](../../development-docs/_archives/ROADMAP.md#release-readiness),
 the natural point to make a stability commitment. **The portal should expect to pin `v1alpha1` for its first integration** — that is accepted, not a temporary
 gap to work around.
@@ -26,12 +45,17 @@ gap to work around.
 | [`gitea-org`](_archives/gitea-org.md#status) (archived) | `XGiteaOrg` | bool, absent-until-apply | bool, absent-until-apply | `orgId`, `orgName` | Same absent-not-false caveat. |
 | [`gitea-team`](_archives/gitea-team.md#status) (archived) | `XGiteaTeam` | bool, absent-until-apply | bool, absent-until-apply | `teamId`, `teamName` | Same absent-not-false caveat. |
 | [`gitea-repository`](_archives/gitea-repository.md#status) (archived) | `XGiteaRepository` | bool, absent-until-apply | bool, absent-until-apply | `repoId`, `cloneUrl`, `sshUrl`, `htmlUrl` | Same absent-not-false caveat. |
-| [`platform-database-clusters`](platform-database-clusters.md#status) | `XPlatformDatabaseCluster` | bool, explicit `false` | bool, explicit `false` | `clusterName`, `namespace`, `shared`, `environment` | `ready` excludes Vault seeding and scheduled backups on purpose — neither stops a running cluster serving. |
-| [`tenant-database`](tenant-database.md#status) | `XTenantDatabase` | bool, explicit `false` | bool, explicit `false` | `clusterRef`, `clusterNamespace`, `tier`, `dbName` | `ready` excludes the Vault credential push — a lagging push doesn't stop the app connecting. |
-| [`scm-connection`](scm-connection.md#status) | `XScmConnection` | bool, absent-until-synced | bool, absent-until-synced | `secretName` | Same absent-not-false caveat. `ready` means the credential Secret exists — never that the token works against the host. |
-| [`scm-repository`](scm-repository.md#status) | `XScmRepository` | bool, absent-until-apply | bool, absent-until-apply | `exists`, `repoId`, `cloneUrl`, `sshUrl`, `htmlUrl`, `fullName` | Same absent-not-false caveat. In `observed` mode `exists` is the field that matters. |
-| [`scm-oauth-app`](scm-oauth-app.md#status) | `XScmOAuthApp` | bool, absent-until-apply | bool, absent-until-apply | `clientId`, `vaultKey`, `generation` | Same absent-not-false caveat. The client secret is never in status — it goes to the store and to a Secret. |
-| [`tenant-app`](tenant-app.md#status) | `XTenantApp` | bool, explicit `false` | bool, explicit `false`, **workload-scoped** | `dependenciesReady`, `darlane.*`, `url`, `namespace`, `image` | See the split below — `ready` alone is not the full health picture for this package. |
+| [`platform-database-clusters`](platform-database-clusters.md#status) | `XPlatformDatabaseCluster` | bool, explicit `false` | bool, explicit `false` | `clusterName`, `namespace`, `shared`, `environment`, `synced`, `syncMessage` | `ready` excludes Vault seeding and scheduled backups on purpose — neither stops a running cluster serving. |
+| [`tenant-database`](tenant-database.md#status) | `XTenantDatabase` | bool, explicit `false` | bool, explicit `false` | `clusterRef`, `clusterNamespace`, `tier`, `dbName`, `synced`, `syncMessage` | `ready` excludes the Vault credential push — a lagging push doesn't stop the app connecting. |
+| [`scm-connection`](scm-connection.md#status) | `XScmConnection` | bool, absent-until-synced | bool, absent-until-synced | `secretName`, `org`, `repositories`, `teams`, `synced`, `syncMessage` | Same absent-not-false caveat. `ready` means the credential Secret exists — it does not say the token works; for an org connection `org.exists` does, and `repositories` / `teams` carry names and counts only. The org inspection is informational: it never gates `ready`. |
+| [`scm-repository`](scm-repository.md#status) | `XScmRepository` | bool, absent-until-apply | bool, absent-until-apply | `exists`, `repoId`, `cloneUrl`, `sshUrl`, `htmlUrl`, `fullName`, `synced`, `syncMessage` | Same absent-not-false caveat. In `observed` mode `exists` is the field that matters. |
+| [`scm-oauth-app`](scm-oauth-app.md#status) | `XScmOAuthApp` | bool, absent-until-apply | bool, absent-until-apply | `clientId`, `vaultKey`, `generation`, `synced`, `syncMessage` | Same absent-not-false caveat. The client secret is never in status — it goes to the store and to a Secret. |
+| [`scm-team`](scm-team.md#status) | `XScmTeam` | bool, absent-until-apply | bool, absent-until-apply | `exists`, `id`, `org`, `baseUrl`, `dexTeam`, `oidcGroup`, `synced`, `syncMessage` | Same absent-not-false caveat. |
+| [`oidc-connection`](oidc-connection.md#status) | `XOIDCConnection` | bool, absent-until-synced | bool, absent-until-synced | `message`, `callbackUrl`, `synced`, `syncMessage` | Same absent-not-false caveat. `ready` means the broker's own config render succeeded — never that the broker has reloaded; Core cannot observe that. |
+| [`oidc-static-password`](oidc-static-password.md#status) | `XOIDCStaticPassword` | bool, absent-until-apply | bool, absent-until-apply | `userId`, `vaultKey`, `synced`, `syncMessage` | Same absent-not-false caveat. The password is never in status — only the pushed record's key. |
+| [`oidc-client`](oidc-client.md#status) | `XOIDCClient` | bool, absent-until-apply | bool, absent-until-apply | `clientId`, `vaultKey`, `synced`, `syncMessage` | Same absent-not-false caveat. The secret is never in status. |
+| [`oidc-connector`](oidc-connector.md#status) | `XOIDCConnector` | bool, absent-until-apply | bool, absent-until-apply | `vaultKey`, `teams`, `synced`, `syncMessage` | Same absent-not-false caveat. |
+| [`tenant-app`](tenant-app.md#status) | `XTenantApp` | bool, explicit `false` | bool, explicit `false`, **workload-scoped** | `dependenciesReady`, `darlane.*`, `url`, `namespace`, `image`, `synced`, `syncMessage` | See the split below — `ready` alone is not the full health picture for this package. |
 
 The **absent-vs-`false`** split is real and package-group-wide: the four `gitea-*` packages use `function-patch-and-transform`, patching values out of Terraform
 outputs via `ToCompositeFieldPath` with an `Optional` policy — the patch simply doesn't run before the first successful apply, so the field is missing from the
@@ -111,7 +135,7 @@ There is no status-side confirmation that a `ServiceMonitor`/`PodMonitor` was ac
 
 ## `cluster` — every package, input not status
 
-`spec.parameters.cluster` (all seven packages via `platform-database-clusters`, `tenant-database`, `tenant-app` — the four `gitea-*` packages don't have it,
+`spec.parameters.cluster` (`platform-database-clusters`, `tenant-database`, `tenant-app` — the four `gitea-*` packages and the `scm-*`/`oidc-*` families don't have it,
 since a Gitea `Workspace` targets a Gitea server over HTTP, not a Kubernetes cluster). Defaults to `"default"`, the local hub. **Behaviour-neutral until a spoke
 `ProviderConfig` exists** — see [multi-cluster.md](../../development-docs/core-ideas/multi-cluster.md). Not yet consumed anywhere; safe for the portal to ignore
 until multi-cluster work lands, at which point it becomes the field that selects a target cluster per XR.

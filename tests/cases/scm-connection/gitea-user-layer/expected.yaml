@@ -8,6 +8,9 @@ spec:
       - apiVersion: kubernetes.crossplane.io/v1alpha2
         kind: Object
         name: gitea-personal-3dc4bc74c1e8
+      - apiVersion: opentofu.upbound.io/v1beta1
+        kind: Workspace
+        name: gitea-personal-ebe7cc968023
 status:
   conditions:
     - reason: WatchCircuitClosed
@@ -16,7 +19,7 @@ status:
     - reason: ReconcileSuccess
       status: 'True'
       type: Synced
-    - message: 'Unready resources: credentials'
+    - message: 'Unready resources: credentials, inspect'
       reason: Creating
       status: 'False'
       type: Ready
@@ -72,5 +75,36 @@ spec:
 
                 '
             engineVersion: v2
+  providerConfigRef:
+    name: default
+---
+apiVersion: opentofu.upbound.io/v1beta1
+kind: Workspace
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: inspect
+  generateName: gitea-personal-
+  labels:
+    crossplane.io/composite: gitea-personal
+  name: gitea-personal-ebe7cc968023
+  ownerReferences:
+    - apiVersion: scm.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XScmConnection
+      name: gitea-personal
+      uid: 76c19f79-e108-5636-8c70-952fd3ce1b6e
+spec:
+  forProvider:
+    module: '# user layer: no org to inspect
+
+      '
+    source: Inline
+    varFiles:
+      - secretKeyRef:
+          key: credentials
+          name: scm-connection-gitea-personal
+          namespace: crossplane-system
+        source: SecretKey
   providerConfigRef:
     name: default

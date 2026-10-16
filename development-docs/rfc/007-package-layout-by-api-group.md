@@ -5,10 +5,9 @@
 Implemented
 
 > [!NOTE]
-> Implemented for both groups now in use: the eight original packages moved to `package/platform/<name>/`, `VERSIONS.yaml` gained `group`/`path`,
-> `tests/lib/packages.py` is the one resolver (the five hand-maintained package lists are gone), and `package/scm/` landed with its first three real packages
-> (`scm-connection`, `scm-repository`, `scm-oauth-app`, RFC-003 Phase 1). `auth/` still awaits its first package (RFC-004). See
-> [ADR-002](../adr/002-three-api-groups.md) for the group split this layout serves.
+> Implemented for all three groups: the original packages moved to `package/platform/<name>/`, `VERSIONS.yaml` gained `group`/`path`,
+> `tests/lib/packages.py` is the one resolver (the hand-maintained package lists are gone), `package/scm/` holds `scm-connection`, `scm-repository`,
+> `scm-oauth-app` and `scm-team` (RFC-003), and `package/auth/` holds the four `oidc-*` packages (RFC-004). See [ADR-002](../adr/002-three-api-groups.md) for the group split this layout serves.
 
 ## Summary
 
@@ -111,13 +110,16 @@ category is also where Crossplane's operational features would be organised if a
 
 ## Rollout Plan
 
-- [ ] **Order (decided):** this layout move first, then `scm` packages written directly on OpenTofu ([RFC-002](002-migrate-terraform-to-opentofu.md),
-  [RFC-003](003-scm-connections-and-resources.md)), then the `random-password` engine swap, then the Dex integration.
-- [ ] **Step 1 — the move.** One behaviour-neutral pull request, accepted only if every unchanged check above stays green.
-- [ ] **Step 2 — `VERSIONS.yaml` `group`** and the release scripts reading it.
-- [ ] **Step 3 — category Kustomizations**, dev and install, with `make install-dev` and `make install` able to take a category.
-- [ ] **Step 4 — docs and contributor guidance**, including a short "adding a package to a category" page.
-- [ ] **Later, if wanted:** `kcl/`, `examples/` and `tests/cases/` follow the same grouping.
+- [x] **Order (decided):** this layout move first, then `scm` packages written directly on OpenTofu ([RFC-002](002-migrate-terraform-to-opentofu.md),
+  [RFC-003](003-scm-connections-and-resources.md)), then the `random-password` engine swap, then the Dex integration. All done, except that `random-password` was
+  archived rather than swapped, so there was no engine swap to make.
+- [x] **Step 1 — the move.** One behaviour-neutral pull request, accepted only if every unchanged check above stays green.
+- [x] **Step 2 — `VERSIONS.yaml` `group`** and the release scripts reading it.
+- [x] **Step 3 — category Kustomizations**, dev and install. `package/scm/` and `package/auth/` each have a dev Kustomization, and `package/install/<group>/` has one per released group, so a category installs with `kubectl apply -k`. A `make install` category argument was **not built, by decision** — `kubectl apply -k` already does it.
+- [x] **Step 4 — docs and contributor guidance**, including a short "adding a package to a category" page — the *Adding a new package* section of `CONTRIBUTING.md`.
+
+`kcl/`, `examples/` and `tests/cases/` stay flat (`kcl/<name>/`, `examples/<name>/`, `tests/cases/<name>/`); the harness finds each package's group through
+`VERSIONS.yaml`, so nothing needs them grouped.
 
 On acceptance, one ADR is optional: the layout is a convention more than a decision with lasting architectural consequence. ADR-002 already records the groups
 it follows.
@@ -125,5 +127,3 @@ it follows.
 ## Open Questions
 
 1. **One category per package, or can one package serve two?** For example a package that composes both an SCM resource and a Dex client.
-2. **Does `random-password` belong in `platform`**, or in a shared category of utilities that every group may use?
-3. **Second step.** Should `kcl/`, `examples/` and `tests/cases/` follow in the same change, accepting a harness update, or wait?

@@ -1,0 +1,15 @@
+# expect: parameters.permission
+# expect: is not one of
+#
+# Only read, write and admin exist — the neutral vocabulary both hosts' roles map onto.
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmTeam
+metadata:
+  name: bad-permission
+spec:
+  parameters:
+    scmRef:
+      name: gitea-internal
+    vendor: gitea
+    teamName: developers
+    permission: owner

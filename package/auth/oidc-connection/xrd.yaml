@@ -1,0 +1,112 @@
+apiVersion: apiextensions.crossplane.io/v2
+kind: CompositeResourceDefinition
+metadata:
+  name: xoidcconnections.auth.wxops.cloud
+spec:
+  group: auth.wxops.cloud
+  # Cluster-scoped: platform-owned, per ADR-002 — tenants do not create a connection.
+  scope: Cluster
+  names:
+    kind: XOIDCConnection
+    plural: xoidcconnections
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - parameters
+              properties:
+                parameters:
+                  type: object
+                  required:
+                    - issuer
+                    - config
+                  properties:
+                    vendor:
+                      type: string
+                      description: |
+                        Which broker this connection points at. Also the remote-key prefix every
+                        `oidc-*` record kind writes under (`<vendor>/connectors/...`,
+                        `<vendor>/clients/...`, `<vendor>/users/...`, `<vendor>/users-def/...`).
+                        Dex is the only broker in this release — the field is what lets another one
+                        land beside it later without a schema change.
+                      enum: ["dex"]
+                      default: dex
+                    issuer:
+                      type: string
+                      description: |
+                        Must equal the broker's own `issuer` setting (a chart value, not written by
+                        Core — see RFC-004). Used only to build `status.callbackUrl`.
+                    secretStoreRef:
+                      type: object
+                      description: |
+                        The ESO ClusterSecretStore every `oidc-*` record kind pushes to. Must read the
+                        same OpenBao mount the broker's own aggregator reads.
+                      properties:
+                        name:
+                          type: string
+                          default: vault-platform
+                      default: {}
+                    config:
+                      type: object
+                      description: |
+                        Identifies the broker's own config `ExternalSecret` — the W'xOps `dexidp` chart
+                        (wxops-idp/charts/dexidp) renders one per Dex install. Core observes it; it
+                        never writes it.
+                      required:
+                        - namespace
+                      properties:
+                        namespace:
+                          type: string
+                        externalSecretName:
+                          type: string
+                          default: dex-config
+            status:
+              type: object
+              properties:
+                created:
+                  type: boolean
+                  description: |
+                    True once the broker's config `ExternalSecret` has been observed at least once.
+
+                    Absent — not false — until then, because the patch is skipped while its source
+                    path does not exist. Treat absent as false.
+                ready:
+                  type: boolean
+                  description: |
+                    True when the broker's config `ExternalSecret` reports `Ready: "True"` — the last
+                    render, with every connector/client/user record, succeeded. Equal to `created` by
+                    construction. **Never that the broker has actually reloaded** — Core cannot observe
+                    that; see the package README.
+                synced:
+                  type: boolean
+                  description: |
+                    False while the composed Object could not observe the broker's config
+                    `ExternalSecret` — a different thing from `message`, which is that ExternalSecret's
+                    own state. `syncMessage` says what. Absent until the first reconcile.
+                syncMessage:
+                  type: string
+                  description: |
+                    The failing resource and the provider's own message, truncated; present only while
+                    something is not Synced.
+                message:
+                  type: string
+                  description: |
+                    The config `ExternalSecret`'s own condition message when not ready — surfaces a
+                    malformed record, a duplicate id, or a missing store, straight from the chart's
+                    own fail-closed template.
+                callbackUrl:
+                  type: string
+                  description: |
+                    `<issuer>/callback` — what every upstream `XOIDCConnector`'s OAuth application
+                    redirect URI must contain.
+
+                    Absent — not "" — until the XR's first successful reconcile, same as `created`,
+                    even though it needs nothing external: it round-trips through the composed
+                    Object's own observed state. Treat absent as not yet available.

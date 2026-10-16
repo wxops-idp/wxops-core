@@ -79,6 +79,8 @@ Full mechanism, the `Manual`-pin alternative, and why: [Channels](../../developm
 | `dbName` | `string` | PostgreSQL database name (echoed for cross-XR collision checks). |
 | `created` | `boolean` | True once every composed resource has been observed at least once. Indicates provisioning has started, not that it succeeded. |
 | `ready` | `boolean` | True when the database is usable: it exists, its owning role exists, and the connection Secret has materialised (plus, on `tier: dedicated`, the child cluster is up). Derived from observed composed-resource state rather than the native `type: Ready` condition, which is unreliable on Crossplane v2.3 with function-kcl v0.12.1. **Poll this field, not conditions.** The Vault credential push (`PushSecret`) is deliberately excluded — if it lags, applications can still connect. |
+| `synced` | `boolean` | False while a composed resource's last apply failed — its `Ready` condition can stay True from the earlier success. Absent until the first reconcile. See [Sync state](status-contract.md#sync-state--every-package). |
+| `syncMessage` | `string` | The failing resource and the provider's own message, truncated to ~400 characters; present only while something is not synced. |
 
 ## Required discovery labels
 

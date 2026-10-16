@@ -20,6 +20,11 @@ resources:
   - ../scm/connection
   - ../scm/repository
   - ../scm/oauth-app
+  - ../scm/team
+  - ../auth/oidc-connection
+  - ../auth/oidc-static-password
+  - ../auth/oidc-client
+  - ../auth/oidc-connector
 
 # Every package/<pkg>/composition.yaml ships channel: stable (the release default). Overriding it
 # here means everything applied via `make install-dev` is unambiguously channel: nightly, so an XR

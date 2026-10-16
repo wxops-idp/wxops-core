@@ -18,9 +18,11 @@ This renders the case, reads the real Object names out, and emits a fixture with
 every resource Ready.
 
 Usage:
-    python3 tests/lib/mkobserved.py <package> <case> [--unready NAME ...]
+    python3 tests/lib/mkobserved.py <package> <case> [--unready NAME ...] [--unsynced NAME ...]
 
-    --unready takes an Object-name suffix, e.g. --unready certificate
+    --unready  takes an Object-name substring, e.g. --unready certificate: Ready=False.
+    --unsynced takes an Object-name substring: Ready stays True (the earlier success) but
+               Synced=False with a provider message — a later apply that failed.
 """
 from __future__ import annotations
 
@@ -32,7 +34,7 @@ import render as R  # noqa: E402
 import yaml  # noqa: E402
 
 
-def build(package: str, case: str, unready: list[str]) -> str:
+def build(package: str, case: str, unready: list[str], unsynced: list[str] = ()) -> str:
     case_dir = R.CASES / package / case
     ok, out, err = R.render(case_dir, package)
     if not ok:
@@ -70,6 +72,13 @@ def build(package: str, case: str, unready: list[str]) -> str:
                 }],
             },
         }
+        if any(u in name for u in unsynced):
+            entry["status"]["conditions"].append({
+                "type": "Synced",
+                "status": "False",
+                "reason": "ReconcileError",
+                "message": "apply failed: cannot apply the manifest",
+            })
         wrapped = ((d.get("spec") or {}).get("forProvider") or {}).get("manifest") or {}
         if wrapped.get("kind") == "Deployment":
             replicas = ((wrapped.get("spec") or {}).get("replicas")) or 1
@@ -88,6 +97,8 @@ def build(package: str, case: str, unready: list[str]) -> str:
     )
     if unready:
         header += f"# Deliberately not Ready: {', '.join(unready)}\n"
+    if unsynced:
+        header += f"# Deliberately not Synced (Ready stays True): {', '.join(unsynced)}\n"
     return header + R.dump_all(entries)
 
 
@@ -96,17 +107,26 @@ def main() -> int:
     if len(args) < 2:
         print(__doc__)
         return 2
-    unready: list[str] = []
-    if "--unready" in sys.argv:
-        unready = sys.argv[sys.argv.index("--unready") + 1:]
-        unready = [u for u in unready if not u.startswith("--")]
+    def values(flag: str) -> list[str]:
+        if flag not in sys.argv:
+            return []
+        out = []
+        for a in sys.argv[sys.argv.index(flag) + 1:]:
+            if a.startswith("--"):
+                break
+            out.append(a)
+        return out
+
+    unready, unsynced = values("--unready"), values("--unsynced")
+    args = [a for a in args if a not in unready and a not in unsynced]
 
     package, case = args[0], args[1]
-    text = build(package, case, unready)
+    text = build(package, case, unready, unsynced)
     dest = R.CASES / package / case / "observed.yaml"
     dest.write_text(text)
     print(f"wrote {dest.relative_to(R.ROOT)}"
-          + (f"  (unready: {', '.join(unready)})" if unready else ""))
+          + (f"  (unready: {', '.join(unready)})" if unready else "")
+          + (f"  (unsynced: {', '.join(unsynced)})" if unsynced else ""))
     return 0
 
 

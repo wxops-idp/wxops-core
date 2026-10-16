@@ -62,6 +62,10 @@ spec:
                 matchCondition:
                   type: Ready
                   status: "True"
+              - type: MatchCondition
+                matchCondition:
+                  type: Synced
+                  status: "True"
 
             patches:
               # scm-connection-<name>, in crossplane-system: the one name consumers derive from
@@ -157,3 +161,353 @@ spec:
                           regexp: "^True$"
                           result: true
                       fallbackValue: false
+
+          # A read-only look at the org this connection points at, so the XR's status says what the
+          # token can see: that the org exists, its id and url, and the names of its repositories and
+          # teams. Names and counts only — the detail lives on each XScmRepository / XScmTeam.
+          #
+          # Never gates the connection: `None` readiness keeps this Workspace out of the XR's Ready
+          # computation, so a token that cannot list teams (Gitea needs org membership for that) leaves
+          # the connection usable with `status.org` simply absent. The module only reads — no resource
+          # blocks, so nothing is ever created, changed or destroyed on the host.
+          #
+          # The user layer (no `org`) has nothing to inspect: the module collapses to a comment and
+          # emits no outputs, so every inspection field stays absent rather than empty.
+          - name: inspect
+            base:
+              apiVersion: opentofu.upbound.io/v1beta1
+              kind: Workspace
+              spec:
+                providerConfigRef:
+                  name: default
+                forProvider:
+                  source: Inline
+                  # Always overwritten by the `match` transform patch below — never rendered as-is.
+                  module: placeholder
+                  varFiles:
+                    - source: SecretKey
+                      secretKeyRef:
+                        namespace: crossplane-system
+                        name: placeholder
+                        key: credentials
+
+            readinessChecks:
+              - type: None
+
+            patches:
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: spec.forProvider.varFiles[0].secretKeyRef.name
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: "scm-connection-%s"
+
+              # ── Module selection ────────────────────────────────────────────
+              # vendor|org, matched by regexp: a vendor with an org picks that vendor's module, an
+              # empty org falls through to the no-op module. Same vendor-exclusive-module pattern as
+              # scm-repository (ADR-004).
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: spec.parameters.vendor
+                    - fromFieldPath: spec.parameters.org
+                  strategy: string
+                  string:
+                    fmt: "%s|%s"
+                toFieldPath: spec.forProvider.module
+                transforms:
+                  - type: match
+                    match:
+                      fallbackValue: "# user layer: no org to inspect\n"
+                      patterns:
+                        - type: regexp
+                          regexp: '^gitea\|.+$'
+                          result: |
+                            terraform {
+                              required_providers {
+                                gitea = { source = "go-gitea/gitea", version = "~> 0.8" }
+                              }
+                            }
+
+                            # ── From the XScmConnection Secret (varFiles) ───────────────────────────
+                            variable "vendor" { type = string }
+                            variable "base_url" { type = string }
+                            variable "default_org" { type = string }
+                            variable "access" { type = string }
+                            variable "token" {
+                              type      = string
+                              sensitive = true
+                            }
+
+                            locals {
+                              # Names are capped so a very large org cannot bloat the XR; the counts
+                              # stay exact.
+                              max_names = 50
+                            }
+
+                            provider "gitea" {
+                              base_url = var.base_url
+                              token    = var.token
+                            }
+
+                            # A missing org fails the read, so the outputs below never appear for one.
+                            data "gitea_org" "this" {
+                              name = var.default_org
+                            }
+
+                            # Listing teams needs the token's user to be a member of the org.
+                            data "gitea_teams" "this" {
+                              organisation = var.default_org
+                            }
+
+                            # `username` is the owner — an org name works as well as a user name.
+                            data "gitea_repositories" "this" {
+                              username = var.default_org
+                            }
+
+                            locals {
+                              team_names = sort([for t in data.gitea_teams.this.teams : t.name])
+                              repo_names = sort([for r in data.gitea_repositories.this.repositories : r.name])
+                            }
+
+                            output "org_exists" {
+                              value = "true"
+                            }
+                            output "org_name" {
+                              value = data.gitea_org.this.name
+                            }
+                            output "org_id" {
+                              value = tostring(data.gitea_org.this.id)
+                            }
+                            output "org_url" {
+                              value = "${trimsuffix(var.base_url, "/")}/${var.default_org}"
+                            }
+                            output "repositories_count" {
+                              value = tostring(length(local.repo_names))
+                            }
+                            output "repositories_names" {
+                              value = jsonencode(slice(local.repo_names, 0, min(local.max_names, length(local.repo_names))))
+                            }
+                            output "teams_count" {
+                              value = tostring(length(local.team_names))
+                            }
+                            output "teams_names" {
+                              value = jsonencode(slice(local.team_names, 0, min(local.max_names, length(local.team_names))))
+                            }
+                        - type: regexp
+                          regexp: '^github\|.+$'
+                          result: |
+                            terraform {
+                              required_providers {
+                                github = { source = "integrations/github", version = "~> 6.13" }
+                              }
+                            }
+
+                            # ── From the XScmConnection Secret (varFiles) ───────────────────────────
+                            variable "vendor" { type = string }
+                            variable "base_url" { type = string } # "" means github.com
+                            variable "default_org" { type = string }
+                            variable "access" { type = string }
+                            variable "token" {
+                              type      = string
+                              sensitive = true
+                            }
+
+                            locals {
+                              # Names are capped so a very large org cannot bloat the XR; the counts
+                              # stay exact.
+                              max_names = 50
+
+                              # github.com, or the Enterprise host with its `/api/v3` suffix removed.
+                              web_url = var.base_url == "" ? "https://github.com" : trimsuffix(trimsuffix(var.base_url, "/"), "/api/v3")
+                            }
+
+                            provider "github" {
+                              base_url = var.base_url != "" ? var.base_url : null
+                              owner    = var.default_org
+                              token    = var.token
+                            }
+
+                            # A missing org fails the read, so the outputs below never appear for one.
+                            # Not summary_only: the repository list is only fetched without it.
+                            data "github_organization" "this" {
+                              name         = var.default_org
+                              summary_only = false
+                            }
+
+                            # Takes no org argument — it reads the provider's `owner`.
+                            data "github_organization_teams" "this" {
+                              summary_only = true
+                            }
+
+                            locals {
+                              # Repositories arrive as `owner/name`; teams are named by their slug,
+                              # the same form XScmTeam reports as `dexTeam`.
+                              repo_names = sort([for r in data.github_organization.this.repositories : element(split("/", r), length(split("/", r)) - 1)])
+                              team_names = sort([for t in data.github_organization_teams.this.teams : t.slug])
+                            }
+
+                            output "org_exists" {
+                              value = "true"
+                            }
+                            output "org_name" {
+                              value = data.github_organization.this.login
+                            }
+                            output "org_id" {
+                              value = tostring(data.github_organization.this.id)
+                            }
+                            output "org_url" {
+                              value = "${local.web_url}/${var.default_org}"
+                            }
+                            output "repositories_count" {
+                              value = tostring(length(local.repo_names))
+                            }
+                            output "repositories_names" {
+                              value = jsonencode(slice(local.repo_names, 0, min(local.max_names, length(local.repo_names))))
+                            }
+                            output "teams_count" {
+                              value = tostring(length(local.team_names))
+                            }
+                            output "teams_names" {
+                              value = jsonencode(slice(local.team_names, 0, min(local.max_names, length(local.team_names))))
+                            }
+
+              # ── Status write-back ──────────────────────────────────────────
+              # Every output is a string. Optional skips a patch while its output is absent, which is
+              # the user layer, a failing read, and the first reconcile alike.
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.outputs.org_exists
+                toFieldPath: status.org.exists
+                policy:
+                  fromFieldPath: Optional
+                transforms:
+                  - type: match
+                    match:
+                      patterns:
+                        - type: literal
+                          literal: "true"
+                          result: true
+                      fallbackValue: false
+
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.outputs.org_name
+                toFieldPath: status.org.name
+                policy:
+                  fromFieldPath: Optional
+
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.outputs.org_id
+                toFieldPath: status.org.id
+                policy:
+                  fromFieldPath: Optional
+
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.outputs.org_url
+                toFieldPath: status.org.url
+                policy:
+                  fromFieldPath: Optional
+
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.outputs.repositories_count
+                toFieldPath: status.repositories.count
+                policy:
+                  fromFieldPath: Optional
+                transforms:
+                  - type: convert
+                    convert:
+                      toType: int64
+
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.outputs.repositories_names
+                toFieldPath: status.repositories.names
+                policy:
+                  fromFieldPath: Optional
+                transforms:
+                  - type: convert
+                    convert:
+                      toType: array
+                      format: json
+
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.outputs.teams_count
+                toFieldPath: status.teams.count
+                policy:
+                  fromFieldPath: Optional
+                transforms:
+                  - type: convert
+                    convert:
+                      toType: int64
+
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.outputs.teams_names
+                toFieldPath: status.teams.names
+                policy:
+                  fromFieldPath: Optional
+                transforms:
+                  - type: convert
+                    convert:
+                      toType: array
+                      format: json
+
+    # Last step: fold each observed composed resource's Synced state into the XR status, so ready
+    # reflects the last apply and not the last success. Source is kcl/status/main.k, embedded by
+    # make kcl-sync — do not edit it here.
+    - step: status
+      functionRef:
+        name: function-kcl
+      input:
+        apiVersion: krm.kcl.dev/v1alpha1
+        kind: KCLInput
+        metadata:
+          name: status
+        spec:
+          source: |
+            """
+            status — shared last step of the patch-and-transform packages.
+
+            Writes what the provisioned resources actually report back into the XR's status: a composed
+            Workspace or Object whose last apply failed keeps Ready=True from the earlier success, so the
+            package's own `ready` (derived from outputs) would otherwise stay true.
+
+            Adds `synced` and `syncMessage`, and clears `ready` while any gating resource is not Synced.
+            Resources named in `_informational` are reported in `syncMessage` but never gate.
+            """
+
+            oxr = option("params").oxr
+            dxr = option("params").dxr or {}
+            _ocds = option("params").ocds or {}
+
+            _get = lambda d: any, k: str, default: any -> any {
+                _safe = d or {}
+                _safe[k] if k in _safe else default
+            }
+
+            # Composed resources that are informational: a failure is shown, but never gates ready or synced.
+            _informational = ["inspect"]
+
+            _failures = [
+                {name = n, message = _get(c, "message", _get(c, "reason", "not synced"))}
+                for n, ocd in _ocds
+                for c in _get(_get(_get(ocd, "Resource", {}), "status", {}), "conditions", [])
+                if _get(c, "type", "") == "Synced" and _get(c, "status", "") == "False"
+            ]
+            _gating = [f for f in _failures if f.name not in _informational]
+
+            _synced = len(_gating) == 0
+            _first = _failures[0] if _failures else {}
+            _msg = (_first.name + ": " + _first.message)[:400] if _failures else ""
+            _more = " (+" + str(len(_failures) - 1) + " more)" if len(_failures) > 1 else ""
+
+            _dstatus = _get(dxr, "status", {}) or {}
+
+            # Nothing observed yet means nothing to report: `synced` stays absent until the first reconcile, and
+            # `ready` is only narrowed when the package already set it — absent stays absent, never a bare false.
+            _dxr = {
+                apiVersion = oxr.apiVersion
+                kind = oxr.kind
+                status = _dstatus | ({synced = _synced} if _ocds else {}) | ({ready = _dstatus.ready and _synced} if _get(_dstatus, "ready", None) != None and _ocds else {}) | ({syncMessage = _msg + _more} if _failures else {})
+            }
+
+            items = [_dxr]

@@ -19,9 +19,9 @@ spec:
         apiVersion: pt.fn.crossplane.io/v1beta1
         kind: Resources
         resources:
-          # 1. The application itself, through one OpenTofu module. Gitea registers it; GitHub has no
-          #    creation API, so there `mode: observed` passes an operator-registered pair through.
-          #    Either way the module ends with the same two outputs, so what follows is identical.
+          # 1. The application itself, through one OpenTofu module chosen by `vendor`. Gitea registers it;
+          #    GitHub has no creation API, so there `mode: observed` passes an operator-registered pair
+          #    through. Either way the module ends with the same outputs, so what follows is identical.
           - name: tf-workspace
             base:
               apiVersion: opentofu.upbound.io/v1beta1
@@ -31,132 +31,8 @@ spec:
                   name: default
                 forProvider:
                   source: Inline
-                  module: |
-                    terraform {
-                      required_providers {
-                        gitea = { source = "go-gitea/gitea", version = "~> 0.8" }
-                      }
-                    }
-
-                    # ── From the XScmConnection Secret (varFiles) ─────────────────────────────────
-                    # default_org is unused here but declared: the connection Secret always sets it, and an undeclared
-                    # variable in a -var-file is a warning this module should not emit.
-                    variable "vendor" {
-                      type = string
-                      validation {
-                        condition     = contains(["gitea", "github"], var.vendor)
-                        error_message = "vendor must be gitea or github (the XScmConnection decides it)."
-                      }
-                    }
-                    variable "base_url" { type = string }
-                    variable "default_org" { type = string }
-                    variable "access" {
-                      type = string
-                      validation {
-                        condition     = contains(["write", "read"], var.access)
-                        error_message = "access must be write or read."
-                      }
-                    }
-                    variable "token" {
-                      type      = string
-                      sensitive = true
-                    }
-
-                    # ── From the XR ───────────────────────────────────────────────────────────────
-                    variable "mode" {
-                      type = string
-                      validation {
-                        condition     = contains(["managed", "observed"], var.mode)
-                        error_message = "mode must be managed or observed."
-                      }
-                    }
-                    variable "app_name" { type = string }
-                    variable "redirect_uris" { type = string }
-                    variable "confidential" { type = bool }
-
-                    # Bumping this replaces the application, so the host issues a new secret. A commit is the audit
-                    # trail; the previous value stays in the store's own version history.
-                    variable "rotation_generation" { type = string }
-
-                    # ── From the operator's Secret, in `observed` mode only (varFiles) ───────────
-                    variable "existing_client_id" {
-                      type    = string
-                      default = ""
-                    }
-                    variable "existing_client_secret" {
-                      type      = string
-                      sensitive = true
-                      default   = ""
-                    }
-
-                    locals {
-                      managed       = var.mode == "managed"
-                      gitea_managed = var.vendor == "gitea" && local.managed
-                      redirect_list = var.redirect_uris == "" ? [] : [for u in split(",", var.redirect_uris) : trimspace(u)]
-                    }
-
-                    provider "gitea" {
-                      base_url = var.base_url != "" ? var.base_url : "https://gitea.invalid"
-                      token    = var.token
-                    }
-
-                    # Rotation trigger. terraform_data is built in — no provider, no API call.
-                    resource "terraform_data" "rotation" {
-                      input = var.rotation_generation
-                    }
-
-                    # The rules a schema cannot express, checked before anything is written. This resource always
-                    # exists, so its preconditions always run — a precondition on a count = 0 resource would not.
-                    resource "terraform_data" "guard" {
-                      input = var.vendor
-
-                      lifecycle {
-                        precondition {
-                          condition     = !local.managed || var.vendor == "gitea"
-                          error_message = "mode: managed is only available on Gitea. GitHub has no API to create an OAuth App, so register it by hand and use mode: observed with credentialsSecretRef."
-                        }
-                        precondition {
-                          condition     = !local.managed || var.access == "write"
-                          error_message = "mode: managed needs a write connection; this XScmConnection is access: read."
-                        }
-                        precondition {
-                          condition     = local.managed || (var.existing_client_id != "" && var.existing_client_secret != "")
-                          error_message = "mode: observed needs credentialsSecretRef to name a Secret whose `credentials` key sets existing_client_id and existing_client_secret in tfvars form."
-                        }
-                        precondition {
-                          condition     = !local.managed || length(local.redirect_list) > 0
-                          error_message = "redirectUris must list at least one URI to create an application."
-                        }
-                      }
-                    }
-
-                    resource "gitea_oauth2_app" "this" {
-                      count = local.gitea_managed ? 1 : 0
-
-                      name                = var.app_name
-                      redirect_uris       = local.redirect_list
-                      confidential_client = var.confidential
-
-                      lifecycle {
-                        replace_triggered_by = [terraform_data.rotation]
-                      }
-                    }
-
-                    # ── Outputs ───────────────────────────────────────────────────────────────────
-                    # client_id is not secret and is read into the XR's status. client_secret is sensitive, so
-                    # provider-opentofu routes it to the Workspace's connection Secret and it never reaches status.
-                    output "client_id" {
-                      value = local.gitea_managed ? gitea_oauth2_app.this[0].client_id : var.existing_client_id
-                    }
-
-                    output "client_secret" {
-                      value     = local.gitea_managed ? gitea_oauth2_app.this[0].client_secret : var.existing_client_secret
-                      sensitive = true
-                    }
-
-                    output "generation" {
-                      value = var.rotation_generation
-                    }
+                  # Always overwritten by the `match` transform patch below — never rendered as-is.
+                  module: placeholder
                   vars:
                     - key: mode
                       value: managed
@@ -194,7 +70,247 @@ spec:
                   namespace: crossplane-system
                   name: placeholder
 
+            # Ready alone is not enough: a failed update leaves it True from the earlier success. Synced
+            # is the condition the provider sets False when the last apply failed.
+            readinessChecks:
+              - type: MatchCondition
+                matchCondition:
+                  type: Ready
+                  status: "True"
+              - type: MatchCondition
+                matchCondition:
+                  type: Synced
+                  status: "True"
+
             patches:
+              # ── Module selection ────────────────────────────────────────────
+              # `vendor` picks between two complete, vendor-exclusive module strings, so the Gitea
+              # provider is never configured for a GitHub connection — it calls base_url the moment it
+              # is configured. See ADR-004.
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.parameters.vendor
+                toFieldPath: spec.forProvider.module
+                transforms:
+                  - type: match
+                    match:
+                      fallbackValue: ""
+                      patterns:
+                        - type: literal
+                          literal: gitea
+                          result: |
+                              terraform {
+                                required_providers {
+                                  gitea = { source = "go-gitea/gitea", version = "~> 0.8" }
+                                }
+                              }
+
+                              # ── From the XScmConnection Secret (varFiles) ─────────────────────────────────
+                              # default_org is unused here but declared: the connection Secret always sets it, and an undeclared
+                              # variable in a -var-file is a warning this module should not emit.
+                              variable "vendor" {
+                                type = string
+                                validation {
+                                  condition     = var.vendor == "gitea"
+                                  error_message = "XScmOAuthApp.spec.parameters.vendor is gitea, but scmRef's XScmConnection resolves to a different vendor. Fix the mismatch on one side."
+                                }
+                              }
+                              variable "base_url" {
+                                type = string
+                                validation {
+                                  condition     = var.base_url != ""
+                                  error_message = "baseUrl is required on a Gitea XScmConnection — there is no default host to fall back to."
+                                }
+                              }
+                              variable "default_org" { type = string }
+                              variable "access" {
+                                type = string
+                                validation {
+                                  condition     = contains(["write", "read"], var.access)
+                                  error_message = "access must be write or read."
+                                }
+                              }
+                              variable "token" {
+                                type      = string
+                                sensitive = true
+                              }
+
+                              # ── From the XR ───────────────────────────────────────────────────────────────
+                              variable "mode" {
+                                type = string
+                                validation {
+                                  condition     = contains(["managed", "observed"], var.mode)
+                                  error_message = "mode must be managed or observed."
+                                }
+                              }
+                              variable "app_name" { type = string }
+                              variable "redirect_uris" { type = string }
+                              variable "confidential" { type = bool }
+
+                              # Bumping this replaces the application, so the host issues a new secret. A commit is the audit
+                              # trail; the previous value stays in the store's own version history.
+                              variable "rotation_generation" { type = string }
+
+                              # ── From the operator's Secret, in `observed` mode only (varFiles) ───────────
+                              variable "existing_client_id" {
+                                type    = string
+                                default = ""
+                              }
+                              variable "existing_client_secret" {
+                                type      = string
+                                sensitive = true
+                                default   = ""
+                              }
+
+                              locals {
+                                managed       = var.mode == "managed"
+                                redirect_list = var.redirect_uris == "" ? [] : [for u in split(",", var.redirect_uris) : trimspace(u)]
+                              }
+
+                              provider "gitea" {
+                                base_url = var.base_url
+                                token    = var.token
+                              }
+
+                              # Rotation trigger. terraform_data is built in — no provider, no API call.
+                              resource "terraform_data" "rotation" {
+                                input = var.rotation_generation
+                              }
+
+                              # The rules a schema cannot express, checked before anything is written. This resource always
+                              # exists, so its preconditions always run — a precondition on a count = 0 resource would not.
+                              resource "terraform_data" "guard" {
+                                input = var.vendor
+
+                                lifecycle {
+                                  precondition {
+                                    condition     = !local.managed || var.access == "write"
+                                    error_message = "mode: managed needs a write connection; this XScmConnection is access: read."
+                                  }
+                                  precondition {
+                                    condition     = local.managed || (var.existing_client_id != "" && var.existing_client_secret != "")
+                                    error_message = "mode: observed needs credentialsSecretRef to name a Secret whose `credentials` key sets existing_client_id and existing_client_secret in tfvars form."
+                                  }
+                                  precondition {
+                                    condition     = !local.managed || length(local.redirect_list) > 0
+                                    error_message = "redirectUris must list at least one URI to create an application."
+                                  }
+                                }
+                              }
+
+                              resource "gitea_oauth2_app" "this" {
+                                count = local.managed ? 1 : 0
+
+                                name                = var.app_name
+                                redirect_uris       = local.redirect_list
+                                confidential_client = var.confidential
+
+                                lifecycle {
+                                  replace_triggered_by = [terraform_data.rotation]
+                                }
+                              }
+
+                              # ── Outputs ───────────────────────────────────────────────────────────────────
+                              # client_id is not secret and is read into the XR's status. client_secret is sensitive, so
+                              # provider-opentofu routes it to the Workspace's connection Secret and it never reaches status.
+                              output "client_id" {
+                                value = local.managed ? gitea_oauth2_app.this[0].client_id : var.existing_client_id
+                              }
+
+                              output "client_secret" {
+                                value     = local.managed ? gitea_oauth2_app.this[0].client_secret : var.existing_client_secret
+                                sensitive = true
+                              }
+
+                              output "generation" {
+                                value = var.rotation_generation
+                              }
+                        - type: literal
+                          literal: github
+                          result: |
+                              # GitHub has no API to create an OAuth App, so this module declares no provider at all: an operator
+                              # registers the application by hand and `observed` mode passes that pair through. With no provider
+                              # block nothing makes a call to the host.
+
+                              # ── From the XScmConnection Secret (varFiles) ─────────────────────────────────
+                              # Only vendor is used; the rest are declared because the connection Secret always sets them, and an
+                              # undeclared variable in a -var-file is a warning this module should not emit.
+                              variable "vendor" {
+                                type = string
+                                validation {
+                                  condition     = var.vendor == "github"
+                                  error_message = "XScmOAuthApp.spec.parameters.vendor is github, but scmRef's XScmConnection resolves to a different vendor. Fix the mismatch on one side."
+                                }
+                              }
+                              variable "base_url" { type = string } # "" means github.com
+                              variable "default_org" { type = string }
+                              variable "access" {
+                                type = string
+                                validation {
+                                  condition     = contains(["write", "read"], var.access)
+                                  error_message = "access must be write or read."
+                                }
+                              }
+                              variable "token" {
+                                type      = string
+                                sensitive = true
+                              }
+
+                              # ── From the XR ───────────────────────────────────────────────────────────────
+                              variable "mode" {
+                                type = string
+                                validation {
+                                  condition     = contains(["managed", "observed"], var.mode)
+                                  error_message = "mode must be managed or observed."
+                                }
+                              }
+                              variable "app_name" { type = string }
+                              variable "redirect_uris" { type = string }
+                              variable "confidential" { type = bool }
+                              variable "rotation_generation" { type = string }
+
+                              # ── From the operator's Secret (varFiles) ─────────────────────────────────────
+                              variable "existing_client_id" {
+                                type    = string
+                                default = ""
+                              }
+                              variable "existing_client_secret" {
+                                type      = string
+                                sensitive = true
+                                default   = ""
+                              }
+
+                              # The rules a schema cannot express, checked before anything is passed through. This resource
+                              # always exists, so its preconditions always run.
+                              resource "terraform_data" "guard" {
+                                input = var.vendor
+
+                                lifecycle {
+                                  precondition {
+                                    condition     = var.mode == "observed"
+                                    error_message = "mode: managed is only available on Gitea. GitHub has no API to create an OAuth App, so register it by hand and use mode: observed with credentialsSecretRef."
+                                  }
+                                  precondition {
+                                    condition     = var.existing_client_id != "" && var.existing_client_secret != ""
+                                    error_message = "mode: observed needs credentialsSecretRef to name a Secret whose `credentials` key sets existing_client_id and existing_client_secret in tfvars form."
+                                  }
+                                }
+                              }
+
+                              # ── Outputs ───────────────────────────────────────────────────────────────────
+                              # The same three the Gitea module ends with, so everything after the Workspace is identical.
+                              output "client_id" {
+                                value = var.existing_client_id
+                              }
+
+                              output "client_secret" {
+                                value     = var.existing_client_secret
+                                sensitive = true
+                              }
+
+                              output "generation" {
+                                value = var.rotation_generation
+                              }
+
               - type: FromCompositeFieldPath
                 fromFieldPath: metadata.uid
                 toFieldPath: spec.writeConnectionSecretToRef.name
@@ -353,6 +469,10 @@ spec:
                 matchCondition:
                   type: Ready
                   status: "True"
+              - type: MatchCondition
+                matchCondition:
+                  type: Synced
+                  status: "True"
 
             patches:
               - type: FromCompositeFieldPath
@@ -404,3 +524,64 @@ spec:
                 toFieldPath: status.vaultKey
                 policy:
                   fromFieldPath: Optional
+
+    # Last step: fold each observed composed resource's Synced state into the XR status, so ready
+    # reflects the last apply and not the last success. Source is kcl/status/main.k, embedded by
+    # make kcl-sync — do not edit it here.
+    - step: status
+      functionRef:
+        name: function-kcl
+      input:
+        apiVersion: krm.kcl.dev/v1alpha1
+        kind: KCLInput
+        metadata:
+          name: status
+        spec:
+          source: |
+            """
+            status — shared last step of the patch-and-transform packages.
+
+            Writes what the provisioned resources actually report back into the XR's status: a composed
+            Workspace or Object whose last apply failed keeps Ready=True from the earlier success, so the
+            package's own `ready` (derived from outputs) would otherwise stay true.
+
+            Adds `synced` and `syncMessage`, and clears `ready` while any gating resource is not Synced.
+            Resources named in `_informational` are reported in `syncMessage` but never gate.
+            """
+
+            oxr = option("params").oxr
+            dxr = option("params").dxr or {}
+            _ocds = option("params").ocds or {}
+
+            _get = lambda d: any, k: str, default: any -> any {
+                _safe = d or {}
+                _safe[k] if k in _safe else default
+            }
+
+            # Composed resources that are informational: a failure is shown, but never gates ready or synced.
+            _informational = ["inspect"]
+
+            _failures = [
+                {name = n, message = _get(c, "message", _get(c, "reason", "not synced"))}
+                for n, ocd in _ocds
+                for c in _get(_get(_get(ocd, "Resource", {}), "status", {}), "conditions", [])
+                if _get(c, "type", "") == "Synced" and _get(c, "status", "") == "False"
+            ]
+            _gating = [f for f in _failures if f.name not in _informational]
+
+            _synced = len(_gating) == 0
+            _first = _failures[0] if _failures else {}
+            _msg = (_first.name + ": " + _first.message)[:400] if _failures else ""
+            _more = " (+" + str(len(_failures) - 1) + " more)" if len(_failures) > 1 else ""
+
+            _dstatus = _get(dxr, "status", {}) or {}
+
+            # Nothing observed yet means nothing to report: `synced` stays absent until the first reconcile, and
+            # `ready` is only narrowed when the package already set it — absent stays absent, never a bare false.
+            _dxr = {
+                apiVersion = oxr.apiVersion
+                kind = oxr.kind
+                status = _dstatus | ({synced = _synced} if _ocds else {}) | ({ready = _dstatus.ready and _synced} if _get(_dstatus, "ready", None) != None and _ocds else {}) | ({syncMessage = _msg + _more} if _failures else {})
+            }
+
+            items = [_dxr]

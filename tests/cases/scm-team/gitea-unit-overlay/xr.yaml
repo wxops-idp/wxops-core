@@ -1,0 +1,18 @@
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmTeam
+metadata:
+  name: rocket-team-maintainers
+spec:
+  parameters:
+    scmRef:
+      name: gitea-internal
+    vendor: gitea
+    teamName: Maintainers
+    description: Write everywhere, but only read Actions and packages
+    permission: write
+    units: [all]
+    # Laid over the base: these two take read, the other eight stay at write.
+    unitPermissions:
+      actions: read
+      packages: read
+    repositories: [rocket-api]

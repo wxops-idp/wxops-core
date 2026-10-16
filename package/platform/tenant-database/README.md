@@ -85,6 +85,20 @@ for full examples, and
 `spec.parameters` reference (including `dedicatedCluster` sizing and
 `databaseReclaimPolicy` semantics).
 
+## Status
+
+| Field | Description |
+|---|---|
+| `clusterRef` | Resolved CNPG cluster name this database is provisioned on. |
+| `clusterNamespace` | Namespace of the resolved cluster. |
+| `tier` | Resolved tier (shared, dedicated, or explicit). |
+| `dbName` | PostgreSQL database name (echoed for cross-XR collision checks). |
+| `created` | True once every composed resource has been observed at least once. |
+| `ready` | True when the database is usable: it exists, its owning role exists, and the connection Secret has materialised (plus, on tier: dedicated, the child cluster is up). |
+| `synced` / `syncMessage` | `synced` is false while a composed resource's last apply failed (its `Ready` can stay True from the earlier success); `syncMessage` is the provider's message, truncated. Absent until the first reconcile |
+
+Full reference: [`docs/api-reference/tenant-database.md`](../../../docs/api-reference/tenant-database.md#status).
+
 ## Relation to other packages
 
 ```

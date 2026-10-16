@@ -36,6 +36,7 @@ status:
   created: true
   dbName: payment-db
   ready: true
+  synced: true
   tier: shared
 ---
 apiVersion: kubernetes.crossplane.io/v1alpha2

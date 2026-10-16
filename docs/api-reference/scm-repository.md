@@ -23,7 +23,7 @@ credentials error.
 | `scmRef.name` | `string` | yes | — | The `XScmConnection` to act through. Carries the base URL, org and token. There is no per-resource `org` override — the connection is the single source, and a `/` in its `org` is rejected there (nested GitLab groups are not v1, and RFC-005's owner label cannot carry one). |
 | `vendor` | `string` (`gitea`, `github`) | yes | — | Must match `scmRef`'s own `vendor` — picks which Terraform provider's module runs, before the connection is even read. See the note above. |
 | `repoName` | `string` | yes | — | Repository name. Renaming creates a new repository, so treat it as immutable. |
-| `mode` | `string` (`managed`, `observed`) | | `managed` | `managed` creates and owns the repository; `observed` only reads it, through a data source, and never writes or deletes it. |
+| `mode` | `string` (`managed`, `observed`) | | `managed` | `managed` creates and owns the repository; `observed` only reads it, through a data source, and never writes or deletes it. **Immutable** — switching `managed` → `observed` would make OpenTofu destroy the host object, so the API server rejects any change; delete and recreate the XR instead. |
 | `description` | `string` | | `""` | |
 | `visibility` | `string` (`private`, `public`) | | `private` | Deliberately the opposite of `XGiteaRepository`, whose default was public. `internal` exists on GitHub Enterprise and GitLab but not Gitea, so it is not offered. |
 | `defaultBranch` | `string` | | `main` | On GitHub this needs the branch to exist, so it is applied only when `autoInit` is true. |
@@ -61,6 +61,8 @@ Every difference is absorbed inside the module, which declares both providers an
 |---|---|---|
 | `created` | `boolean` | True once the apply has written state, derived from the `repo_id` output. **Absent** — not `false` — until the first successful apply. |
 | `ready` | `boolean` | True when the repository exists. Equal to `created` by construction. |
+| `synced` | `boolean` | False while a composed resource's last apply failed — its `Ready` condition can stay True from the earlier success. Absent until the first reconcile. See [Sync state](status-contract.md#sync-state--every-package). |
+| `syncMessage` | `string` | The failing resource and the provider's own message, truncated to ~400 characters; present only while something is not synced. |
 | `exists` | `boolean` | True when the repository is present on the host — the point of `observed` mode; equals `created` in `managed` mode. |
 | `repoId` | `string` | The host's own identifier. |
 | `cloneUrl` | `string` | HTTPS clone URL. |

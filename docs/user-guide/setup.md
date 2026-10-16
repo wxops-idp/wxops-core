@@ -119,6 +119,19 @@ make uninstall-dev   # remove XRDs and Compositions applied by make install-dev
 
 Delete XRs first, and read each Kind's deletion notes before you do. Kinds that hold data, like `XTenantDatabase`, keep it by default.
 
+### Removing one category
+
+`kubectl delete -k` works on a category the same way `kubectl apply -k` installs it (`package/scm/`, `package/auth/`, or `package/install/<group>/` for the registry
+install). Order matters, because a Composition or XRD removed while XRs still use it leaves them with nothing to reconcile them:
+
+1. **Delete the XRs of the category first**, and wait until they are gone (`kubectl get composite`). Their composed resources go with them: a `PushSecret` deletes its
+   OpenBao record, while an `XScmTeam` or `XScmRepository` keeps the host object unless `retain: false` is set.
+2. **Then delete the packages** — the Compositions and XRDs — with `kubectl delete -k package/<group>/` (or `make uninstall-dev`).
+3. **Last, clear what is left over.** Crossplane never garbage-collects `CompositionRevision`s, so old ones remain; delete them by composition with
+   `kubectl delete compositionrevision -l crossplane.io/composition-name=<composition>`.
+
+Remove in dependency order across categories: `auth` reads `scm` (an `XOIDCConnector` reads its `XScmConnection` and `XScmTeam`s), so take `auth` out before `scm`.
+
 ## Next
 
 - Ship an application end to end: [app onboarding](app-onboarding.md)

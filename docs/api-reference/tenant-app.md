@@ -376,6 +376,8 @@ Full mechanism, the `Manual`-pin alternative, and why: [Channels](../../developm
 |---|---|---|
 | `created` | `boolean` | All core resources (Deployment, Service, IngressRoute) observed at least once. |
 | `ready` | `boolean` | All core resources report Ready. **Scoped to the workload** — see below. |
+| `synced` | `boolean` | False while a composed resource's last apply failed — its `Ready` condition can stay True from the earlier success. Absent until the first reconcile. See [Sync state](status-contract.md#sync-state--every-package). |
+| `syncMessage` | `string` | The failing resource and the provider's own message, truncated to ~400 characters; present only while something is not synced. |
 | `dependenciesReady` | `boolean` | Non-workload composed resources are Ready. Today: the cert-manager `Certificate`. |
 | `url` | `string` | Derived from `ingress.host`. Empty when ingress is disabled. |
 | `namespace` | `string` | Namespace the app is deployed to. |

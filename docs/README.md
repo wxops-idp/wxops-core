@@ -66,6 +66,11 @@ API group (`platform`, `scm`, ...) is per package — see [ADR-002](../developme
 | [scm-connection](api-reference/scm-connection.md) | `XScmConnection` | One Git hosting service and its credential, rendered for every other `scm` resource |
 | [scm-repository](api-reference/scm-repository.md) | `XScmRepository` | A repository on Gitea or GitHub, created (`managed`) or read (`observed`) |
 | [scm-oauth-app](api-reference/scm-oauth-app.md) | `XScmOAuthApp` | A host-side OAuth application, with its credentials in the secret store |
+| [scm-team](api-reference/scm-team.md) | `XScmTeam` | A team and its membership on Gitea or GitHub, created (`managed`) or read (`observed`) |
+| [oidc-connection](api-reference/oidc-connection.md) | `XOIDCConnection` | Points at one broker install; observes its config render, publishes the remote-key prefix |
+| [oidc-static-password](api-reference/oidc-static-password.md) | `XOIDCStaticPassword` | A local broker user — bootstrap admin, break-glass — ESO-generated or operator-defined |
+| [oidc-client](api-reference/oidc-client.md) | `XOIDCClient` | A downstream OAuth client that logs in through the broker |
+| [oidc-connector](api-reference/oidc-connector.md) | `XOIDCConnector` | An upstream Git vendor connector, team allow-list generated from `XScmTeam` |
 | [status-contract](api-reference/status-contract.md) | all | Every package's `status` fields on one page: the absent-vs-`false` split, `ready` vs `dependenciesReady` |
 
 ### User guide

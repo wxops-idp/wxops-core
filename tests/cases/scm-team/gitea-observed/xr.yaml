@@ -1,0 +1,14 @@
+# Gitea's own built-in Owners team — observed, never created or managed.
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmTeam
+metadata:
+  name: rocket-team-owners
+  labels:
+    wxops.cloud/owner: rocket-team
+spec:
+  parameters:
+    scmRef:
+      name: gitea-internal
+    vendor: gitea
+    mode: observed
+    teamName: Owners

@@ -1,0 +1,18 @@
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmTeam
+metadata:
+  name: rocket-team-ci
+spec:
+  parameters:
+    scmRef:
+      name: gitea-internal
+    vendor: gitea
+    teamName: CI
+    description: Pipelines — write code, read issues, no wiki, read Actions
+    # Overrides on top of units/permission (default units: code, issues, pulls at write).
+    unitPermissions:
+      code: write
+      issues: read
+      wiki: none
+      actions: read
+    repositories: [rocket-api]

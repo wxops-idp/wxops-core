@@ -1,0 +1,11 @@
+# Points at one broker install — the W'xOps dexidp chart (wxops-idp/charts/dexidp) owns the
+# aggregator that renders the broker's config; this XR only observes it. See RFC-004.
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XOIDCConnection
+metadata:
+  name: dex
+spec:
+  parameters:
+    issuer: https://idp.wxops.local
+    config:
+      namespace: dex

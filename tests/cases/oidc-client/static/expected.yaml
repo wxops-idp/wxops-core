@@ -1,0 +1,116 @@
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XOIDCClient
+metadata:
+  name: oauth2-proxy
+spec:
+  crossplane:
+    resourceRefs:
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: 1268517f-client-es
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: 1268517f-push-record
+status:
+  clientId: wxops-oauth2-proxy
+  conditions:
+    - reason: WatchCircuitClosed
+      status: 'True'
+      type: Responsive
+    - reason: ReconcileSuccess
+      status: 'True'
+      type: Synced
+    - message: 'Unready resources: 1268517f-client-es, 1268517f-push-record'
+      reason: Creating
+      status: 'False'
+      type: Ready
+  created: false
+  ready: false
+  vaultKey: dex/clients/wxops-oauth2-proxy
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: 1268517f-client-es
+  labels:
+    crossplane.io/composite: oauth2-proxy
+  name: 1268517f-client-es
+  ownerReferences:
+    - apiVersion: auth.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XOIDCClient
+      name: oauth2-proxy
+      uid: 1268517f-91ad-593d-8006-ba0f037a17ff
+spec:
+  forProvider:
+    manifest:
+      apiVersion: external-secrets.io/v1
+      kind: ExternalSecret
+      metadata:
+        name: 1268517f-client-es
+        namespace: crossplane-system
+      spec:
+        data:
+          - remoteRef:
+              key: dex/clients-def/wxops-oauth2-proxy
+              property: secret
+            secretKey: password
+        refreshInterval: '0'
+        refreshPolicy: OnChange
+        secretStoreRef:
+          kind: ClusterSecretStore
+          name: vault-platform
+        target:
+          creationPolicy: Owner
+          name: oidc-1268517f-client-creds
+          template:
+            data:
+              record: '{"id":"wxops-oauth2-proxy","name":"OAuth2 Proxy","redirectURIs":"[\"https://proxy.example.com/oauth2/callback\"]","secret":"{{ .password }}"}'
+            engineVersion: v2
+            metadata:
+              annotations:
+                auth.wxops.cloud/generation: '1'
+  providerConfigRef:
+    name: default
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: 1268517f-push-record
+  labels:
+    crossplane.io/composite: oauth2-proxy
+  name: 1268517f-push-record
+  ownerReferences:
+    - apiVersion: auth.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XOIDCClient
+      name: oauth2-proxy
+      uid: 1268517f-91ad-593d-8006-ba0f037a17ff
+spec:
+  forProvider:
+    manifest:
+      apiVersion: external-secrets.io/v1alpha1
+      kind: PushSecret
+      metadata:
+        name: 1268517f-client-es-push-record
+        namespace: crossplane-system
+      spec:
+        data:
+          - match:
+              remoteRef:
+                remoteKey: dex/clients/wxops-oauth2-proxy
+              secretKey: record
+        deletionPolicy: Delete
+        refreshInterval: 1m
+        secretStoreRefs:
+          - kind: ClusterSecretStore
+            name: vault-platform
+        selector:
+          secret:
+            name: oidc-1268517f-client-creds
+  providerConfigRef:
+    name: default

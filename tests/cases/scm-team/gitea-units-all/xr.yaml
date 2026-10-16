@@ -1,0 +1,15 @@
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmTeam
+metadata:
+  name: rocket-team-platform
+spec:
+  parameters:
+    scmRef:
+      name: gitea-internal
+    vendor: gitea
+    teamName: Platform
+    description: Every repository feature, for an organisation that wants the full set
+    permission: write
+    # `all` expands to all ten units in the module — no need to list them.
+    units: [all]
+    repositories: [rocket-api]

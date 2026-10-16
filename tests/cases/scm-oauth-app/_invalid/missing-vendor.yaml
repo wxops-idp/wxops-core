@@ -1,0 +1,14 @@
+# expect: vendor
+# expect: required property
+#
+# The module is chosen by this field before the connection's Secret is read, so it cannot be left to a
+# default the composition might not see.
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmOAuthApp
+metadata:
+  name: no-vendor
+spec:
+  parameters:
+    scmRef:
+      name: gitea-internal
+    appName: dex

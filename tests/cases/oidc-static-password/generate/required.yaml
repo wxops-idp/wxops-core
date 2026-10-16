@@ -1,0 +1,22 @@
+# Fixture for `crossplane composition render --required-resources`.
+#
+# oidc-static-password's first pipeline step (function-extra-resources) discovers the connection
+# named by connectionRef.name via the "crossplane.io/composite" label Crossplane stamps on every
+# root XR with its own name (see kcl/oidc-static-password/main.k). An offline render has no live
+# XOIDCConnection to discover from, so the fixture must carry that label by hand.
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XOIDCConnection
+metadata:
+  name: dex
+  labels:
+    crossplane.io/composite: dex
+spec:
+  parameters:
+    vendor: dex
+    issuer: https://idp.wxops.local
+    secretStoreRef:
+      name: vault-platform
+    config:
+      namespace: dex
+status:
+  callbackUrl: https://idp.wxops.local/callback

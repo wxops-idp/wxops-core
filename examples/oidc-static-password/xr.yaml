@@ -1,0 +1,18 @@
+# The bootstrap admin — logs in before any upstream connector exists. Write the initial password
+# first (it is the bootstrap secret, Core never mints it):
+#   bao kv put -mount=platform dex/users-def/admin password='admin@wxops'
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XOIDCStaticPassword
+metadata:
+  name: admin
+spec:
+  parameters:
+    connectionRef:
+      name: dex
+    email: admin@wxops.local
+    username: admin
+    displayName: Platform admin
+    groups:
+      - "platform-team:Owners"
+    secret:
+      source: static

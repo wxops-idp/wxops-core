@@ -57,6 +57,7 @@ status:
   image: ghcr.io/rocket-team/payment-api:1.4.0
   namespace: rocket-team-production
   ready: true
+  synced: true
   url: https://payment-api.rocket-team.example.com
 ---
 apiVersion: kubernetes.crossplane.io/v1alpha2

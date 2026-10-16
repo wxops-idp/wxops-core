@@ -1,0 +1,708 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: xscmteams.scm.wxops.cloud
+  labels:
+    crossplane.io/xrd: xscmteams.scm.wxops.cloud
+    channel: stable
+spec:
+  compositeTypeRef:
+    apiVersion: scm.wxops.cloud/v1alpha1
+    kind: XScmTeam
+
+  mode: Pipeline
+  pipeline:
+    - step: patch-and-transform
+      functionRef:
+        name: function-patch-and-transform
+      input:
+        apiVersion: pt.fn.crossplane.io/v1beta1
+        kind: Resources
+        resources:
+          # One OpenTofu Workspace. Which module it runs is NOT a `count`/`if` inside one shared
+          # HCL file — `spec.parameters.vendor` picks between two complete, vendor-exclusive module
+          # strings via a `match` transform, the same pattern `scm-repository` uses. See ADR-004.
+          - name: tf-workspace
+            base:
+              apiVersion: opentofu.upbound.io/v1beta1
+              kind: Workspace
+              spec:
+                providerConfigRef:
+                  name: default
+                forProvider:
+                  source: Inline
+                  # Always overwritten by the `match` transform patch below — never rendered as-is.
+                  module: placeholder
+                  vars:
+                    - key: mode
+                      value: managed
+                    - key: team_name
+                      value: placeholder
+                    - key: description
+                      value: ""
+                    - key: permission
+                      value: write
+                    - key: units
+                      value: '["code","issues","pulls"]'
+                    - key: unit_permissions
+                      value: "{}"
+                    - key: repositories
+                      value: "[]"
+                    - key: members
+                      value: "[]"
+                    - key: include_all_repositories
+                      value: "false"
+                    - key: can_create_repos
+                      value: "false"
+                    - key: privacy
+                      value: closed
+                    - key: parent_team_id
+                      value: ""
+                    - key: notification_setting
+                      value: notifications_enabled
+
+                  # vendor, base_url, default_org, access and token all arrive from the connection's
+                  # Secret, in tfvars form — exactly as scm-repository reads them.
+                  varFiles:
+                    - source: SecretKey
+                      secretKeyRef:
+                        namespace: crossplane-system
+                        name: placeholder
+                        key: credentials
+
+            # Ready alone is not enough: a failed update leaves it True from the earlier success. Synced
+            # is the condition the provider sets False when the last apply failed.
+            readinessChecks:
+              - type: MatchCondition
+                matchCondition:
+                  type: Ready
+                  status: "True"
+              - type: MatchCondition
+                matchCondition:
+                  type: Synced
+                  status: "True"
+
+            patches:
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.parameters.scmRef.name
+                toFieldPath: spec.forProvider.varFiles[0].secretKeyRef.name
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: "scm-connection-%s"
+
+              # ── Module selection ────────────────────────────────────────────
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.parameters.vendor
+                toFieldPath: spec.forProvider.module
+                transforms:
+                  - type: match
+                    match:
+                      fallbackValue: ""
+                      patterns:
+                        - type: literal
+                          literal: gitea
+                          result: |
+                            terraform {
+                              required_providers {
+                                gitea = { source = "go-gitea/gitea", version = "~> 0.8" }
+                              }
+                            }
+
+                            # ── From the XScmConnection Secret (varFiles) ───────────────────────────
+                            variable "vendor" {
+                              type = string
+                              validation {
+                                condition     = var.vendor == "gitea"
+                                error_message = "XScmTeam.spec.parameters.vendor is gitea, but scmRef's XScmConnection resolves to a different vendor. Fix the mismatch on one side."
+                              }
+                            }
+                            variable "base_url" {
+                              type = string
+                              validation {
+                                condition     = var.base_url != ""
+                                error_message = "baseUrl is required on a Gitea XScmConnection — there is no default host to fall back to."
+                              }
+                            }
+                            variable "default_org" { type = string }
+                            variable "access" {
+                              type = string
+                              validation {
+                                condition     = contains(["write", "read"], var.access)
+                                error_message = "access must be write or read."
+                              }
+                            }
+                            variable "token" {
+                              type      = string
+                              sensitive = true
+                            }
+
+                            # ── From the XR ─────────────────────────────────────────────────────────
+                            variable "mode" {
+                              type = string
+                              validation {
+                                condition     = contains(["managed", "observed"], var.mode)
+                                error_message = "mode must be managed or observed."
+                              }
+                            }
+                            variable "team_name" { type = string }
+                            variable "description" { type = string }
+                            variable "permission" {
+                              type = string
+                              validation {
+                                condition     = contains(["read", "write", "admin"], var.permission)
+                                error_message = "permission must be read, write or admin."
+                              }
+                            }
+                            variable "units" { type = string }            # JSON array of strings
+                            variable "unit_permissions" { type = string } # JSON object, unit -> none|read|write
+                            variable "repositories" { type = string }     # JSON array of strings
+                            variable "members" { type = string }          # JSON array of {username, role}
+                            variable "include_all_repositories" { type = bool }
+                            variable "can_create_repos" { type = bool }
+                            variable "privacy" { type = string }              # GitHub-only
+                            variable "parent_team_id" { type = string }       # GitHub-only
+                            variable "notification_setting" { type = string } # GitHub-only
+
+                            locals {
+                              managed  = var.mode == "managed"
+                              observed = var.mode == "observed"
+
+                              # One matrix, one record per unit, always sent as `units_map`: every unit in
+                              # `units` (`all` stands for the ten) at `permission`, then `unit_permissions`
+                              # laid over it — a unit set there takes that level, and `none` is only reachable
+                              # there. A unit in neither is `none`. The resource's own `units` string is never
+                              # sent, so there is one path and no stale state to fall back on: units_map is
+                              # Optional+Computed, and a null or partial map would leave a previous grant in
+                              # force. Native attributes at go-gitea/gitea 0.8.1 — see the package README.
+                              all_units      = ["code", "issues", "ext_issues", "wiki", "ext_wiki", "pulls", "releases", "projects", "actions", "packages"]
+                              unit_names     = contains(jsondecode(var.units), "all") ? local.all_units : jsondecode(var.units)
+                              unit_perms_map = jsondecode(var.unit_permissions)
+                              unit_matrix    = merge({ for u in toset(local.unit_names) : u => var.permission }, local.unit_perms_map)
+                              units_map      = { for u in local.all_units : "repo.${u}" => lookup(local.unit_matrix, u, "none") }
+
+                              member_list = jsondecode(var.members)
+                              repo_list   = jsondecode(var.repositories)
+
+                              # Gitea has no per-member role — only the team-wide `permission` above.
+                              # `maintainer` is a GitHub-only concept (see the github branch's
+                              # github_team_membership), so any non-"member" role reaching this branch
+                              # is rejected below rather than silently treated as "member".
+                              non_member_roles = [for m in local.member_list : m if try(m.role, "member") != "member"]
+
+                              # privacy/parentTeamId/notificationSetting are GitHub-only (team
+                              # visibility, nested teams, and GitHub notifications all have no Gitea
+                              # equivalent) — any non-default value reaching this branch is rejected
+                              # below, not silently dropped.
+                              no_github_only_fields = var.privacy == "closed" && var.parent_team_id == "" && var.notification_setting == "notifications_enabled"
+                            }
+
+                            provider "gitea" {
+                              base_url = var.base_url
+                              token    = var.token
+                            }
+
+                            resource "gitea_team" "this" {
+                              count = local.managed ? 1 : 0
+
+                              name         = var.team_name
+                              organisation = var.default_org
+                              description  = var.description
+                              permission   = var.permission
+                              # The per-unit levels are `units_map`; `permission` is the base level it was built from.
+                              units_map                = local.units_map
+                              repositories             = local.repo_list
+                              include_all_repositories = var.include_all_repositories
+                              can_create_repos         = var.can_create_repos
+
+                              lifecycle {
+                                precondition {
+                                  condition     = var.access == "write"
+                                  error_message = "mode: managed needs a write connection; this XScmConnection is access: read."
+                                }
+                                precondition {
+                                  condition     = var.permission != "admin"
+                                  error_message = "permission: admin is not supported on Gitea — access is a per-unit matrix of read, write and none. Use write, and unitPermissions for any unit that should differ."
+                                }
+                                precondition {
+                                  condition     = length(local.non_member_roles) == 0
+                                  error_message = "members[].role is GitHub-only — Gitea has no per-member maintainer role, only the team-wide permission. Remove the role (or set it to \"member\") for Gitea teams."
+                                }
+                                precondition {
+                                  condition     = local.no_github_only_fields
+                                  error_message = "privacy/parentTeamId/notificationSetting are GitHub-only — Gitea has no team visibility, nested-team or per-team notification concept. Leave them at their defaults for a Gitea team."
+                                }
+                              }
+                            }
+
+                            resource "gitea_team_membership" "this" {
+                              for_each = local.managed ? toset([for m in local.member_list : m.username]) : toset([])
+                              team_id  = gitea_team.this[0].id
+                              username = each.key
+                            }
+
+                            data "gitea_teams" "all" {
+                              count        = local.observed ? 1 : 0
+                              organisation = var.default_org
+                            }
+
+                            locals {
+                              observed_match = local.observed ? [
+                                for t in data.gitea_teams.all[0].teams : t if t.name == var.team_name
+                              ] : []
+                            }
+
+                            # ── Neutral outputs: the same set whatever the host ───────────────────
+                            output "id" {
+                              value = local.managed ? tostring(gitea_team.this[0].id) : (
+                                length(local.observed_match) > 0 ? tostring(local.observed_match[0].id) : ""
+                              )
+                            }
+                            output "org" {
+                              value = var.default_org
+                            }
+                            output "base_url" {
+                              value = var.base_url
+                            }
+                            output "dex_team" {
+                              value = var.team_name
+                            }
+                            output "exists" {
+                              value = local.managed ? "true" : (length(local.observed_match) > 0 ? "true" : "false")
+                            }
+                        - type: literal
+                          literal: github
+                          result: |
+                            terraform {
+                              required_providers {
+                                github = { source = "integrations/github", version = "~> 6.13" }
+                              }
+                            }
+
+                            # ── From the XScmConnection Secret (varFiles) ───────────────────────────
+                            variable "vendor" {
+                              type = string
+                              validation {
+                                condition     = var.vendor == "github"
+                                error_message = "XScmTeam.spec.parameters.vendor is github, but scmRef's XScmConnection resolves to a different vendor. Fix the mismatch on one side."
+                              }
+                            }
+                            variable "base_url" { type = string } # "" means github.com
+                            variable "default_org" {
+                              type = string
+                              validation {
+                                condition     = var.default_org != ""
+                                error_message = "GitHub teams are an org concept — the XScmConnection needs org set (the user layer has no teams)."
+                              }
+                            }
+                            variable "access" {
+                              type = string
+                              validation {
+                                condition     = contains(["write", "read"], var.access)
+                                error_message = "access must be write or read."
+                              }
+                            }
+                            variable "token" {
+                              type      = string
+                              sensitive = true
+                            }
+
+                            # ── From the XR ─────────────────────────────────────────────────────────
+                            variable "mode" {
+                              type = string
+                              validation {
+                                condition     = contains(["managed", "observed"], var.mode)
+                                error_message = "mode must be managed or observed."
+                              }
+                            }
+                            variable "team_name" { type = string }
+                            variable "description" { type = string }
+                            variable "permission" {
+                              type = string
+                              validation {
+                                condition     = contains(["read", "write", "admin"], var.permission)
+                                error_message = "permission must be read, write or admin."
+                              }
+                            }
+                            variable "units" { type = string }
+                            variable "unit_permissions" { type = string }
+                            variable "repositories" { type = string }
+                            variable "members" { type = string } # JSON array of {username, role}
+                            variable "include_all_repositories" { type = bool }
+                            variable "can_create_repos" { type = bool }
+                            variable "privacy" {
+                              type = string
+                              validation {
+                                condition     = contains(["closed", "secret"], var.privacy)
+                                error_message = "privacy must be closed or secret."
+                              }
+                            }
+                            variable "parent_team_id" { type = string }
+                            variable "notification_setting" {
+                              type = string
+                              validation {
+                                condition     = contains(["notifications_enabled", "notifications_disabled"], var.notification_setting)
+                                error_message = "notificationSetting must be notifications_enabled or notifications_disabled."
+                              }
+                            }
+
+                            locals {
+                              managed  = var.mode == "managed"
+                              observed = var.mode == "observed"
+
+                              # GitHub has no per-unit grants and no team-level admin — any Gitea-only
+                              # customization reaching this module is rejected below, not silently
+                              # dropped. See the package README's permission matrix.
+                              units_is_default = jsondecode(var.units) == ["code", "issues", "pulls"]
+                              no_unit_custom   = local.units_is_default && jsondecode(var.unit_permissions) == {}
+
+                              member_list = jsondecode(var.members)
+                              # username -> role, for github_team_membership's for_each (which needs a
+                              # map, not the list the JSON arrives as).
+                              member_roles = { for m in local.member_list : m.username => try(m.role, "member") }
+                              repo_list    = jsondecode(var.repositories)
+
+                              github_permission = { read = "pull", write = "push", admin = "admin" }[var.permission]
+
+                              # GitHub slugifies a team's display name for its API identifier (lowercase,
+                              # spaces/underscores to hyphens). teamName is used as both here, so a name
+                              # outside that shape needs confirming against a real GitHub org (spike item).
+                              slug = lower(replace(var.team_name, " ", "-"))
+                            }
+
+                            provider "github" {
+                              base_url = var.base_url != "" ? var.base_url : null
+                              owner    = var.default_org
+                              token    = var.token
+                            }
+
+                            # ── Org-member gate ─────────────────────────────────────────────────────
+                            # GitHub invites a non-member by email and leaves the membership pending, so a wrong username would
+                            # neither fail nor take effect. members[] must already be in the org; a pending invitee is not.
+                            # Reading the member list needs the token's user to be a member of the org (an owner, to add anyone).
+                            locals {
+                              gate = local.managed && length(local.member_list) > 0
+                            }
+
+                            # Not summary_only: the member list is only fetched without it.
+                            data "github_organization" "this" {
+                              count        = local.gate ? 1 : 0
+                              name         = var.default_org
+                              summary_only = false
+                            }
+
+                            locals {
+                              org_members     = local.gate ? [for u in data.github_organization.this[0].users : lower(u.login)] : []
+                              non_org_members = [for m in local.member_list : m.username if !contains(local.org_members, lower(m.username))]
+                            }
+
+                            resource "github_team" "this" {
+                              count = local.managed ? 1 : 0
+
+                              name                 = var.team_name
+                              description          = var.description
+                              privacy              = var.privacy
+                              parent_team_id       = var.parent_team_id != "" ? var.parent_team_id : null
+                              notification_setting = var.notification_setting
+
+                              lifecycle {
+                                precondition {
+                                  condition     = var.access == "write"
+                                  error_message = "mode: managed needs a write connection; this XScmConnection is access: read."
+                                }
+                                precondition {
+                                  condition     = length(local.non_org_members) == 0
+                                  error_message = "members must already belong to the org ${var.default_org}; not members: ${join(", ", local.non_org_members)}. GitHub would only send them an invitation and leave the membership pending, so nothing is applied. Invite them to the org first and wait for them to accept."
+                                }
+                                precondition {
+                                  condition     = local.no_unit_custom
+                                  error_message = "GitHub grants a role per repository, not per unit — units/unitPermissions are Gitea-only. Use permission with repositories instead."
+                                }
+                                precondition {
+                                  condition     = !var.include_all_repositories && !var.can_create_repos
+                                  error_message = "includeAllRepositories/canCreateRepos are Gitea-only — GitHub has no team-level equivalent for either. Grant access per repository (repositories), and repository creation is an org-wide GitHub setting outside this kind's scope."
+                                }
+                              }
+                            }
+
+                            resource "github_team_membership" "this" {
+                              for_each = local.managed ? local.member_roles : {}
+                              team_id  = github_team.this[0].id
+                              username = each.key
+                              role     = each.value
+                            }
+
+                            resource "github_team_repository" "this" {
+                              for_each   = local.managed ? toset(local.repo_list) : toset([])
+                              team_id    = github_team.this[0].id
+                              repository = each.key
+                              permission = local.github_permission
+                            }
+
+                            data "github_team" "this" {
+                              count = local.observed ? 1 : 0
+                              slug  = local.slug
+                            }
+
+                            # ── Neutral outputs: the same set whatever the host ───────────────────
+                            output "id" {
+                              value = local.managed ? tostring(github_team.this[0].id) : tostring(data.github_team.this[0].id)
+                            }
+                            output "org" {
+                              value = var.default_org
+                            }
+                            output "base_url" {
+                              value = var.base_url
+                            }
+                            output "dex_team" {
+                              value = local.managed ? github_team.this[0].slug : data.github_team.this[0].slug
+                            }
+                            output "exists" {
+                              value = "true" # both branches fail the apply outright if the team is absent
+                            }
+
+              # `retain` is Crossplane's job, not the module's: orphaning the Workspace leaves the
+              # team alone, where a destroy would un-assign its repositories and remove members.
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.parameters.retain
+                toFieldPath: spec.deletionPolicy
+                transforms:
+                  - type: convert
+                    convert:
+                      toType: string
+                  - type: map
+                    map:
+                      "true": Orphan
+                      "false": Delete
+
+              # ── XR fields → module variables ───────────────────────────────
+              # vars[] is index-addressed, so entries are APPEND-ONLY — see docs/learn/02-opentofu-here.md.
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.parameters.mode
+                toFieldPath: spec.forProvider.vars[0].value
+
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.parameters.teamName
+                toFieldPath: spec.forProvider.vars[1].value
+
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.parameters.description
+                toFieldPath: spec.forProvider.vars[2].value
+
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.parameters.permission
+                toFieldPath: spec.forProvider.vars[3].value
+
+              # Lists and maps reach HCL as a real JSON string (`json.Marshal` on the raw value),
+              # decoded back with jsondecode() in the module — simpler than the comma-string/split()
+              # idiom for a nested type like unitPermissions, and used uniformly here for consistency.
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.parameters.units
+                toFieldPath: spec.forProvider.vars[4].value
+                transforms:
+                  - type: string
+                    string:
+                      type: Convert
+                      convert: ToJson
+
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.parameters.unitPermissions
+                toFieldPath: spec.forProvider.vars[5].value
+                transforms:
+                  - type: string
+                    string:
+                      type: Convert
+                      convert: ToJson
+
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.parameters.repositories
+                toFieldPath: spec.forProvider.vars[6].value
+                transforms:
+                  - type: string
+                    string:
+                      type: Convert
+                      convert: ToJson
+
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.parameters.members
+                toFieldPath: spec.forProvider.vars[7].value
+                transforms:
+                  - type: string
+                    string:
+                      type: Convert
+                      convert: ToJson
+
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.parameters.includeAllRepositories
+                toFieldPath: spec.forProvider.vars[8].value
+                transforms:
+                  - type: convert
+                    convert:
+                      toType: string
+
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.parameters.canCreateRepos
+                toFieldPath: spec.forProvider.vars[9].value
+                transforms:
+                  - type: convert
+                    convert:
+                      toType: string
+
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.parameters.privacy
+                toFieldPath: spec.forProvider.vars[10].value
+
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.parameters.parentTeamId
+                toFieldPath: spec.forProvider.vars[11].value
+
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.parameters.notificationSetting
+                toFieldPath: spec.forProvider.vars[12].value
+
+              # ── Status write-back ──────────────────────────────────────────
+              # `org` isn't on the XR at all (RFC-003: no per-resource override), so it is read back
+              # from the module's own output, the same as the connection's `default_org` resolution
+              # every other scm-* package relies on.
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.outputs.org
+                toFieldPath: status.org
+                policy:
+                  fromFieldPath: Optional
+
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.outputs.base_url
+                toFieldPath: status.baseUrl
+                policy:
+                  fromFieldPath: Optional
+
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.outputs.id
+                toFieldPath: status.id
+                policy:
+                  fromFieldPath: Optional
+
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.outputs.dex_team
+                toFieldPath: status.dexTeam
+                policy:
+                  fromFieldPath: Optional
+
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.outputs.exists
+                toFieldPath: status.exists
+                policy:
+                  fromFieldPath: Optional
+                transforms:
+                  - type: match
+                    match:
+                      patterns:
+                        - type: literal
+                          literal: "true"
+                          result: true
+                      fallbackValue: false
+
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.outputs.id
+                toFieldPath: status.created
+                policy:
+                  fromFieldPath: Optional
+                transforms:
+                  - type: match
+                    match:
+                      patterns:
+                        - type: regexp
+                          regexp: ".+"
+                          result: true
+                      fallbackValue: false
+
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.outputs.id
+                toFieldPath: status.ready
+                policy:
+                  fromFieldPath: Optional
+                transforms:
+                  - type: match
+                    match:
+                      patterns:
+                        - type: regexp
+                          regexp: ".+"
+                          result: true
+                      fallbackValue: false
+
+              # `<org>:<dexTeam>` — the exact string a connector emits in the `groups` claim. Reads
+              # two fields off the SAME composed resource and combines them into one XR status
+              # field, the mirror image of the CombineFromComposite patches elsewhere in this repo.
+              - type: CombineToComposite
+                combine:
+                  variables:
+                    - fromFieldPath: status.atProvider.outputs.org
+                    - fromFieldPath: status.atProvider.outputs.dex_team
+                  strategy: string
+                  string:
+                    fmt: "%s:%s"
+                toFieldPath: status.oidcGroup
+                policy:
+                  fromFieldPath: Optional
+
+    # Last step: fold each observed composed resource's Synced state into the XR status, so ready
+    # reflects the last apply and not the last success. Source is kcl/status/main.k, embedded by
+    # make kcl-sync — do not edit it here.
+    - step: status
+      functionRef:
+        name: function-kcl
+      input:
+        apiVersion: krm.kcl.dev/v1alpha1
+        kind: KCLInput
+        metadata:
+          name: status
+        spec:
+          source: |
+            """
+            status — shared last step of the patch-and-transform packages.
+
+            Writes what the provisioned resources actually report back into the XR's status: a composed
+            Workspace or Object whose last apply failed keeps Ready=True from the earlier success, so the
+            package's own `ready` (derived from outputs) would otherwise stay true.
+
+            Adds `synced` and `syncMessage`, and clears `ready` while any gating resource is not Synced.
+            Resources named in `_informational` are reported in `syncMessage` but never gate.
+            """
+
+            oxr = option("params").oxr
+            dxr = option("params").dxr or {}
+            _ocds = option("params").ocds or {}
+
+            _get = lambda d: any, k: str, default: any -> any {
+                _safe = d or {}
+                _safe[k] if k in _safe else default
+            }
+
+            # Composed resources that are informational: a failure is shown, but never gates ready or synced.
+            _informational = ["inspect"]
+
+            _failures = [
+                {name = n, message = _get(c, "message", _get(c, "reason", "not synced"))}
+                for n, ocd in _ocds
+                for c in _get(_get(_get(ocd, "Resource", {}), "status", {}), "conditions", [])
+                if _get(c, "type", "") == "Synced" and _get(c, "status", "") == "False"
+            ]
+            _gating = [f for f in _failures if f.name not in _informational]
+
+            _synced = len(_gating) == 0
+            _first = _failures[0] if _failures else {}
+            _msg = (_first.name + ": " + _first.message)[:400] if _failures else ""
+            _more = " (+" + str(len(_failures) - 1) + " more)" if len(_failures) > 1 else ""
+
+            _dstatus = _get(dxr, "status", {}) or {}
+
+            # Nothing observed yet means nothing to report: `synced` stays absent until the first reconcile, and
+            # `ready` is only narrowed when the package already set it — absent stays absent, never a bare false.
+            _dxr = {
+                apiVersion = oxr.apiVersion
+                kind = oxr.kind
+                status = _dstatus | ({synced = _synced} if _ocds else {}) | ({ready = _dstatus.ready and _synced} if _get(_dstatus, "ready", None) != None and _ocds else {}) | ({syncMessage = _msg + _more} if _failures else {})
+            }
+
+            items = [_dxr]

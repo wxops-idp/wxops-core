@@ -1,0 +1,14 @@
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XOIDCStaticPassword
+metadata:
+  name: admin
+spec:
+  parameters:
+    connectionRef:
+      name: dex
+    email: admin@wxops.local
+    username: admin
+    displayName: Platform admin
+    groups: ["platform-team:Owners"]
+    secret:
+      source: static

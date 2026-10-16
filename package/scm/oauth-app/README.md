@@ -52,6 +52,7 @@ spec:
   parameters:
     scmRef:
       name: gitea-internal
+    vendor: gitea
     mode: managed
     appName: dex
     redirectUris:
@@ -109,8 +110,9 @@ start-up need a restart. Rotate deliberately, in a quiet window.
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|
 | `scmRef.name` | string | yes | — | The `XScmConnection` to act through |
+| `vendor` | string | yes | — | `gitea` or `github`; must match the connection's own. Picks the vendor-exclusive module. See [ADR-004](../../../development-docs/adr/004-scm-repository-vendor-field.md) |
 | `appName` | string | yes | — | Application name on the host |
-| `mode` | string | no | `managed` | `managed` (Gitea) or `observed` (any host) |
+| `mode` | string | no | `managed` | `managed` (Gitea) or `observed` (any host). **Immutable** — switching `managed` → `observed` would make OpenTofu destroy the host object, so the API server rejects any change; delete and recreate the XR instead. |
 | `redirectUris` | []string | no | `[]` | At least one required for `managed` |
 | `confidential` | bool | no | `true` | False for a browser-only client (PKCE) |
 | `credentialsSecretRef` | object | no | — | `observed` only: the operator's tfvars Secret |
@@ -119,6 +121,19 @@ start-up need a restart. Rotate deliberately, in a quiet window.
 | `vaultKey` | string | no | `oauth/<name>/credentials` | Key inside that store |
 
 Full reference: [`docs/api-reference/scm-oauth-app.md`](../../../docs/api-reference/scm-oauth-app.md).
+
+## Status
+
+| Field | Description |
+|---|---|
+| `created` | True once the application exists and its credentials have been read, derived from the presence of the `client_id` output. |
+| `ready` | True when the credentials are available **and** nothing is failing to sync: `created` and `synced`. |
+| `clientId` | The public half of the credential pair. |
+| `vaultKey` | The key the credentials were pushed to, inside the store. |
+| `generation` | The rotation generation the published credentials belong to. |
+| `synced` / `syncMessage` | `synced` is false while a composed resource's last apply failed (its `Ready` can stay True from the earlier success); `syncMessage` is the provider's message, truncated. Absent until the first reconcile |
+
+Full reference: [`docs/api-reference/scm-oauth-app.md`](../../../docs/api-reference/scm-oauth-app.md#status).
 
 ## Build and publish
 

@@ -1,0 +1,71 @@
+# Fixture for `crossplane composition render --required-resources`.
+#
+# oidc-connector's first pipeline step (function-extra-resources) discovers four kinds of
+# resources: the XOIDCConnection, the XScmConnection, the XScmOAuthApp (each a single named lookup
+# via the "crossplane.io/composite" label), and every XScmTeam labelled
+# scm.wxops.cloud/oidc-login: "true" (a label-value selector). See kcl/oidc-connector/main.k.
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XOIDCConnection
+metadata:
+  name: dex
+  labels:
+    crossplane.io/composite: dex
+spec:
+  parameters:
+    vendor: dex
+    issuer: https://idp.wxops.local
+    secretStoreRef:
+      name: vault-platform
+    config:
+      namespace: dex
+status:
+  callbackUrl: https://idp.wxops.local/callback
+---
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmConnection
+metadata:
+  name: gitea-platform-team
+  labels:
+    crossplane.io/composite: gitea-platform-team
+spec:
+  parameters:
+    vendor: gitea
+    baseUrl: https://gitea.example.com
+    org: platform-team
+status:
+  secretName: scm-connection-gitea-platform-team
+---
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmOAuthApp
+metadata:
+  name: dex-gitea
+  labels:
+    crossplane.io/composite: dex-gitea
+spec:
+  parameters:
+    scmRef:
+      name: gitea-platform-team
+    appName: dex
+status:
+  clientId: "7b4c1234"
+  vaultKey: oauth/dex-gitea/credentials
+---
+# Opted in to Dex login (the scm.wxops.cloud/oidc-login label); same host (status.baseUrl) and org
+# (status.org) as the XScmConnection above, so its dexTeam is picked up with no hand-listed `teams`.
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmTeam
+metadata:
+  name: platform-team-developers
+  labels:
+    wxops.cloud/owner: platform-team
+    scm.wxops.cloud/oidc-login: "true"
+spec:
+  parameters:
+    scmRef:
+      name: gitea-platform-team
+    vendor: gitea
+    teamName: Developers
+status:
+  org: platform-team
+  baseUrl: https://gitea.example.com
+  dexTeam: Developers

@@ -1,0 +1,19 @@
+apiVersion: meta.pkg.crossplane.io/v1
+kind: Configuration
+metadata:
+  name: oidc-client
+  annotations:
+    meta.crossplane.io/maintainer: W'xOps Platform Team
+    meta.crossplane.io/description: A downstream OAuth client that logs in through the broker, ESO-generated or operator-defined, pushed to OpenBao.
+    meta.crossplane.io/source: github.com/wxops-idp/wxops-core
+    meta.crossplane.io/license: Apache-2.0
+spec:
+  crossplane:
+    version: ">=v2.3.0-0"
+  dependsOn:
+    - provider: xpkg.upbound.io/crossplane-contrib/provider-kubernetes
+      version: ">=v1.2.1"
+    - function: xpkg.upbound.io/crossplane-contrib/function-kcl
+      version: ">=v0.12.1"
+    - function: xpkg.upbound.io/crossplane-contrib/function-extra-resources
+      version: ">=v0.3.0"

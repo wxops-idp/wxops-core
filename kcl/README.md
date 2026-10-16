@@ -65,6 +65,8 @@ make kcl-check    # fail if composition.yaml has drifted from kcl/{pkg}/main.k
 
 ## Future: KCL OCI modules (deferred)
 
+> The one helper already shared is `kcl/status/main.k`, embedded into the patch-and-transform packages by `make kcl-sync` (`STATUS_PACKAGES`).
+>
 > **Status: future.** Revisit when there are 3+ KCL packages sharing helper functions, or when a single `main.k` exceeds ~300 lines and becomes hard to navigate inside `composition.yaml`.
 
 The inline-embedding approach above (kcl-sync) works well for independent per-package logic, but breaks down when:

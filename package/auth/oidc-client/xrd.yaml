@@ -1,0 +1,148 @@
+apiVersion: apiextensions.crossplane.io/v2
+kind: CompositeResourceDefinition
+metadata:
+  name: xoidcclients.auth.wxops.cloud
+spec:
+  group: auth.wxops.cloud
+  # Cluster-scoped: `owner` is `platform` only in this release — RFC-004's tenant-client question
+  # (where would a tenant's record live, given the aggregator must read every client under one
+  # prefix) is open, so there is nothing to scope to a tenant yet.
+  scope: Cluster
+  names:
+    kind: XOIDCClient
+    plural: xoidcclients
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - parameters
+              properties:
+                parameters:
+                  type: object
+                  required:
+                    - connectionRef
+                    - clientId
+                    - redirectUris
+                  properties:
+                    connectionRef:
+                      type: object
+                      description: The XOIDCConnection this client belongs to — its vendor names the remote-key prefix.
+                      required:
+                        - name
+                      properties:
+                        name:
+                          type: string
+                    clientId:
+                      type: string
+                      description: |
+                        The OAuth client id, and this resource's own identifier: the remote key is
+                        `<vendor>/clients/<clientId>`. Immutable in practice — renaming moves the
+                        record to a new key.
+                      pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$'
+                    displayName:
+                      type: string
+                      default: ""
+                    redirectUris:
+                      type: array
+                      description: Accepted redirect URIs. A login flow arriving from any other URI is refused.
+                      items:
+                        type: string
+                      minItems: 1
+                    public:
+                      type: boolean
+                      description: |
+                        True for a browser-only client that cannot keep a secret (PKCE instead) — no
+                        generator runs, and the record carries no `secret` field. False for a
+                        server-side client such as Pinniped or the Portal.
+                      default: false
+                    trustedPeers:
+                      type: array
+                      description: Other client ids allowed to exchange tokens on this client's behalf.
+                      items:
+                        type: string
+                      default: []
+                    owner:
+                      type: string
+                      description: |
+                        `platform` only in this release — see RFC-004's tenant-client open question.
+                      enum: ["platform"]
+                      default: platform
+                    secret:
+                      type: object
+                      description: |
+                        Where the client secret comes from. Ignored when `public` is true. See the
+                        package README.
+                      properties:
+                        source:
+                          type: string
+                          description: |
+                            `static` reads `<vendor>/clients-def/<clientId>` (property `secret`) — the
+                            operator writes it there first, the same `<vendor>/<kind>-def/<id>`
+                            convention `oidc-static-password` uses, derived purely from this
+                            resource's own `clientId`. No separate "where" field to get wrong.
+                          enum: ["generate", "static"]
+                          default: generate
+                        generator:
+                          type: object
+                          description: "`generate` only — copied onto the ESO `Password` generator's spec."
+                          properties:
+                            length:
+                              type: integer
+                              default: 32
+                            digits:
+                              type: integer
+                              default: 8
+                            symbols:
+                              type: integer
+                              default: 0
+                          default: {}
+                      default: {}
+                    rotation:
+                      type: object
+                      description: |
+                        Bump `generation` to regenerate (`generate`) or to re-read a changed value
+                        (`static`) — a Dex client has exactly one secret, so a rotation is not
+                        zero-downtime; see the package README.
+                      properties:
+                        generation:
+                          type: integer
+                          minimum: 1
+                          default: 1
+                      default: {}
+            status:
+              type: object
+              properties:
+                created:
+                  type: boolean
+                  description: |
+                    True once the record has been pushed at least once.
+
+                    Absent — not false — until then. Treat absent as false.
+                ready:
+                  type: boolean
+                  description: True when the record is in sync. Equal to `created` by construction.
+                synced:
+                  type: boolean
+                  description: |
+                    False while a composed resource that `ready` depends on failed its last apply —
+                    its `Ready` condition can stay True from the earlier success, so `ready` is
+                    derived with this in mind. `syncMessage` says what. Absent until the first
+                    reconcile.
+                syncMessage:
+                  type: string
+                  description: |
+                    The failing resource and the provider's own message, truncated; present while
+                    anything — including a resource `ready` deliberately excludes — is not Synced.
+                clientId:
+                  type: string
+                  description: Echoed from spec, for convenience.
+                vaultKey:
+                  type: string
+                  description: Where the record (not the secret) was pushed, inside the store.

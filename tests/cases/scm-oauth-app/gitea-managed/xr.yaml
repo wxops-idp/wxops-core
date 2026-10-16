@@ -11,6 +11,7 @@ spec:
   parameters:
     scmRef:
       name: gitea-internal
+    vendor: gitea
     mode: managed
     appName: dex
     redirectUris:

@@ -1,0 +1,18 @@
+# Same connection as gitea/, with the observed state of both composed resources: the credential
+# Secret in sync and the org inspection read back. Proves the status write-back, including the
+# string -> integer / JSON-array conversions.
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmConnection
+metadata:
+  name: gitea-internal
+  labels:
+    wxops.cloud/owner: platform
+spec:
+  parameters:
+    vendor: gitea
+    org: wxops-idp
+    baseUrl: http://gitea-http.gitea.svc.cluster.local:3000
+    access: write
+    # secretStoreRef defaults to vault-platform; tokenKey defaults to token.
+    # secretStoreRef:
+    #   name: vault-platform

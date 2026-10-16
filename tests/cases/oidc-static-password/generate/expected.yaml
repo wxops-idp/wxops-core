@@ -1,0 +1,246 @@
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XOIDCStaticPassword
+metadata:
+  name: breakglass
+spec:
+  crossplane:
+    resourceRefs:
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: d6b9e339-push-pwd
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: d6b9e339-push-record
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: d6b9e339-pwd-es
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: d6b9e339-pwd-gen
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: d6b9e339-user-es
+status:
+  conditions:
+    - reason: WatchCircuitClosed
+      status: 'True'
+      type: Responsive
+    - reason: ReconcileSuccess
+      status: 'True'
+      type: Synced
+    - message: 'Unready resources: d6b9e339-push-pwd, d6b9e339-push-record, d6b9e339-pwd-es, and 2 more'
+      reason: Creating
+      status: 'False'
+      type: Ready
+  created: false
+  ready: false
+  userId: breakglass
+  vaultKey: dex/users/breakglass
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: d6b9e339-push-pwd
+  labels:
+    crossplane.io/composite: breakglass
+  name: d6b9e339-push-pwd
+  ownerReferences:
+    - apiVersion: auth.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XOIDCStaticPassword
+      name: breakglass
+      uid: d6b9e339-0524-5eb5-ae80-486473c772de
+spec:
+  forProvider:
+    manifest:
+      apiVersion: external-secrets.io/v1alpha1
+      kind: PushSecret
+      metadata:
+        name: d6b9e339-user-es-push-pwd
+        namespace: crossplane-system
+      spec:
+        data:
+          - match:
+              remoteRef:
+                remoteKey: dex/users-def/breakglass
+              secretKey: def
+        deletionPolicy: Delete
+        refreshInterval: 1m
+        secretStoreRefs:
+          - kind: ClusterSecretStore
+            name: vault-platform
+        selector:
+          secret:
+            name: oidc-d6b9e339-pwd-def
+  providerConfigRef:
+    name: default
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: d6b9e339-push-record
+  labels:
+    crossplane.io/composite: breakglass
+  name: d6b9e339-push-record
+  ownerReferences:
+    - apiVersion: auth.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XOIDCStaticPassword
+      name: breakglass
+      uid: d6b9e339-0524-5eb5-ae80-486473c772de
+spec:
+  forProvider:
+    manifest:
+      apiVersion: external-secrets.io/v1alpha1
+      kind: PushSecret
+      metadata:
+        name: d6b9e339-user-es-push-record
+        namespace: crossplane-system
+      spec:
+        data:
+          - match:
+              remoteRef:
+                remoteKey: dex/users/breakglass
+              secretKey: record
+        deletionPolicy: Delete
+        refreshInterval: 1m
+        secretStoreRefs:
+          - kind: ClusterSecretStore
+            name: vault-platform
+        selector:
+          secret:
+            name: oidc-d6b9e339-user-creds
+  providerConfigRef:
+    name: default
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: d6b9e339-pwd-es
+  labels:
+    crossplane.io/composite: breakglass
+  name: d6b9e339-pwd-es
+  ownerReferences:
+    - apiVersion: auth.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XOIDCStaticPassword
+      name: breakglass
+      uid: d6b9e339-0524-5eb5-ae80-486473c772de
+spec:
+  forProvider:
+    manifest:
+      apiVersion: external-secrets.io/v1
+      kind: ExternalSecret
+      metadata:
+        annotations:
+          force-sync: '1'
+        name: d6b9e339-pwd-es
+        namespace: crossplane-system
+      spec:
+        dataFrom:
+          - sourceRef:
+              generatorRef:
+                apiVersion: generators.external-secrets.io/v1alpha1
+                kind: Password
+                name: d6b9e339-pwd-gen
+        refreshInterval: 99999h
+        refreshPolicy: Periodic
+        target:
+          creationPolicy: Owner
+          name: oidc-d6b9e339-pwd-def
+          template:
+            data:
+              def: '{"password":{{ .password | toJson }},"generation":"1"}'
+            engineVersion: v2
+  providerConfigRef:
+    name: default
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: d6b9e339-pwd-gen
+  labels:
+    crossplane.io/composite: breakglass
+  name: d6b9e339-pwd-gen
+  ownerReferences:
+    - apiVersion: auth.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XOIDCStaticPassword
+      name: breakglass
+      uid: d6b9e339-0524-5eb5-ae80-486473c772de
+spec:
+  forProvider:
+    manifest:
+      apiVersion: generators.external-secrets.io/v1alpha1
+      kind: Password
+      metadata:
+        name: d6b9e339-pwd-gen
+        namespace: crossplane-system
+      spec:
+        allowRepeat: false
+        digits: 8
+        length: 32
+        noUpper: false
+        symbolCharacters: ''
+        symbols: 0
+  providerConfigRef:
+    name: default
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: d6b9e339-user-es
+  labels:
+    crossplane.io/composite: breakglass
+  name: d6b9e339-user-es
+  ownerReferences:
+    - apiVersion: auth.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XOIDCStaticPassword
+      name: breakglass
+      uid: d6b9e339-0524-5eb5-ae80-486473c772de
+spec:
+  forProvider:
+    manifest:
+      apiVersion: external-secrets.io/v1
+      kind: ExternalSecret
+      metadata:
+        name: d6b9e339-user-es
+        namespace: crossplane-system
+      spec:
+        data:
+          - remoteRef:
+              key: dex/users-def/breakglass
+              property: password
+            secretKey: password
+          - remoteRef:
+              key: dex/users-def/breakglass
+              property: generation
+            secretKey: generation
+        refreshInterval: '0'
+        refreshPolicy: OnChange
+        secretStoreRef:
+          kind: ClusterSecretStore
+          name: vault-platform
+        target:
+          creationPolicy: Owner
+          name: oidc-d6b9e339-user-creds
+          template:
+            data:
+              record: '{{ if ne .generation "1" }}{{ fail "waiting for dex/users-def/breakglass generation 1" }}{{ end }}{"email":"breakglass@wxops.cloud","username":"breakglass","name":"","userID":"breakglass","groups":"[]","hash":"{{ .password | bcrypt }}"}'
+            engineVersion: v2
+            metadata:
+              annotations:
+                auth.wxops.cloud/generation: '1'
+  providerConfigRef:
+    name: default

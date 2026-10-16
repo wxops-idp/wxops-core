@@ -1,0 +1,9 @@
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XOIDCConnection
+metadata:
+  name: dex
+spec:
+  parameters:
+    issuer: https://idp.wxops.local
+    config:
+      namespace: dex

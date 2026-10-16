@@ -1,0 +1,15 @@
+# expect: parameters.privacy
+# expect: is not one of
+#
+# Only closed and secret exist — GitHub's own two team-visibility levels.
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmTeam
+metadata:
+  name: bad-privacy
+spec:
+  parameters:
+    scmRef:
+      name: github-wxops-idp
+    vendor: github
+    teamName: developers
+    privacy: public

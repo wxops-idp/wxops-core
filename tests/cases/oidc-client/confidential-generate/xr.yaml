@@ -1,0 +1,14 @@
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XOIDCClient
+metadata:
+  name: portal
+spec:
+  parameters:
+    connectionRef:
+      name: dex
+    clientId: wxops-portal
+    displayName: W'xOps Portal
+    redirectUris:
+      - https://portal.example.com/auth/callback
+    secret:
+      source: generate
