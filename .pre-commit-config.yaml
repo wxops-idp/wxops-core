@@ -104,7 +104,6 @@ repos:
           (?x)^(
             examples/.*|
             kcl/.*|
-            \.gitea/.*|
             \.github/.*|
             \.gitlab/.*|
             VERSIONS\.yaml|
@@ -123,7 +122,7 @@ repos:
       - id: crossplane-validate
         name: crossplane xpkg build (all packages)
         language: script
-        entry: .gitea/scripts/validate-packages.sh
+        entry: .github/scripts/validate-packages.sh
         pass_filenames: false
         files: ^package/
         types: [yaml]
@@ -137,7 +136,7 @@ repos:
         name: kcl source in sync with compositions
         language: python
         additional_dependencies: [pyyaml]
-        entry: python3 .gitea/scripts/kcl-sync.py --check
+        entry: python3 .github/scripts/kcl-sync.py --check
         pass_filenames: false
         files: ^(kcl/|package/.*/composition\.yaml)
 
@@ -151,7 +150,7 @@ repos:
         name: package/install pins agree with VERSIONS.yaml
         language: python
         additional_dependencies: [pyyaml]
-        entry: python3 .gitea/scripts/release-state.py check
+        entry: python3 .github/scripts/release-state.py check
         pass_filenames: false
         files: ^(VERSIONS\.yaml|package/install/)
 
@@ -166,7 +165,7 @@ repos:
         name: README packages table in sync with VERSIONS.yaml
         language: python
         additional_dependencies: [pyyaml]
-        entry: python3 .gitea/scripts/gen-readme-packages.py --check
+        entry: python3 .github/scripts/gen-readme-packages.py --check
         pass_filenames: false
         files: ^(VERSIONS\.yaml|README\.md|package/.*/xrd\.yaml)$
 

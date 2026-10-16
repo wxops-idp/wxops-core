@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# .gitea/scripts/check-release-notes.sh
+# .github/scripts/check-release-notes.sh
 #
 # Scaffolds release-notes/<release>.md: release-notes/template.md with its
 # Compatibility section pre-filled from tests/api_compat.py, plus a git-cliff
@@ -9,7 +9,7 @@
 # release` refuses without it. Optional otherwise: the release body CI builds
 # always carries the package table and the changelog.
 #
-# Usage: bash .gitea/scripts/check-release-notes.sh <release>
+# Usage: bash .github/scripts/check-release-notes.sh <release>
 #        make release-notes [VERSION=release-YYYY-MM-DD]
 
 set -euo pipefail
@@ -32,7 +32,7 @@ tmp=$(mktemp)
 trap 'rm -f "$tmp"' EXIT
 
 {
-  python3 .gitea/scripts/release-state.py notes "$version"
+  python3 .github/scripts/release-state.py notes "$version"
   printf '\n---\n\n'
   printf '<!-- Reference block: upcoming commits for this release.\n'
   printf '     Use this to write your Highlights, then REMOVE this section.\n'

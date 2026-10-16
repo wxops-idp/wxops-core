@@ -1,6 +1,6 @@
 # Production install for the `platform.wxops.cloud` packages.
 #
-# Pins are written by `make release` (.gitea/scripts/release-state.py), never by
+# Pins are written by `make release` (.github/scripts/release-state.py), never by
 # hand: each package points at the release it last changed in.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization

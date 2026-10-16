@@ -1,12 +1,8 @@
 name: Validate
 
-# The merge gate for GitHub-side pull requests. Mirrors
-# .gitea/workflows/pr-validate.yaml — same checks, same order, kept in sync by
-# hand since Gitea and GitHub Actions do not share a workflow file.
-#
-# Gitea was primary through v0.4.0; GitHub is primary from the first
-# date-named release, Gitea archived. A PR opened here needs its own gate
-# regardless — nothing else validates a GitHub-side PR.
+# The merge gate for pull requests, and the only one: GitHub has been primary since the first
+# date-named release (Gitea was primary through v0.4.0 and is archived), so the scripts it runs live
+# in .github/scripts and nothing else validates a PR.
 #
 # PR-only, deliberately: this does not also run on push to main. A merge into
 # main is only reachable through a PR that already passed this gate, so a
@@ -114,7 +110,7 @@ jobs:
         run: make kcl-check
 
       - name: xpkg build (all packages)
-        run: bash .gitea/scripts/validate-packages.sh
+        run: bash .github/scripts/validate-packages.sh
 
   # ── The composition test suite ─────────────────────────────────────────────
   # Slowest job: `crossplane composition render` runs each function as a Docker
@@ -240,10 +236,10 @@ jobs:
       # registry, installs nothing.
       - name: Package pins agree with VERSIONS.yaml
         run: |
-          python3 .gitea/scripts/release-state.py check \
+          python3 .github/scripts/release-state.py check \
             || { echo "::error::package/install/ and VERSIONS.yaml disagree — both are written by make release"; exit 1; }
 
       - name: README packages table in sync
         run: |
-          python3 .gitea/scripts/gen-readme-packages.py --check \
+          python3 .github/scripts/gen-readme-packages.py --check \
             || { echo "::error::run 'make readme-sync'"; exit 1; }
