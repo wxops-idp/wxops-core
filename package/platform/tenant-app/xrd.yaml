@@ -1098,6 +1098,18 @@ spec:
 
                     Scoped to the core workload on purpose. Check dependenciesReady
                     alongside it before declaring the app fully healthy.
+                synced:
+                  type: boolean
+                  description: |
+                    False while a composed resource that `ready` depends on failed its last apply —
+                    its `Ready` condition can stay True from the earlier success, so `ready` is
+                    derived with this in mind. `syncMessage` says what. Absent until the first
+                    reconcile.
+                syncMessage:
+                  type: string
+                  description: |
+                    The failing resource and the provider's own message, truncated; present while
+                    anything — including a resource `ready` deliberately excludes — is not Synced.
                 dependenciesReady:
                   type: boolean
                   description: |

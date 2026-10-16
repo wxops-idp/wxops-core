@@ -61,6 +61,8 @@ Every difference is absorbed inside the module, which declares both providers an
 |---|---|---|
 | `created` | `boolean` | True once the apply has written state, derived from the `repo_id` output. **Absent** — not `false` — until the first successful apply. |
 | `ready` | `boolean` | True when the repository exists. Equal to `created` by construction. |
+| `synced` | `boolean` | False while a composed resource's last apply failed — its `Ready` condition can stay True from the earlier success. Absent until the first reconcile. See [Sync state](status-contract.md#sync-state--every-package). |
+| `syncMessage` | `string` | The failing resource and the provider's own message, truncated to ~400 characters; present only while something is not synced. |
 | `exists` | `boolean` | True when the repository is present on the host — the point of `observed` mode; equals `created` in `managed` mode. |
 | `repoId` | `string` | The host's own identifier. |
 | `cloneUrl` | `string` | HTTPS clone URL. |

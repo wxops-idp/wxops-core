@@ -92,6 +92,7 @@ consumer needs to pick up the new value (its own `ExternalSecret` refresh) befor
 | Field | Description |
 |---|---|
 | `created` / `ready` | Standard contract |
+| `synced` / `syncMessage` | `synced` is false while a composed resource's last apply failed (its `Ready` can stay True from the earlier success); `syncMessage` is the provider's message, truncated. Absent until the first reconcile |
 | `clientId` | Echoed from spec |
 | `vaultKey` | Where the record (not the secret) was pushed |
 

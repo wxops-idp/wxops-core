@@ -79,6 +79,14 @@ Two tiers, also derived from Git teams rather than stored:
 Git teams carry membership, not role, through the claim — so a "maintainer" tier has to be a second team by naming convention. Whether that is acceptable is an
 open question.
 
+### What the connector guarantees today
+
+[`XOIDCConnector`](../../docs/api-reference/oidc-connector.md#choosing-which-teams-can-sign-in) already decides which Git teams can reach the `groups` claim at all: a team is in
+the claim only if an `XScmTeam` labelled `scm.wxops.cloud/oidc-login` generates it, or an operator lists it by hand, for an org the connector admits. Each entry is the team's
+`status.dexTeam` — the lowercase **slug on GitHub**, the team name as created on Gitea — and the resulting group is `<org>:<team>`, the string `XScmTeam` publishes as
+`status.oidcGroup`. The one-to-one rule can therefore rely on the claim naming a team exactly as the owner label does on GitHub; on Gitea the case is whatever the team was
+created with, and Core does not normalise it. Whether it should is for this RFC, since the owner label is a flat lowercase slug.
+
 ### Three writers, three enforcement points
 
 A single check does not cover all paths, because Kyverno only sees the *requesting user*, and on some paths the requesting user is a machine.

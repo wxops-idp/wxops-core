@@ -197,9 +197,13 @@ When adding new capabilities:
 
 Start simple before reaching for advanced patterns.
 
-Every XRD must expose `status.created` and `status.ready`. The portal polls
-those; the native `type: Ready` condition is unreliable on Crossplane v2.3 with
-function-kcl v0.12.1, so readiness is derived from `ocds` instead. Compositions
+Every XRD must expose `status.created`, `status.ready`, `status.synced` and
+`status.syncMessage`. The portal polls those; the native `type: Ready` condition is
+unreliable on Crossplane v2.3 with function-kcl v0.12.1, so readiness is derived from
+`ocds` instead. A composed resource keeps `Ready=True` after a failed update, so
+readiness also requires `Synced` not `False`: the KCL packages do it in `_isReady`, and
+the patch-and-transform packages end with a shared `status` step (`kcl/status/main.k`,
+embedded by `make kcl-sync`). Compositions
 must never emit Kubernetes RBAC — see [`development-docs/_archives/ROADMAP.md`](development-docs/_archives/ROADMAP.md) *Decided and
 rejected*; the composition creates the ServiceAccount and publishes its name in
 status, and the GitOps repo binds a `Role` to it.

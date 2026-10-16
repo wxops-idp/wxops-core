@@ -1,0 +1,23 @@
+# Same team as gitea-managed, observed after a later update failed: the Workspace still holds the
+# outputs of the earlier success and Ready=True, but Synced=False. Conditions are listed Synced-first
+# on purpose — the status step must pick them by type, not position.
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmTeam
+metadata:
+  name: rocket-team-developers
+  labels:
+    wxops.cloud/owner: rocket-team
+spec:
+  parameters:
+    scmRef:
+      name: gitea-internal
+    vendor: gitea
+    teamName: Developers
+    description: Rocket squad developers
+    permission: write
+    repositories: [rocket-api]
+    includeAllRepositories: false
+    canCreateRepos: true
+    members:
+      - username: alice
+      - username: bob

@@ -210,7 +210,8 @@ in with `mode: observed` instead).
 
 | Field | Description |
 |---|---|
-| `created` / `ready` | Standard contract — absent until the first successful apply |
+| `created` / `ready` | Standard contract — absent until the first successful apply. `ready` is also false while the last apply failed |
+| `synced` | False while the Workspace's last apply failed; `syncMessage` carries the provider's message (truncated) |
 | `exists` | Present on the host |
 | `id` | The host's own identifier |
 | `org` | The connection's org, echoed |

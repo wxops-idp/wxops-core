@@ -1,0 +1,38 @@
+# Observed after the Vault credential push failed to sync. The push is excluded from ready on
+# purpose (the app can still connect), so synced and ready stay true and only syncMessage shows it.
+apiVersion: platform.wxops.cloud/v1alpha1
+kind: XTenantDatabase
+metadata:
+  name: rocket-team-payment-db
+  labels:
+    wxops.cloud/tenant-database: "true"
+spec:
+  parameters:
+    # tier: shared     # default — auto-assigns to the least-loaded shared cluster
+    # tier: dedicated  # composes a child XPlatformDatabaseCluster (1 cluster = 1 db)
+    environment: dev   # pool filtered by environment — must match cluster's environment
+    # clusterRef: cluster-a          # explicit override — bypasses tier logic
+    # clusterNamespace: cnpg-system  # explicit override — bypasses tier logic
+    dbName: payment-db
+    owner: rocket-team
+    extensions:
+      - uuid-ossp
+      - pgcrypto
+
+    # "retain" (default) protects the database and its owning role from XR
+    # deletion — both survive and must be cleaned up manually if the tenant
+    # is decommissioned. Set to "delete" to have CNPG drop the database on XR
+    # deletion (also allows the role to be dropped) — a ClusterUsage orders
+    # the role's DROP ROLE to run only after the database's DROP DATABASE has
+    # completed, avoiding the 2BP01 parallel-deletion race.
+    #
+    # Also controls the connection-creds Secret and its ExternalSecret/
+    # Password-generator: "retain" orphans them on XR deletion so the
+    # existing password is preserved and reused on recreate (delete them
+    # manually to force a new password); "delete" tears them down too, so
+    # recreation generates a brand-new password — ordered by a second
+    # ClusterUsage so the Secret isn't removed until DROP ROLE completes
+    # (provider-sql's Observe() needs it even while deleting the Role).
+    # databaseReclaimPolicy: "retain"
+
+    vaultSecretStoreName: "vault-tenant"

@@ -106,6 +106,9 @@ Not XR fields — hard-coded in the pushed record, the same way `teamNameField` 
 and `useLoginAsID: false` (both vendors), `teamNameField: slug` (GitHub only — Gitea's connector has no such field,
 confirmed against its `Config` struct; see the package's own comment in `kcl/oidc-connector/main.k`).
 
+The full picture — the three ways to choose teams, slug versus plain name per vendor, and a worked example — is in
+[`docs/api-reference/oidc-connector.md`](../../../docs/api-reference/oidc-connector.md#choosing-which-teams-can-sign-in).
+
 GitHub's slug is always lowercase; Gitea has no slug concept, and its own team-name validation
 (`AlphaDashDot`) allows uppercase, so `orgs[].teams` can carry two different cases for what's really
 the same claim shape. Not normalized here — see [`scm-team`'s README](../../scm/team#dexteam-case-across-vendors)
@@ -116,6 +119,7 @@ the same claim shape. Not normalized here — see [`scm-team`'s README](../../sc
 | Field | Description |
 |---|---|
 | `created` / `ready` | Standard contract |
+| `synced` / `syncMessage` | `synced` is false while a composed resource's last apply failed (its `Ready` can stay True from the earlier success); `syncMessage` is the provider's message, truncated. Absent until the first reconcile |
 | `vaultKey` | Where the record was pushed |
 | `teams` | Per org, the full resolved team list (generated + hand-listed) |
 

@@ -120,7 +120,9 @@ the only team they belong to also removes them from the org. An email address is
 | Field | Type | Description |
 |---|---|---|
 | `created` | `boolean` | True once the apply has completed, derived from the `id` output. **Absent** — not `false` — until then. |
-| `ready` | `boolean` | Equal to `created` by construction. |
+| `ready` | `boolean` | `created` **and** `synced`: true only while the team exists and the last apply succeeded. |
+| `synced` | `boolean` | False while the provisioning Workspace's last apply failed (e.g. Gitea rejected a member). Absent until the first reconcile. |
+| `syncMessage` | `string` | The failing resource and the provider's own message, truncated to ~400 characters; present only while something is not synced. The full error is on the Workspace's `Synced` condition. |
 | `exists` | `boolean` | Present on the host. The whole point of `observed` mode. |
 | `id` | `string` | The host's own identifier. |
 | `org` | `string` | The connection's org, echoed. |

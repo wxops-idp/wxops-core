@@ -252,7 +252,20 @@ spec:
                     skipped while its source path does not exist. Treat absent as false.
                 ready:
                   type: boolean
-                  description: True when the team exists. Equal to `created` by construction.
+                  description: |
+                    True when the team exists **and** its last apply succeeded: `created` and `synced`.
+                    A failed update leaves the team in place, so `created` stays true while `ready`
+                    goes false.
+                synced:
+                  type: boolean
+                  description: |
+                    False while the provisioning Workspace's last apply failed — the host rejected
+                    something. `syncMessage` says what. Absent until the first reconcile.
+                syncMessage:
+                  type: string
+                  description: |
+                    The failing resource and the provider's own message, truncated; present only while
+                    something is not Synced. The full error is on the Workspace's `Synced` condition.
                 exists:
                   type: boolean
                   description: |

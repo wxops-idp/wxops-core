@@ -1,0 +1,39 @@
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  name: gitea-internal-credentials
+  annotations:
+    crossplane.io/composition-resource-name: credentials
+status:
+  atProvider:
+    manifest:
+      status:
+        conditions:
+          - type: Ready
+            status: 'True'
+            reason: SecretSynced
+  conditions:
+    - type: Ready
+      status: 'True'
+      reason: Available
+    - type: Synced
+      status: 'True'
+      reason: ReconcileSuccess
+---
+apiVersion: opentofu.upbound.io/v1beta1
+kind: Workspace
+metadata:
+  name: gitea-internal-inspect
+  annotations:
+    crossplane.io/composition-resource-name: inspect
+status:
+  atProvider:
+    outputs: {}
+  conditions:
+    - type: Synced
+      status: 'False'
+      reason: ReconcileError
+      message: 'update failed: cannot apply tofu configuration: Error: GetUserByName'
+    - type: Ready
+      status: 'True'
+      reason: Available

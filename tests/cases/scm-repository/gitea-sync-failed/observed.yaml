@@ -1,0 +1,22 @@
+apiVersion: opentofu.upbound.io/v1beta1
+kind: Workspace
+metadata:
+  name: team-alpha-api-service-ws
+  annotations:
+    crossplane.io/composition-resource-name: tf-workspace
+status:
+  atProvider:
+    outputs:
+      repo_id: '42'
+      clone_url: https://gitea.example.com/rocket-team/api-service.git
+      html_url: https://gitea.example.com/rocket-team/api-service
+      ssh_url: git@gitea.example.com:rocket-team/api-service.git
+      full_name: rocket-team/api-service
+  conditions:
+    - type: Synced
+      status: 'False'
+      reason: ReconcileError
+      message: 'update failed: cannot apply tofu configuration: Error: GetUserByName'
+    - type: Ready
+      status: 'True'
+      reason: Available

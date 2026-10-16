@@ -44,6 +44,8 @@ to pick up the new value (its own `ExternalSecret` refresh) before it can authen
 |---|---|---|
 | `created` | `boolean` | True once the record has been pushed at least once. **Absent** — not `false` — until then. |
 | `ready` | `boolean` | Equal to `created` by construction. |
+| `synced` | `boolean` | False while a composed resource's last apply failed — its `Ready` condition can stay True from the earlier success. Absent until the first reconcile. See [Sync state](status-contract.md#sync-state--every-package). |
+| `syncMessage` | `string` | The failing resource and the provider's own message, truncated to ~400 characters; present only while something is not synced. |
 | `clientId` | `string` | Echoed from spec. |
 | `vaultKey` | `string` | Where the record (not the secret) was pushed. |
 

@@ -34,6 +34,7 @@ status:
     names:
       - payment-api
       - web
+  synced: true
   teams:
     count: 3
     names:

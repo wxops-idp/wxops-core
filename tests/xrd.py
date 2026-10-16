@@ -165,6 +165,26 @@ def check_mode_immutable(package: str, failures: list[str]) -> int:
     return 1
 
 
+def check_sync_fields(package: str, failures: list[str]) -> int:
+    """Every XRD's status must declare `synced` and `syncMessage`.
+
+    `ready` alone cannot say the last apply worked: a composed resource keeps Ready=True after a
+    failed update. A package that omits these fields would leave a failing apply invisible on the
+    XR, and an undeclared field is pruned by the API server even when the composition writes it.
+    """
+    xrd = yaml.safe_load((P.path(package) / "xrd.yaml").read_text())
+    ver = (xrd.get("spec", {}).get("versions") or [{}])[0]
+    status = (((ver.get("schema") or {}).get("openAPIV3Schema") or {}).get("properties") or {}).get("status") or {}
+    props = status.get("properties") or {}
+    missing = [f for f in ("synced", "syncMessage") if f not in props]
+    if missing:
+        print(f"    {R.RED}NO SYNC FIELDS{R.RESET} status lacks {', '.join(missing)}")
+        failures.append(f"{package}/sync-fields")
+    else:
+        print(f"    {R.GREEN}ok{R.RESET}      status declares synced / syncMessage")
+    return 1
+
+
 def check_unit_keys_rule(package: str, failures: list[str]) -> int:
     """`unitPermissions` must carry a keys rule listing exactly the units in `units`' enum.
 
@@ -255,6 +275,7 @@ def main() -> int:
         n_invalid += check_invalid(package, failures)
         check_mode_immutable(package, failures)
         check_unit_keys_rule(package, failures)
+        check_sync_fields(package, failures)
         notes = check_default_parity(package)
         if notes:
             parity[package] = notes

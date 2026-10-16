@@ -57,6 +57,8 @@ a bcrypt `hash`, computed by ESO's v2 template engine's Sprig `bcrypt` function 
 |---|---|---|
 | `created` | `boolean` | True once the record has been pushed at least once. **Absent** — not `false` — until then. |
 | `ready` | `boolean` | Equal to `created` by construction. |
+| `synced` | `boolean` | False while a composed resource's last apply failed — its `Ready` condition can stay True from the earlier success. Absent until the first reconcile. See [Sync state](status-contract.md#sync-state--every-package). |
+| `syncMessage` | `string` | The failing resource and the provider's own message, truncated to ~400 characters; present only while something is not synced. |
 | `userId` | `string` | The resolved userId (the XR's own `userId`, or `username` if left unset). |
 | `vaultKey` | `string` | Where the record (not the password) was pushed. |
 

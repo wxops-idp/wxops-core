@@ -91,6 +91,22 @@ Deleting the XR **keeps** the repository by default (`retain: true` orphans the 
 
 Full reference: [`docs/api-reference/scm-repository.md`](../../../docs/api-reference/scm-repository.md).
 
+## Status
+
+| Field | Description |
+|---|---|
+| `created` | True once the apply has completed and written state, derived from the presence of the `repo_id` output. |
+| `ready` | True when the repository exists **and** its last apply succeeded: `created` and `synced`. |
+| `exists` | True when the repository is present on the host. |
+| `repoId` | The host's own identifier for the repository. |
+| `cloneUrl` | HTTPS clone URL. |
+| `sshUrl` | SSH clone URL. |
+| `htmlUrl` | Browser URL. |
+| `fullName` | `<org>/<repo>` as the host reports it. |
+| `synced` / `syncMessage` | `synced` is false while a composed resource's last apply failed (its `Ready` can stay True from the earlier success); `syncMessage` is the provider's message, truncated. Absent until the first reconcile |
+
+Full reference: [`docs/api-reference/scm-repository.md`](../../../docs/api-reference/scm-repository.md#status).
+
 ## Build and publish
 
 ```bash

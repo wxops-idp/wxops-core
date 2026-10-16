@@ -87,6 +87,20 @@ See [`examples/scm-connection/xr.yaml`](../../../examples/scm-connection/xr.yaml
 
 Full reference: [`docs/api-reference/scm-connection.md`](../../../docs/api-reference/scm-connection.md).
 
+## Status
+
+| Field | Description |
+|---|---|
+| `created` | True once the credential Secret has been rendered from the store. |
+| `ready` | True when the credential Secret is in sync: `created` and `synced`. |
+| `secretName` | The Secret every consumer's Workspace reads as `varFiles`. |
+| `org` | What the token can see of the connection's `org`, read-only. |
+| `repositories` | The org's repositories as this token sees them (archived ones included). |
+| `teams` | The org's teams as this token sees them. |
+| `synced` / `syncMessage` | `synced` is false while a composed resource's last apply failed (its `Ready` can stay True from the earlier success); `syncMessage` is the provider's message, truncated. Absent until the first reconcile |
+
+Full reference: [`docs/api-reference/scm-connection.md`](../../../docs/api-reference/scm-connection.md#status).
+
 ## Build and publish
 
 ```bash

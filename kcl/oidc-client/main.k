@@ -100,11 +100,20 @@ _secretField = '"public":true' if public else '"secret":"{{ .password }}"'
 _recordJson = '{"id":"' + clientId + '","name":"' + displayName + '","redirectURIs":"' + _urisJson.replace('"', '\\"') + '"' + _peersField + ',' + _secretField + '}'
 
 _ocds = option("params").ocds or {}
+# A composed resource whose last apply failed keeps Ready=True from the earlier success, so Ready
+# alone cannot say the apply worked: Synced is the condition the provider sets False.
+_syncConds = lambda name: str -> [any] {
+    _res = _get(_get(_ocds, name, {}), "Resource", {})
+    [c for c in _get(_get(_res, "status", {}), "conditions", []) if _get(c, "type", "") == "Synced" and _get(c, "status", "") == "False"]
+}
+_syncFailed = lambda name: str -> bool {
+    len(_syncConds(name)) > 0
+}
 _isReady = lambda name: str -> bool {
     _ocd = _ocds[name] if name in _ocds else {}
     _res = _get(_ocd, "Resource", {})
     _conds = _get(_get(_res, "status", {}), "conditions", [])
-    len([c for c in _conds if _get(c, "type", "") == "Ready" and _get(c, "status", "") == "True"]) > 0
+    len([c for c in _conds if _get(c, "type", "") == "Ready" and _get(c, "status", "") == "True"]) > 0 and not _syncFailed(name)
 }
 
 # ── ESO Password generator (confidential + generate only) ───────────────────
@@ -326,6 +335,15 @@ _composedNames = [short + "-client-es", short + "-push-record"] + ([short + "-se
 _created = len([n for n in _composedNames if n not in _ocds]) == 0
 _ready = _isReady(short + "-client-es") and _isReady(short + "-push-record") and ((_isReady(short + "-secret-es") and _isReady(short + "-push-secret")) if isGenerate else True)
 
+# ── Sync state ──────────────────────────────────────────────────────────────
+# `synced` follows the same resources `ready` does; a failure on any other composed resource is still
+# shown in `syncMessage` without gating anything.
+_gatingNames = [short + "-client-es", short + "-push-record"] + ([short + "-secret-es", short + "-push-secret"] if isGenerate else [])
+_syncFailures = [n + ": " + _get(_syncConds(n)[0], "message", _get(_syncConds(n)[0], "reason", "not synced")) for n in _ocds if _syncFailed(n)]
+_synced = len([n for n in _gatingNames if _syncFailed(n)]) == 0
+_syncMessage = (_syncFailures[0] + (" (+" + str(len(_syncFailures) - 1) + " more)" if len(_syncFailures) > 1 else ""))[:400] if _syncFailures else ""
+_syncStatus = ({"synced" = _synced} if _ocds else {}) | ({"syncMessage" = _syncMessage} if _syncFailures else {})
+
 _dxr = {
     apiVersion = "auth.wxops.cloud/v1alpha1"
     kind = "XOIDCClient"
@@ -334,7 +352,7 @@ _dxr = {
         ready = _ready
         clientId = clientId
         vaultKey = recordKey
-    }
+    } | _syncStatus
 }
 
 items = [_dxr] + ([_secret_gen, _secret_es, _push_secret] if isGenerate else []) + [_client_es, _push_record]

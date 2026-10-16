@@ -116,6 +116,7 @@ refresh:
 | Field | Description |
 |---|---|
 | `created` / `ready` | Standard contract |
+| `synced` / `syncMessage` | `synced` is false while a composed resource's last apply failed (its `Ready` can stay True from the earlier success); `syncMessage` is the provider's message, truncated. Absent until the first reconcile |
 | `userId` | The resolved userId |
 | `vaultKey` | Where the record (not the password) was pushed |
 

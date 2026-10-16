@@ -24,6 +24,7 @@ spec:
   parameters:
     scmRef:
       name: github-wxops-idp
+    vendor: github
     mode: observed
     appName: dex
     redirectUris:

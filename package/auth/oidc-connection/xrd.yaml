@@ -84,6 +84,17 @@ spec:
                     render, with every connector/client/user record, succeeded. Equal to `created` by
                     construction. **Never that the broker has actually reloaded** — Core cannot observe
                     that; see the package README.
+                synced:
+                  type: boolean
+                  description: |
+                    False while the composed Object could not observe the broker's config
+                    `ExternalSecret` — a different thing from `message`, which is that ExternalSecret's
+                    own state. `syncMessage` says what. Absent until the first reconcile.
+                syncMessage:
+                  type: string
+                  description: |
+                    The failing resource and the provider's own message, truncated; present only while
+                    something is not Synced.
                 message:
                   type: string
                   description: |

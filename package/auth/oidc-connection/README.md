@@ -67,6 +67,7 @@ See [`examples/oidc-connection/xr.yaml`](../../../examples/oidc-connection/xr.ya
 | Field | Description |
 |---|---|
 | `created` / `ready` | The chart's config `ExternalSecret` reports `Ready: "True"` — **never** that the broker has actually reloaded; Core cannot observe that |
+| `synced` / `syncMessage` | `synced` is false while a composed resource's last apply failed (its `Ready` can stay True from the earlier success); `syncMessage` is the provider's message, truncated. Absent until the first reconcile |
 | `message` | The `ExternalSecret`'s own condition message when not ready — a malformed record, a duplicate id, or a missing store, straight from the chart's fail-closed template |
 | `callbackUrl` | `<issuer>/callback` — what every `XOIDCConnector`'s upstream OAuth application redirect URI must contain |
 

@@ -1,0 +1,11 @@
+# Observed after the Object stopped syncing: Ready=True remains from the last good observation, but
+# Synced=False. ready must go false and syncMessage must carry the provider message.
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XOIDCConnection
+metadata:
+  name: dex
+spec:
+  parameters:
+    issuer: https://idp.wxops.local
+    config:
+      namespace: dex

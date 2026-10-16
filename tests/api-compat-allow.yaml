@@ -14,4 +14,28 @@
 # An entry without a reason is ignored. `make release` requires release notes
 # while any entry is in use and clears this list in the release commit — an
 # allowance covers one release, never a standing exemption.
-allow: []
+allow:
+  - package: scm-oauth-app
+    rule: required-added
+    path: v1alpha1.spec.parameters.vendor
+    reason: "Module selection needs the vendor before the connection's Secret is read, as on scm-repository and scm-team. A first version defaulted it to gitea, but on a real cluster Crossplane rendered an existing XR without the defaulted value and the Workspace ran the literal placeholder module. The only existing XR in a cluster is dex-gitea, which gets vendor: gitea added (checked with kubectl)."
+  - package: scm-oauth-app
+    rule: replay-invalid
+    path: tests/cases/scm-oauth-app/gitea-managed/xr.yaml
+    reason: "Module selection needs the vendor before the connection's Secret is read, as on scm-repository and scm-team. A first version defaulted it to gitea, but on a real cluster Crossplane rendered an existing XR without the defaulted value and the Workspace ran the literal placeholder module. The only existing XR in a cluster is dex-gitea, which gets vendor: gitea added (checked with kubectl)."
+  - package: scm-oauth-app
+    rule: replay-invalid
+    path: tests/cases/scm-oauth-app/gitea-tenant-path/xr.yaml
+    reason: "Module selection needs the vendor before the connection's Secret is read, as on scm-repository and scm-team. A first version defaulted it to gitea, but on a real cluster Crossplane rendered an existing XR without the defaulted value and the Workspace ran the literal placeholder module. The only existing XR in a cluster is dex-gitea, which gets vendor: gitea added (checked with kubectl)."
+  - package: scm-oauth-app
+    rule: replay-invalid
+    path: tests/cases/scm-oauth-app/github-observed/xr.yaml
+    reason: "Module selection needs the vendor before the connection's Secret is read, as on scm-repository and scm-team. A first version defaulted it to gitea, but on a real cluster Crossplane rendered an existing XR without the defaulted value and the Workspace ran the literal placeholder module. The only existing XR in a cluster is dex-gitea, which gets vendor: gitea added (checked with kubectl)."
+  - package: scm-oauth-app
+    rule: replay-invalid
+    path: examples/scm-oauth-app/github-observed.yaml
+    reason: "Module selection needs the vendor before the connection's Secret is read, as on scm-repository and scm-team. A first version defaulted it to gitea, but on a real cluster Crossplane rendered an existing XR without the defaulted value and the Workspace ran the literal placeholder module. The only existing XR in a cluster is dex-gitea, which gets vendor: gitea added (checked with kubectl)."
+  - package: scm-oauth-app
+    rule: replay-invalid
+    path: examples/scm-oauth-app/xr.yaml
+    reason: "Module selection needs the vendor before the connection's Secret is read, as on scm-repository and scm-team. A first version defaulted it to gitea, but on a real cluster Crossplane rendered an existing XR without the defaulted value and the Workspace ran the literal placeholder module. The only existing XR in a cluster is dex-gitea, which gets vendor: gitea added (checked with kubectl)."

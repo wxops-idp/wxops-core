@@ -37,6 +37,8 @@ condition.
 |---|---|---|
 | `created` | `boolean` | True once the chart's config `ExternalSecret` has been observed at least once. **Absent** — not `false` — until then. |
 | `ready` | `boolean` | True when the chart's `ExternalSecret` reports `Ready: "True"` — the last render, with every record, succeeded. **Never** that the broker has actually reloaded; Core cannot observe that. |
+| `synced` | `boolean` | False while a composed resource's last apply failed — its `Ready` condition can stay True from the earlier success. Absent until the first reconcile. See [Sync state](status-contract.md#sync-state--every-package). |
+| `syncMessage` | `string` | The failing resource and the provider's own message, truncated to ~400 characters; present only while something is not synced. |
 | `message` | `string` | The `ExternalSecret`'s own condition message when not ready — a malformed record, a duplicate id, or a missing store, straight from the chart's fail-closed template. |
 | `callbackUrl` | `string` | `<issuer>/callback` — what every `XOIDCConnector`'s upstream OAuth application redirect URI must contain. |
 

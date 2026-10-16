@@ -72,6 +72,20 @@ for the full set of optional fields (pooler, tuning, backup, monitoring,
 [`docs/api-reference/platform-database-clusters.md`](../../../docs/api-reference/platform-database-clusters.md)
 for the complete `spec.parameters` reference.
 
+## Status
+
+| Field | Description |
+|---|---|
+| `clusterName` | CNPG cluster name (echoed from spec.parameters.clusterName). |
+| `namespace` | Namespace where the CNPG cluster lives. |
+| `shared` | Whether this cluster is in the shared multi-tenant pool. |
+| `environment` | Environment this cluster serves (dev, staging, prod). |
+| `created` | True once every composed resource has been observed at least once. |
+| `ready` | True when the cluster can serve connections: the CNPG Cluster is up, and any enabled pooler is up too (tenants are handed the pooler endpoint, not the cluster's). |
+| `synced` / `syncMessage` | `synced` is false while a composed resource's last apply failed (its `Ready` can stay True from the earlier success); `syncMessage` is the provider's message, truncated. Absent until the first reconcile |
+
+Full reference: [`docs/api-reference/platform-database-clusters.md`](../../../docs/api-reference/platform-database-clusters.md#status).
+
 ## Relation to other packages
 
 ```

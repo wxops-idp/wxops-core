@@ -1,0 +1,22 @@
+apiVersion: opentofu.upbound.io/v1beta1
+kind: Workspace
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: tf-workspace
+  name: rocket-team-developers-ws
+status:
+  atProvider:
+    outputs:
+      base_url: https://gitea.example.com
+      dex_team: Developers
+      exists: 'true'
+      id: '12'
+      org: rocket-team
+  conditions:
+    - reason: ReconcileError
+      status: 'False'
+      type: Synced
+      message: 'update failed: cannot apply tofu configuration: Error: GetUserByName'
+    - reason: Available
+      status: 'True'
+      type: Ready

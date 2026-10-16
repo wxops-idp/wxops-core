@@ -1,0 +1,22 @@
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  name: dex-dex-config
+  annotations:
+    crossplane.io/composition-resource-name: dex-config
+status:
+  atProvider:
+    manifest:
+      status:
+        conditions:
+          - type: Ready
+            status: 'True'
+            reason: SecretSynced
+  conditions:
+    - type: Synced
+      status: 'False'
+      reason: ReconcileError
+      message: 'observe failed: cannot get object: externalsecrets.external-secrets.io "dex-config" not found'
+    - type: Ready
+      status: 'True'
+      reason: Available

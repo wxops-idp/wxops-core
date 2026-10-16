@@ -48,6 +48,8 @@ A consumer never reads the connection object: it turns `scmRef.name` into that S
 |---|---|---|
 | `created` | `boolean` | True once the credential Secret has been rendered. **Absent** — not `false` — until then; treat absent as false. |
 | `ready` | `boolean` | True when the Secret is in sync. Equal to `created` by construction. It does **not** say the token works — `org` below does, for an org connection. |
+| `synced` | `boolean` | False while a composed resource's last apply failed — its `Ready` condition can stay True from the earlier success. Absent until the first reconcile. See [Sync state](status-contract.md#sync-state--every-package). |
+| `syncMessage` | `string` | The failing resource and the provider's own message, truncated to ~400 characters; present only while something is not synced. |
 | `secretName` | `string` | The Secret consumers read, published so the name is discoverable rather than conventional. |
 | `org` | `object` | `exists`, `name`, `id`, `url` — the org as the host reports it. See [What the connection reports](#what-the-connection-reports-about-the-org). |
 | `repositories` | `object` | `count` and `names` of the org's repositories. |

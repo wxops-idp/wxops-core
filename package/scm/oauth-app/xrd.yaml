@@ -27,6 +27,7 @@ spec:
                   type: object
                   required:
                     - scmRef
+                    - vendor
                     - appName
                   properties:
                     scmRef:
@@ -39,6 +40,18 @@ spec:
                       properties:
                         name:
                           type: string
+                    vendor:
+                      type: string
+                      description: |
+                        Must match the vendor on the `scmRef` connection — the module refuses to run on a
+                        mismatch, with a clear message. Repeated here for the same reason
+                        `XScmRepository.spec.parameters.vendor` is: Crossplane has to pick the Terraform
+                        provider before the connection's Secret is read, and configuring the Gitea one for a
+                        GitHub connection fails the whole Workspace. See ADR-004.
+
+                        Required, with no default: a default is not something the composition can rely on
+                        seeing, and a missing value would leave the module unselected.
+                      enum: ["gitea", "github"]
                     mode:
                       type: string
                       description: |
@@ -125,7 +138,20 @@ spec:
                     Absent — not `false` — until the first successful apply. Treat absent as false.
                 ready:
                   type: boolean
-                  description: True when the credentials are available. Equal to `created` by construction.
+                  description: |
+                    True when the credentials are available **and** nothing is failing to sync:
+                    `created` and `synced`.
+                synced:
+                  type: boolean
+                  description: |
+                    False while a provisioned resource's last apply failed — the host (or the secret
+                    store) rejected something. `syncMessage` says what. Absent until the first
+                    reconcile.
+                syncMessage:
+                  type: string
+                  description: |
+                    The failing resource and the provider's own message, truncated; present only while
+                    something is not Synced. The full error is on that resource's `Synced` condition.
                 clientId:
                   type: string
                   description: |

@@ -110,9 +110,21 @@ spec:
                 ready:
                   type: boolean
                   description: |
-                    True when the credential Secret is in sync. Equal to `created` by construction:
-                    a connection either has its Secret or it does not. The token is never verified
-                    against the host — only a resource using the connection can prove that.
+                    True when the credential Secret is in sync: `created` and `synced`. The token is
+                    never verified against the host by this field — `org` below is what shows it
+                    reaches the org.
+                synced:
+                  type: boolean
+                  description: |
+                    False while a provisioned resource's last apply failed — the host (or the secret
+                    store) rejected something. `syncMessage` says what. Absent until the first
+                    reconcile.
+                syncMessage:
+                  type: string
+                  description: |
+                    The failing resource and the provider's own message, truncated; present only while
+                    something is not Synced. The org inspection is informational: its failure is shown
+                    here but does not make `synced` false or `ready` false.
                 secretName:
                   type: string
                   description: |

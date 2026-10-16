@@ -29,7 +29,8 @@ application should belong to.
 
 | Field | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `scmRef.name` | `string` | yes | — | The `XScmConnection` to act through. Carries the vendor, base URL and token. |
+| `scmRef.name` | `string` | yes | — | The `XScmConnection` to act through. Carries the base URL and token. |
+| `vendor` | `string` (`gitea`, `github`) | yes | — | Must match the connection's own vendor; picks which module runs, so the Gitea provider is never configured for a GitHub connection — see [ADR-004](../../development-docs/adr/004-scm-repository-vendor-field.md). |
 | `appName` | `string` | yes | — | The application name as it appears on the host. |
 | `mode` | `string` (`managed`, `observed`) | | `managed` | `managed` registers it and owns the secret (Gitea only). `observed` publishes an operator-registered pair. **Immutable** — switching `managed` → `observed` would make OpenTofu destroy the host object, so the API server rejects any change; delete and recreate the XR instead. |
 | `redirectUris` | `[]string` | | `[]` | Accepted redirect URIs. At least one is required for `managed`. |
@@ -68,6 +69,8 @@ application fail. Consumers that read the secret at start-up also need a restart
 |---|---|---|
 | `created` | `boolean` | True once the application exists and its credentials were read, derived from the `client_id` output. **Absent** — not `false` — until the first successful apply. |
 | `ready` | `boolean` | True when the credentials are available. Equal to `created` by construction. |
+| `synced` | `boolean` | False while a composed resource's last apply failed — its `Ready` condition can stay True from the earlier success. Absent until the first reconcile. See [Sync state](status-contract.md#sync-state--every-package). |
+| `syncMessage` | `string` | The failing resource and the provider's own message, truncated to ~400 characters; present only while something is not synced. |
 | `clientId` | `string` | The public half of the pair. |
 | `vaultKey` | `string` | The key the pair was pushed to inside the store, published so a consumer reads the location rather than reconstructing it. |
 | `generation` | `integer` | The rotation generation the published credentials belong to. |

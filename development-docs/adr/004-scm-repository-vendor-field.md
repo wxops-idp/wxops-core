@@ -49,8 +49,12 @@ gitea, but scmRef's XScmConnection resolves to a different vendor"`) instead of 
 
 - `XScmRepository` is the one kind in the family where a tenant's own XR names the vendor, duplicating what `scmRef` already implies.
   It is documented as a cross-checked repeat, not a second source of truth: the module refuses to run at all if the two disagree.
-- `scm-oauth-app` does not need this and was not changed: its GitHub path is `observed`-only passthrough (GitHub has no OAuth-app
-  creation API), so its module only ever declares the `gitea` provider — the conflict this ADR fixes cannot occur there.
+- `scm-oauth-app` was first left out on the reasoning that its GitHub path is `observed`-only passthrough, so its module only declared
+  the `gitea` provider. That was wrong: the Gitea provider is configured whatever the vendor, and on a GitHub connection it still
+  calls `base_url` (empty there), failing the Workspace. It carries `vendor` too now, required like on `XScmRepository`, with a
+  provider-free GitHub module that only passes the operator-registered pair through. A first version made it optional with a
+  default of `gitea` so released resources needed no edit; on a real cluster Crossplane rendered an existing resource without the
+  defaulted value, left the module unselected, and the Workspace ran the literal placeholder — so the field is required instead.
 - Any future package that needs two *real, creatable* resource types from two different Terraform providers in one Workspace inherits
   this same pattern — the fix is not specific to repositories.
 - `tests/xrd.py` was hardened alongside this (applies XRD defaults before validating, matching API-server order) after a related bug

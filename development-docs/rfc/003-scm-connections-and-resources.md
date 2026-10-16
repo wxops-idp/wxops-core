@@ -256,8 +256,10 @@ not install it, which stays platform GitOps like Dex.
   configures every provider a module declares as soon as a resource of its type exists, whether or not that resource's `count`
   evaluates to zero — there is no way to make a provider conditional from inside HCL. Crossplane has to choose which module to render
   before the connection's Secret is even read, so `vendor` is repeated on `XScmRepository.spec.parameters`, with the module's own
-  `variable "vendor"` (still read from the connection, as before) validating that the two agree. `XScmOAuthApp` doesn't need this: its
-  GitHub path is `observed`-only passthrough, so only one provider (`gitea`) is ever declared in its module.
+  `variable "vendor"` (still read from the connection, as before) validating that the two agree. `XScmOAuthApp` repeats it for the same
+  reason — it first did not, on the assumption that its GitHub path (`observed`-only passthrough) never needed the Gitea provider, but
+  that provider is configured, and calls `base_url`, whichever vendor runs. Its `vendor` is required, as there; the GitHub module declares
+  no provider at all.
 - **`org` has no per-resource override, by decision.** Earlier drafts gave `XScmRepository` its own optional `org` that fell back to the
   connection's — a fallback chain duplicated in both the schema and the module. The connection's `org` is now the only source: an
   `XScmRepository` or `XScmOAuthApp` reads it straight off the connection Secret as `default_org`, with no second field to keep in sync

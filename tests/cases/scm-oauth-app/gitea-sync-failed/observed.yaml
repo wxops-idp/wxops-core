@@ -1,0 +1,19 @@
+apiVersion: opentofu.upbound.io/v1beta1
+kind: Workspace
+metadata:
+  name: dex-gitea-ws
+  annotations:
+    crossplane.io/composition-resource-name: tf-workspace
+status:
+  atProvider:
+    outputs:
+      client_id: abc123
+      generation: '1'
+  conditions:
+    - type: Synced
+      status: 'False'
+      reason: ReconcileError
+      message: 'update failed: cannot apply tofu configuration: Error: GetUserByName'
+    - type: Ready
+      status: 'True'
+      reason: Available
