@@ -7,9 +7,9 @@ This script re-indents main.k and splices it into the spec.source block
 of the corresponding Crossplane composition so xpkg build picks it up.
 
 Usage:
-  python3 .gitea/scripts/kcl-sync.py                  # sync all KCL packages
-  python3 .gitea/scripts/kcl-sync.py platform-database-clusters # sync one package
-  python3 .gitea/scripts/kcl-sync.py --check           # exit 1 if any composition is out of sync
+  python3 .github/scripts/kcl-sync.py                  # sync all KCL packages
+  python3 .github/scripts/kcl-sync.py platform-database-clusters # sync one package
+  python3 .github/scripts/kcl-sync.py --check           # exit 1 if any composition is out of sync
 
 How it works:
   composition.yaml has this structure (indentation matters):

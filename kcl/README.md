@@ -33,7 +33,7 @@ make kcl-sync     # re-embed kcl/{pkg}/main.k into package/{pkg}/composition.yam
 make kcl-check    # fail if composition.yaml has drifted from kcl/{pkg}/main.k
 ```
 
-`.gitea/scripts/kcl-sync.py` does the splicing (splits `composition.yaml` on the `source: |` marker, re-indents `main.k`, and replaces everything after it). A pre-commit hook (`kcl-drift-check`) runs `make kcl-check` automatically, so always run `make kcl-sync` and commit **both** `kcl/{pkg}/main.k` and `package/{pkg}/composition.yaml` together.
+`.github/scripts/kcl-sync.py` does the splicing (splits `composition.yaml` on the `source: |` marker, re-indents `main.k`, and replaces everything after it). A pre-commit hook (`kcl-drift-check`) runs `make kcl-check` automatically, so always run `make kcl-sync` and commit **both** `kcl/{pkg}/main.k` and `package/{pkg}/composition.yaml` together.
 
 ## Wiring a KCL module into an XRD
 
@@ -133,7 +133,7 @@ items = [
 ]
 ```
 
-**Build pipeline changes required** — a second publish pipeline alongside the existing Crossplane xpkg one, e.g. `.gitea/workflows/publish-kcl-modules.yaml` triggered on `kcl/**` changes / `kcl/v*` tags, running `kcl mod push` for `lib` and each package module. After this, `composition.yaml`'s `source:` field points at the OCI reference instead of inline source, and `kcl-sync` / `kcl-drift-check` become unused and can be removed.
+**Build pipeline changes required** — a second publish pipeline alongside the existing Crossplane xpkg one, e.g. `.github/workflows/publish-kcl-modules.yaml` triggered on `kcl/**` changes / `kcl/v*` tags, running `kcl mod push` for `lib` and each package module. After this, `composition.yaml`'s `source:` field points at the OCI reference instead of inline source, and `kcl-sync` / `kcl-drift-check` become unused and can be removed.
 
 **Version coordination** — three axes once on OCI modules:
 1. **Crossplane package version** — `VERSIONS.yaml`, governs the `.xpkg` OCI image.

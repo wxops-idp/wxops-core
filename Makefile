@@ -46,7 +46,7 @@ push: build ## Build and push all packages to the registry
 
 .PHONY: validate
 validate: ## Validate all package directories (crossplane xpkg build, no push)
-	@bash .gitea/scripts/validate-packages.sh
+	@bash .github/scripts/validate-packages.sh
 
 .PHONY: clean
 clean: ## Remove local .xpkg build artifacts
@@ -56,19 +56,19 @@ clean: ## Remove local .xpkg build artifacts
 
 .PHONY: kcl-sync
 kcl-sync: ## Embed kcl/{pkg}/main.k into composition.yaml (run after editing KCL source)
-	@python3 .gitea/scripts/kcl-sync.py
+	@python3 .github/scripts/kcl-sync.py
 
 .PHONY: kcl-check
 kcl-check: ## Fail if any composition.yaml is out of sync with its kcl/ source
-	@python3 .gitea/scripts/kcl-sync.py --check
+	@python3 .github/scripts/kcl-sync.py --check
 
 .PHONY: readme-sync
 readme-sync: ## Regenerate the README.md packages table from VERSIONS.yaml
-	@python3 .gitea/scripts/gen-readme-packages.py
+	@python3 .github/scripts/gen-readme-packages.py
 
 .PHONY: readme-check
 readme-check: ## Fail if README.md packages table is out of sync with VERSIONS.yaml
-	@python3 .gitea/scripts/gen-readme-packages.py --check
+	@python3 .github/scripts/gen-readme-packages.py --check
 
 # ── Lint & render ────────────────────────────────────────────────────────────
 
@@ -227,14 +227,14 @@ changelog-preview: ## Preview unreleased changelog without writing
 
 .PHONY: release-notes
 release-notes: ## Scaffold release-notes/<release>.md with its compatibility report (VERSION defaults to today)
-	@ver="$(VERSION)"; [ -n "$$ver" ] || ver=$$(python3 .gitea/scripts/release-state.py next); \
+	@ver="$(VERSION)"; [ -n "$$ver" ] || ver=$$(python3 .github/scripts/release-state.py next); \
 	echo "$$ver" | grep -qE '^release-[0-9]{4}-[0-9]{2}-[0-9]{2}(\.[0-9]+)?$$' || \
 		{ echo "error: VERSION must look like release-YYYY-MM-DD[.N], e.g. make release-notes VERSION=release-2026-09-11" >&2; exit 1; }; \
-	bash .gitea/scripts/check-release-notes.sh "$$ver"
+	bash .github/scripts/check-release-notes.sh "$$ver"
 
 .PHONY: release-check
 release-check: ## Fail if VERSIONS.yaml and package/install/ disagree
-	@python3 .gitea/scripts/release-state.py check
+	@python3 .github/scripts/release-state.py check
 
 # The release commit skips the test-api-compat hook: `release-state.py write`
 # has just run that same gate on this exact tree, and rerunning it after the
@@ -248,7 +248,7 @@ release: ## Prepare a release commit + tag (no push) — VERSION=release-YYYY-MM
 	@echo "  drifted before this runs, or right now in another terminal, since"
 	@echo "  nothing else in the tree may be dirty (see the check below)."
 	@echo ""
-	@ver="$(VERSION)"; [ -n "$$ver" ] || ver=$$(python3 .gitea/scripts/release-state.py next); \
+	@ver="$(VERSION)"; [ -n "$$ver" ] || ver=$$(python3 .github/scripts/release-state.py next); \
 	all=""; [ -z "$(ALL)" ] || all="--all"; \
 	echo "$$ver" | grep -qE '^release-[0-9]{4}-[0-9]{2}-[0-9]{2}(\.[0-9]+)?$$' \
 		|| { echo "error: '$$ver' is not a release name (expected release-YYYY-MM-DD[.N])" >&2; exit 1; }; \
@@ -258,8 +258,8 @@ release: ## Prepare a release commit + tag (no push) — VERSION=release-YYYY-MM
 	git rev-parse -q --verify "refs/tags/$$ver" >/dev/null \
 		&& { echo "error: tag $$ver already exists" >&2; exit 1; }; \
 	echo "→ classifying changes and pinning packages for $$ver"; \
-	python3 .gitea/scripts/release-state.py write "$$ver" $$all || exit 1; \
-	python3 .gitea/scripts/gen-readme-packages.py; \
+	python3 .github/scripts/release-state.py write "$$ver" $$all || exit 1; \
+	python3 .github/scripts/gen-readme-packages.py; \
 	echo "→ writing CHANGELOG.md for $$ver"; \
 	git-cliff --tag "$$ver" -o CHANGELOG.md; \
 	git add CHANGELOG.md README.md docs/ development-docs/ release-notes/ \

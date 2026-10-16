@@ -137,7 +137,7 @@ Classified against the tiers [`tests/README.md`](../../tests/README.md#test-api-
 | Add ServiceMonitor, conditional emit | `kcl/tenant-app/main.k` | `safe` |
 | Add PodMonitor, conditional emit | `kcl/tenant-app/main.k` | `safe` |
 | Grant `monitoring.coreos.com` to the provider | `providers/rbac-provider-kubernetes.yaml` | prerequisite — not a composition change |
-| Add `tenant-app` to the validation array | `.gitea/scripts/validate-packages.sh` | CI only |
+| Add `tenant-app` to the validation array | `.github/scripts/validate-packages.sh` | CI only |
 | **Name the existing Service port `http`** | `kcl/tenant-app/main.k:663` | **`careful`** |
 
 The `careful` row is the only one carrying risk. It edits the contents of a live composed resource, so Crossplane applies an in-place patch. Adding a name to a

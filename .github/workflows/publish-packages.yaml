@@ -30,7 +30,7 @@ jobs:
           crossplane version --client
 
       - name: Run package validation
-        run: bash .gitea/scripts/validate-packages.sh
+        run: bash .github/scripts/validate-packages.sh
 
   discover:
     name: Discover packages
@@ -165,7 +165,7 @@ jobs:
           fi
           {
             printf '## Packages\n\n'
-            python3 .gitea/scripts/release-state.py summary "$TAG"
+            python3 .github/scripts/release-state.py summary "$TAG"
             printf '\n---\n\n'
           } >> "$body"
           git-cliff --current --strip all >> "$body"

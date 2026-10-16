@@ -33,7 +33,7 @@ public disclosure. Credit is given in the release notes unless you ask otherwise
 ## Scope
 
 In scope: the XRDs, Compositions, KCL source, the release/publish pipeline (`.github/workflows/`,
-`.gitea/scripts/`), and anything a Configuration package composes that could escalate beyond what
+`.github/scripts/`), and anything a Configuration package composes that could escalate beyond what
 its own XR should grant — see
 [Compositions never emit Kubernetes RBAC](CONTRIBUTING.md#boundaries) for the standing rule this
 guards.

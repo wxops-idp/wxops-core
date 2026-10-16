@@ -7,7 +7,7 @@
 string rules — stripping a group prefix would mangle `platform-database-clusters`.
 
 It lives in `tests/lib/` because that is already this repo's shared Python
-library: `.gitea/scripts/release-state.py` imports `releases` from here. Both
+library: `.github/scripts/release-state.py` imports `releases` from here. Both
 the test suite and the build scripts therefore import it the same way, and the
 CLI below serves the Makefile and the bash scripts:
 
@@ -90,7 +90,7 @@ def baseline_paths(name: str) -> list[str]:
     kinds): gone from the current registry entirely, but still real at the baseline tag.
     `tests/api_compat.py`'s own `packages()` unions such names in from the baseline specifically
     to classify their removal, so this must resolve a historical path without the name being
-    registered now — see `.gitea/scripts/release-state.py` for the mirror-image use.
+    registered now — see `.github/scripts/release-state.py` for the mirror-image use.
     """
     try:
         out = [rel_path(name)]

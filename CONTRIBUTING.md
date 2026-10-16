@@ -56,7 +56,7 @@ make lint
 ```
 
 Then open a PR against `main`. CI
-([`.gitea/workflows/pr-validate.yaml`](.gitea/workflows/pr-validate.yaml)) runs
+([`.github/workflows/pr-validate.yaml`](.github/workflows/pr-validate.yaml)) runs
 the same gates. Pre-commit is local and `--no-verify` bypasses it; CI does not.
 
 ### Commit messages
@@ -122,7 +122,7 @@ A package lives at `package/<group>/<name>/`, where the group is the API group i
 - [ ] `package/<group>/<name>/xrd.yaml` — schema-first, minimal, **with `status.created`, `status.ready`, `status.synced` and `status.syncMessage`** (`make test-xrd` fails without the last two)
 - [ ] `package/<group>/<name>/composition.yaml`
 - [ ] `kcl/<name>/main.k` + `kcl.mod` if using function-kcl, then `make kcl-sync` (and add the name to
-      `KCL_PACKAGES` in [`.gitea/scripts/kcl-sync.py`](.gitea/scripts/kcl-sync.py)). Make `_isReady` require `Synced` not `False` and add the sync status, as the
+      `KCL_PACKAGES` in [`.github/scripts/kcl-sync.py`](.github/scripts/kcl-sync.py)). Make `_isReady` require `Synced` not `False` and add the sync status, as the
       existing KCL packages do
 - [ ] **A patch-and-transform package** ends its pipeline with the shared `status` step (copy it from `package/scm/team/composition.yaml`), is listed in
       `STATUS_PACKAGES` in the same script, and depends on `function-kcl` in its `crossplane.yaml`; its Workspace and Object resources need `Ready` and `Synced`

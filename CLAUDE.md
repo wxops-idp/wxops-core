@@ -178,7 +178,7 @@ Commits are validated by:
 8. **Golden render tests** — `pre-push` stage only, ~90s
 
 CI enforces the same gates on every pull request via
-`.gitea/workflows/pr-validate.yaml`. Pre-commit runs locally and is bypassable
+`.github/workflows/pr-validate.yaml`. Pre-commit runs locally and is bypassable
 with `--no-verify`; CI is not.
 
 ## Working model

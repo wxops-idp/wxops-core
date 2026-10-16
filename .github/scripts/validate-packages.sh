@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# .gitea/scripts/validate-packages.sh
+# .github/scripts/validate-packages.sh
 #
 # Validates all Crossplane Configuration packages by running
 # `crossplane xpkg build` against each package directory.
