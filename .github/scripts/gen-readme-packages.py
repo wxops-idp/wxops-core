@@ -6,7 +6,7 @@ Reads VERSIONS.yaml for package names, versions, and API versions. Reads each
 package/{name}/xrd.yaml for the Kind name. Replaces the block between
 <!-- packages-table-start --> and <!-- packages-table-end --> in README.md, and the
 two badges derived from the same file (package count, served API versions) between
-<!-- badges-dynamic-start --> and <!-- badges-dynamic-end -->.
+<!-- badges-dynamic-start --> and <!-- badges-dynamic-end -->, kept on the badge line.
 
 Usage:
   python3 .github/scripts/gen-readme-packages.py          # sync README.md
@@ -53,7 +53,7 @@ def build_badges() -> str:
     versions = yaml.safe_load((ROOT / "VERSIONS.yaml").read_text())
     packages = versions.get("packages", {})
     served = sorted({v for info in packages.values() for v in info["api"]["served"]})
-    return "\n".join([
+    return " ".join([
         f"[![Packages](https://img.shields.io/badge/packages-{len(packages)}-blue)](#packages)",
         f"[![API](https://img.shields.io/badge/API-{'%20%7C%20'.join(served)}-orange)](docs/api-reference/status-contract.md#api-version)",
     ])
@@ -77,7 +77,8 @@ def main() -> int:
 
     pre = new_readme[: new_readme.index(B_START) + len(B_START)]
     post = new_readme[new_readme.index(B_END) :]
-    new_readme = f"{pre}\n{build_badges()}\n{post}"
+    # Inline, not on their own lines: the badges share one line with their static neighbours.
+    new_readme = f"{pre} {build_badges()}{post}"
 
     if new_readme == readme:
         print("  ok    README.md packages table and badges are up to date")
