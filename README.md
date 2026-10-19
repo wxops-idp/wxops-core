@@ -1,17 +1,12 @@
 # W'xOps Core
 
-[![Release](https://img.shields.io/github/v/release/wxops-idp/wxops-core?label=release)](https://github.com/wxops-idp/wxops-core/releases)
-<!-- badges-dynamic-start -->
-[![Packages](https://img.shields.io/badge/packages-11-blue)](#packages)
-[![API](https://img.shields.io/badge/API-v1alpha1-orange)](docs/api-reference/status-contract.md#api-version)
-<!-- badges-dynamic-end -->
-[![Crossplane](https://img.shields.io/badge/Crossplane-v2.3-blueviolet)](https://docs.crossplane.io/v2.3/)
-[![License](https://img.shields.io/github/license/wxops-idp/wxops-core)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/wxops-idp/wxops-core?label=release)](https://github.com/wxops-idp/wxops-core/releases)<!-- badges-dynamic-start --> [![Packages](https://img.shields.io/badge/packages-11-blue)](#packages) [![API](https://img.shields.io/badge/API-v1alpha1-orange)](docs/api-reference/status-contract.md#api-version)<!-- badges-dynamic-end --> [![Crossplane](https://img.shields.io/badge/Crossplane-v2.3-blueviolet)](https://docs.crossplane.io/v2.3/) [![License](https://img.shields.io/github/license/wxops-idp/wxops-core)](LICENSE)
 
 ***"Ask Kubernetes for a GitHub repository, a PostgreSQL database, or a full application deployment — get a real one back."***
 
 > [!NOTE]
-> W'xOps Core is a platform-engineering control plane built on [Crossplane v2](https://www.crossplane.io/). One declarative API takes a team from code to running infrastructure — repositories and teams on Gitea or GitHub, single sign-on through Dex, databases, and applications with ingress, TLS and credentials already wired — so developers kubectl apply what they need without worrying about the infrastructure underneath. Each kind is a schema (an XRD) plus the composition that realises it, packaged per API group; there is no custom controller and no UI required.
+> W'xOps Core is a platform-engineering control plane built on [Crossplane v2](https://www.crossplane.io/). One declarative API takes a team from code to running infrastructure — repositories and teams on Gitea or GitHub, single sign-on through Dex, databases, and applications with ingress, TLS and credentials already wired — so developers kubectl apply what they nee
+> d without worrying about the infrastructure underneath. Each kind is a schema (an XRD) plus the composition that realises it, packaged per API group; there is no custom controller and no UI required.
 
 ## The problem this solves
 
