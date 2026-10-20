@@ -203,9 +203,10 @@ flowchart LR
 cardinality is more expensive and *less* answerable than the per-cluster Prometheus it replaced. The label contract below is the prerequisite, and it costs
 almost nothing if done first.
 
-W'xOps is at **Tier 1, done properly**: `sampleLimit` is composition-enforced (Part 1), and `status.created`/`ready` already crosses clusters natively because
-`Object` status flows back regardless of target cluster. That last property means the *state* half of Tier 3 partly exists before the *metrics* half has
-started.
+W'xOps is at **Tier 1, done properly**: `sampleLimit` is composition-enforced (Part 1), and every package already reports `created`, `ready`, `synced` and
+`syncMessage`. With Crossplane on each spoke that status stays on the spoke; it reaches the fleet the same way metrics will — pushed outbound, through Argo CD
+Agent and as metrics ([self-service-operations.md](self-service-operations.md#whats-missing)). The *state* half of Tier 3 is therefore one exporter away, not
+a separate system.
 
 ---
 
@@ -265,7 +266,7 @@ Eight signal classes. Most observability discussions cover two of them and then 
 | Signal | Answers | Tier 1 | Tier 2 / 3 option | W'xOps state |
 |---|---|---|---|---|
 | **Metrics** | "Is it slow / erroring / saturated?" | Prometheus + the Part 1 monitors | `remote_write` → Mimir / VM / Thanos Receive | ✅ emission shipped (v0.4.0); ❌ no aggregation |
-| **Logs** | "What did it say when it broke?" | Loki + **Alloy** (not Promtail — EOL March 2026) | Same agent, central Loki; also Guardian's audit sink | ❌ platform infra, undecided |
+| **Logs** | "What did it say when it broke?" | Loki + **Alloy** (not Promtail — EOL March 2026) | Same agent, central Loki; also the Darlane session-audit sink | ❌ platform infra, undecided |
 | **Traces** | "Which hop in the request was slow?" | OpenTelemetry SDK → Tempo | Central Tempo; per-app opt-in | ❌ deferred; `darlane.telemetryPort` is the hook |
 | **Events** | "What did Kubernetes *do* just before?" | `kube-state-metrics` + an event exporter | Ship events as logs or OTel to the central store | ❌ **the cheapest missing signal** — see below |
 | **Topology / state** | "What does this XR own, and what is unhealthy?" | XR tree: `resourceRefs` → `Object`s → `status` | Native across clusters already | ✅ structurally present; 🔶 `status.notReady` proposed |
@@ -303,8 +304,8 @@ contract so much as sit beside it. Treat it as a fallback for un-instrumentable 
 ### Why Hubble is unusually cheap here, and Falco is not
 
 **This argument is conditional, and the condition is not yet met.** Cilium appears in this repo in exactly one place: `cni-cilium` in the *proposed* spoke
-bootstrap `ClusterResourceSet` in [`multi-cluster.md`](multi-cluster.md#layer-3--data-plane), with Cluster Mesh as the named data-plane option. That is a
-design-doc example for spokes that do not exist yet ([M2](solution-matrix.md#domain-2--multi-cluster--multi-region) is not started), **not** a decided platform
+bootstrap `ClusterResourceSet` in [`multi-cluster.md`](../_archives/multi-cluster.md#layer-3--data-plane), with Cluster Mesh as the named data-plane option. That is a
+design-doc example from the archived CAPI-era design — W'xOps no longer provisions clusters at all ([multi-cluster.md](multi-cluster.md)) — **not** a decided platform
 fact, and the CNI of the cluster running today is not recorded anywhere in this repo.
 
 *If* Cilium is the CNI, Hubble is a flag on a component that is already there — no new DaemonSet, no second kernel-touching supply chain, no additional
@@ -315,8 +316,8 @@ observability as advanced and runtime security as table stakes.
 *If it is not*, O13 is an ordinary medium-cost item competing on its merits, and the sequencing below loses its cheapest step. **Confirm the CNI before quoting
 Hubble as near-free** — this is a one-command check (`kubectl -n kube-system get ds`), and the whole cost argument rests on it.
 
-The mixed-fleet caveat holds either way: a spoke this platform did **not** provision — the managed, opaque clusters in
-[M3b](multi-cluster-connectivity.md#path-e--existing-clusters) — may not be on Cilium regardless, and Hubble is unavailable there. That is where a CNI-agnostic
+The mixed-fleet caveat holds either way: W'xOps manages clusters it is given ([multi-cluster.md](multi-cluster.md)), so no cluster's CNI is the
+platform's choice — a cluster not on Cilium has no Hubble. That is where a CNI-agnostic
 option such as Retina becomes the question, and why "flows" cannot be assumed uniform across a fleet.
 
 ### The push/pull rule applies unchanged
@@ -354,7 +355,7 @@ Not feature count. This is the distinction that determines blast radius:
 | **KubeArmor** | Enforce, policy-first (LSM: AppArmor / BPF-LSM) | Starts from allowed behaviour rather than from detections |
 
 Enforcement is a production-outage risk in a way detection is not: a bad rule kills a tenant's workload, and the tenant has no way to see why. For a platform at
-Tier 1 the answer is **detect only, advisory** — the same stance Guardian already takes with its Phase 1 scans, which never interrupt the developer's process.
+Tier 1 the answer is **detect only, advisory** — the same stance Darlane's session scanning takes ([session safety](darlane.md#session-safety--tools-audit-data-boundary)), which never interrupts the developer's process.
 
 The cost of Falco is not installing it. Default rulesets are noisy, tuning is the actual project, and an untuned Falco produces enough alert fatigue to degrade
 the *rest* of the alerting. Budget for the tuning or do not start.
@@ -584,8 +585,8 @@ Part 1.
 case gets stronger, but so does the cardinality cost of a per-developer, short-lived workload writing into a central store. Likely answer: scrape locally, do
 not `remote_write`.
 
-**(Part 2) What happens to flows on a spoke that is not Cilium?** Hubble is free on clusters this platform provisions and unavailable on the managed ones it
-merely joins ([M3b](multi-cluster-connectivity.md#path-e--existing-clusters)). Either the fleet accepts a non-uniform signal — flows where the CNI allows, none
+**(Part 2) What happens to flows on a spoke that is not Cilium?** Hubble is free where a cluster happens to run Cilium and unavailable elsewhere — and with
+bring-your-own clusters ([multi-cluster.md](multi-cluster.md)) that is decided per cluster, not by the platform. Either the fleet accepts a non-uniform signal — flows where the CNI allows, none
 elsewhere — or it adds Retina for uniformity and pays a DaemonSet everywhere to make a dashboard consistent. **The non-uniform answer is probably right**, and
 it is worth stating explicitly so nobody re-opens it as a bug.
 
@@ -603,13 +604,14 @@ deploys it, not after.
 - [`tenant-app.md`](../../docs/api-reference/tenant-app.md) — the full `XTenantApp` schema
 - [`development-docs/_archives/ROADMAP.md`](../_archives/ROADMAP.md) — archived; the work item this describes
 - [`release-notes/README.md`](../../release-notes/README.md) — the `safe`/`careful`/`breaking` change-tier taxonomy
-- [`multi-cluster.md`](multi-cluster.md) — per-cluster observability endpoints, later
-- [`multi-cluster-connectivity.md`](multi-cluster-connectivity.md#observability-plane) — the
+- [`multi-cluster.md`](multi-cluster.md) — Alloy pushing over mTLS to an observability cluster reached by name; the archived
+  [`multi-cluster.md`](../_archives/multi-cluster.md) — per-cluster observability endpoints, later
+- [`multi-cluster-connectivity.md`](../_archives/multi-cluster-connectivity.md#observability-plane) — the
   observability plane in the four-plane architecture, and why the push topology follows from the
   connectivity posture
 - [`self-service-operations.md`](self-service-operations.md) — how these signals feed runbooks and the diagnosis/intelligence layer
 - [`security-threat-model.md`](security-threat-model.md) — owns *what* runtime security should
   detect; this page owns only how the detections are collected
-- [`guardian.md`](guardian.md#phase-2--audit-and-compliance) — the other place eBPF appears, as a
+- [Darlane session safety](darlane.md#session-safety--tools-audit-data-boundary) — the other place audit capture appears, as a
   per-session capture method rather than a fleet-wide plane
 - [`solution-matrix.md`](solution-matrix.md) — rows O1-O15 index this material

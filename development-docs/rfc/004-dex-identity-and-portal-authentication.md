@@ -423,7 +423,7 @@ operator, not Dex's API, not a Core-owned aggregator); stable secrets (a client 
 4. **Restart tolerance.** Is one rolling restart per refresh interval acceptable for the expected rate of change? If a high-churn future is
    likely, the earlier CRD design is the fallback for clients only.
 5. **API server trust.** Should the Kubernetes API server accept Dex-issued tokens directly (structured authentication, as
-   [`multi-cluster-proposal.md`](../core-ideas/multi-cluster-proposal.md) describes), or only the Portal? That decides how much of RFC-005 can
+   [`multi-cluster-proposal.md`](../_archives/multi-cluster-proposal.md) describes), or only the Portal? That decides how much of RFC-005 can
    lean on Kubernetes's own user info. How Dex relates to Pinniped is part of the same question and is not decided here.
 6. **Who registers clients? — settled.** The platform team. Tenants have no permission on `XOIDCClient`, so they cannot ask for arbitrary redirect URIs; keeping
    the `XOIDC*` kinds out of tenant RBAC is part of RFC-005's coarse layer.

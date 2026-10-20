@@ -169,7 +169,7 @@ of a policy library.
 ### Not a networking layer
 
 Traefik `IngressRoute` for north-south traffic only. **No service mesh, no east-west routing, no cross-cluster data plane.** See
-[`docs/core-ideas/multi-cluster.md`](../core-ideas/multi-cluster.md#layer-3--data-plane) — a mesh is a Layer 3 concern the platform defers until a concrete
+[`docs/core-ideas/multi-cluster.md`](multi-cluster.md#layer-3--data-plane) — a mesh is a Layer 3 concern the platform defers until a concrete
 workload needs it, and Darlane traffic splitting is deliberately confined to a single cluster.
 
 ### Not the product surface
@@ -291,13 +291,13 @@ In priority order, all post-portal:
    workflow needs all three. Follows RFC-003 Phase 1 (`scm-connection`/`scm-repository`/`scm-oauth-app`, shipped).
 2. **`XDarlane` standalone XRD** — see [Where Darlane belongs](#where-darlane-belongs)
 3. **Multi-cluster prototype** — now fully specified in
-   [`multi-cluster-proposal.md`](../core-ideas/multi-cluster-proposal.md) (CAPI + one spoke +
+   [`multi-cluster-proposal.md`](multi-cluster-proposal.md) (CAPI + one spoke +
    scoped `ProviderConfig` + structured authn, with exit criteria); the v0.4.0
    `cluster` threading is its completed prerequisite. The connection-security
    options for item 4, and the answer for spokes CAPI did not provision, are in
-   [`multi-cluster-connectivity.md`](../core-ideas/multi-cluster-connectivity.md). Tracked as
+   [`multi-cluster-connectivity.md`](multi-cluster-connectivity.md). Tracked as
    [open decision 4](#open-decisions).
-3. **Guardian Phase 1** — [`guardian.md`](../core-ideas/guardian.md)
+3. **Guardian Phase 1** — [`guardian.md`](guardian.md)
 4. **Self-service operations track** — sequenced in
    [`self-service-operations.md`](../core-ideas/self-service-operations.md#what-to-build--sequenced)
    and [`knowledge-architecture.md`](../core-ideas/knowledge-architecture.md#adoption--sequenced-each-step-useful-alone);
@@ -315,7 +315,7 @@ picture:
 - [ ] **`scheduling:` block** (`nodeSelector`, `tolerations`, spread) on
       `tenant-app` + `platform-database-clusters` — verified gap; prerequisite
       for any arm64/edge/GPU node pool
-      ([multi-cluster-scale.md](../core-ideas/multi-cluster-scale.md#the-verified-wxops-gaps))
+      ([multi-cluster-scale.md](multi-cluster-scale.md#the-verified-wxops-gaps))
 - [ ] **Widen `resources.requests/limits`** to accept extended-resource keys
       (`nvidia.com/gpu`) — today's schema silently prunes them despite the
       "passed through verbatim" description (same doc)
@@ -325,7 +325,7 @@ picture:
       ([self-service-operations.md](../core-ideas/self-service-operations.md#pillar-2--runbooks-as-platform-contract))
 - [ ] **`ingress.gslb` block** — blocked on the k8gb↔Traefik-IngressRoute
       spike; do the spike first
-      ([multi-cluster-scale.md](../core-ideas/multi-cluster-scale.md#gslb-implementations--three-options-one-field-tested))
+      ([multi-cluster-scale.md](multi-cluster-scale.md#gslb-implementations--three-options-one-field-tested))
 - [ ] **Runbooks + `docs/incidents/` convention** — knowledge-architecture
       adoption steps 2–3; docs-only, no code
 
@@ -351,7 +351,7 @@ the default**. This would layer on top as an opt-in path, not replace it.
       `XPlatformDatabaseCluster` (requires `provider-vault`) so platform admins
       do not need to pre-create Vault mounts out of band.
 
-Interacts with [Vault path conventions](../core-ideas/multi-cluster.md#decisions-to-make-before-building): if a cluster dimension is ever added to Vault paths,
+Interacts with [Vault path conventions](multi-cluster.md#decisions-to-make-before-building): if a cluster dimension is ever added to Vault paths,
 settle it before this ships, not after.
 
 ---
@@ -430,18 +430,18 @@ composition it enforces.
 | 1 | `v1alpha1` → `v1beta1` promotion | [Release readiness](#release-readiness) | Portal binding; irreversible after |
 | 2 | `ready` widened vs. split into `dependenciesReady` | Phase 0 | Portal status rendering — ✅ resolved, split chosen |
 | 3 | Portal → Git vs. Portal → API | Before portal work begins | [Backlog → Portal and GitOps contract](#portal-and-gitops-contract) |
-| 4 | Target cluster as XR parameter vs. hub-side boundary | Before the multi-cluster prototype | [`multi-cluster.md`](../core-ideas/multi-cluster.md#decisions-to-make-before-building) |
+| 4 | Target cluster as XR parameter vs. hub-side boundary | Before the multi-cluster prototype | [`multi-cluster.md`](multi-cluster.md#decisions-to-make-before-building) |
 | 5 | Vault path cluster dimension | Before first spoke | Breaking change to every `remoteKey` |
 
 ---
 
 ## References
 
-- [`docs/core-ideas/multi-cluster.md`](../core-ideas/multi-cluster.md) — hub-spoke architecture and options
-- [`docs/core-ideas/multi-cluster-connectivity.md`](../core-ideas/multi-cluster-connectivity.md) — securing the
+- [`docs/core-ideas/multi-cluster.md`](multi-cluster.md) — hub-spoke architecture and options
+- [`docs/core-ideas/multi-cluster-connectivity.md`](multi-cluster-connectivity.md) — securing the
   hub→spoke API connection, for new and pre-existing clusters
 - [`docs/core-ideas/darlane.md`](../core-ideas/darlane.md) — Darlane workflows and the `XDarlane` vision
-- [`docs/core-ideas/guardian.md`](../core-ideas/guardian.md) — Guardian Framework design
+- [`docs/core-ideas/guardian.md`](guardian.md) — Guardian Framework design
 - [`docs/api-reference/tenant-app.md`](../../docs/api-reference/tenant-app.md) — `XTenantApp` API reference
 - [`VERSIONS.yaml`](../../VERSIONS.yaml) — served API versions, and the release each package last changed in
 - [`release-notes/README.md`](../../release-notes/README.md) — release naming, the API-compat gate, when notes are required

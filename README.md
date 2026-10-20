@@ -65,12 +65,21 @@ actually executes underneath (HCL run in-cluster against a Gitea or GitHub provi
 
 Documentation has two homes, split by reader. [`docs/README.md`](docs/README.md) is for using, operating and building on the platform
 as it stands today. [`development-docs/README.md`](development-docs/README.md) is for where it's headed and how it's built: the
-development matrix tracking every package's and core idea's status, the core ideas themselves, and the decisions, proposals and roadmap.
+development matrix tracking every package's and core idea's status, the core ideas themselves, and the decisions (ADRs) and proposals (RFCs).
+
+**New here?** Four steps, each only as deep as you need:
+
+| Step | Read | You come away knowing |
+|---|---|---|
+| 1. **Why it exists** | [The problem this solves](#the-problem-this-solves) · [Learn](docs/learn/README.md) | What Core is for, and enough Crossplane, OpenTofu and KCL to read this repo |
+| 2. **Use it** | [Setup](docs/user-guide/setup.md) · [App onboarding](docs/user-guide/app-onboarding.md) · [API reference](docs/api-reference/README.md) | How to install it, ship an app, and read every Kind's fields and status |
+| 3. **What is in progress** | [Solution matrix — Next up](development-docs/core-ideas/solution-matrix.md#next-up) · [RFC index](development-docs/rfc/README.md) · [Access model](development-docs/core-ideas/access-model.md) · [Multi-cluster](development-docs/core-ideas/multi-cluster.md) | What is shipped, what is designed, and what is being worked on now |
+| 4. **Get involved** | [CONTRIBUTING](CONTRIBUTING.md) · [Development guide](development-docs/development/README.md) · [RFC template](development-docs/rfc/TEMPLATE.md) | How to change a package, test it, and propose something new |
 
 | Section | For | Start with |
 |---|---|---|
 | [API reference](docs/api-reference/README.md) | What each Kind accepts, what Core composes and keeps reconciled, what it reports | The reconcile loop from your side, then one page per Kind |
-| [Core ideas](development-docs/README.md#core-ideas) | Darlane, Guardian, multi-cluster, observability, self-service operations, security | [Solution matrix](development-docs/core-ideas/solution-matrix.md) |
+| [Core ideas](development-docs/README.md#core-ideas) | Darlane, multi-cluster, observability, self-service operations, access model, security | [Solution matrix](development-docs/core-ideas/solution-matrix.md) |
 | [User guide](docs/README.md#user-guide) | Installing Core and building on it | [Setup](docs/user-guide/setup.md) · [App onboarding](docs/user-guide/app-onboarding.md) |
 | [Development](development-docs/README.md) | Changing, testing, releasing and rolling out Core, and the decisions behind it | [Development guide](development-docs/development/README.md) · [Releasing](development-docs/development/releasing.md) · [RFC index](development-docs/rfc/README.md) |
 
@@ -133,7 +142,7 @@ docs/                         ← generic documentation hub (docs/README.md): us
     _archives/                ← retired Kinds' reference docs
   user-guide/                 ← setup, app onboarding, portal integration
 development-docs/             ← development hub (development-docs/README.md): matrix, decisions, process
-  core-ideas/                 ← Darlane, Guardian, multi-cluster, observability, self-service, security
+  core-ideas/                 ← Darlane, multi-cluster, observability, self-service, access model, security
   adr/ · rfc/ · development/ (guide, releasing) · _archives/ (ROADMAP.md, superseded by the RFC index)
 examples/                     ← minimal XR YAML to exercise each package
   platform-database-clusters/xr.yaml

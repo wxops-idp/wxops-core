@@ -1,5 +1,10 @@
 # Multi-Cluster Proposal — the chosen path
 
+> [!NOTE]
+> **Archived 2026-10-20 — kept for the record, no longer the live design.** Part of the CAPI-era multi-cluster family (hub provisions spokes and
+> holds their credentials). Superseded by [`core-ideas/multi-cluster.md`](../core-ideas/multi-cluster.md): W'xOps manages clusters it is given, spokes
+> dial out, and a CoreDNS-named L7 backbone connects clusters without a CNI or vendor dependency. Not updated for anything after that date.
+
 > **Status: proposal, not implemented.** [`multi-cluster.md`](multi-cluster.md) presents the full option space without prescribing; this document is the
 > prescription — one concrete architecture, one prototype, and the decisions locked (or explicitly left open) to build it. Where the two documents disagree,
 > this one is newer and wins; where this one is silent, the research doc is the reference.
@@ -232,5 +237,5 @@ Open — decide before the first *production* spoke, not before the prototype:
   prototype: regions at scale, tenancy tiers, arm64/GPU hardware, edge fleets
 - [`status-contract.md`](../../docs/api-reference/status-contract.md) — the status fields that make
   cross-cluster XRs observable from the hub
-- [`darlane.md`](darlane.md) — the interactive workflows that force the tunnel
+- [`darlane.md`](../core-ideas/darlane.md) — the interactive workflows that force the tunnel
 - [k8gb](https://www.k8gb.io/) · [ExternalDNS](https://github.com/kubernetes-sigs/external-dns) — the multi-region layer

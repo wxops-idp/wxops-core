@@ -28,7 +28,10 @@ application. Where the platform is headed — core ideas, decisions, proposals, 
 | Know what a resource does, which fields it takes, and what the reconcile loop does for me | [API reference](api-reference/README.md) |
 | Build a portal or a tool against the API | [Portal integration](user-guide/portal-integration.md) · [Status contract](api-reference/status-contract.md) |
 | Understand where the platform is heading | [Core ideas](../development-docs/README.md#core-ideas) · [Solution matrix](../development-docs/core-ideas/solution-matrix.md) |
-| Change the platform, cut a release, or record a decision | [Development docs](../development-docs/README.md) |
+| See what is being worked on right now | [Solution matrix — Next up](../development-docs/core-ideas/solution-matrix.md#next-up) · [RFC index](../development-docs/rfc/README.md) |
+| Understand who can do what — one login, teams, personas, policies | [Access model](../development-docs/core-ideas/access-model.md) |
+| Understand how clusters join and reach each other | [Multi-cluster](../development-docs/core-ideas/multi-cluster.md) |
+| Change the platform, cut a release, or record a decision | [Development docs](../development-docs/README.md) · [CONTRIBUTING](../CONTRIBUTING.md) |
 
 ---
 
@@ -116,7 +119,7 @@ Core ideas, decisions, proposals, the roadmap and the development process are in
 | Doc | What it covers |
 |---|---|
 | [**Development docs hub**](../development-docs/README.md) | Find your way, the development matrix, and where new docs go |
-| [Core ideas](../development-docs/README.md#core-ideas) | Darlane, Guardian, multi-cluster, observability, self-service operations, knowledge architecture, security — [solution matrix](../development-docs/core-ideas/solution-matrix.md) is the index |
+| [Core ideas](../development-docs/README.md#core-ideas) | Darlane, multi-cluster, observability, self-service operations, knowledge architecture, access model, security — [solution matrix](../development-docs/core-ideas/solution-matrix.md) is the index |
 | [Development guide](../development-docs/development/README.md) | The change loop, hooks and make targets, and the rules that bite |
 | [Releasing](../development-docs/development/releasing.md) | Version axes, why a released XRD only grows, `make release`, CI publishing |
 | [ROADMAP](../development-docs/_archives/ROADMAP.md) (archived) | Phases, the deferred core, decisions made and rejected, open decisions, as of the release it describes — superseded by the [RFC index](../development-docs/rfc/README.md) |

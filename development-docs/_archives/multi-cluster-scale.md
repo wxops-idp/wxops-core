@@ -1,5 +1,10 @@
 # Multi-Cluster at Scale — regions, tenants, and heterogeneous hardware
 
+> [!NOTE]
+> **Archived 2026-10-20 — kept for the record, no longer the live design.** Part of the CAPI-era multi-cluster family (hub provisions spokes and
+> holds their credentials). Superseded by [`core-ideas/multi-cluster.md`](../core-ideas/multi-cluster.md): W'xOps manages clusters it is given, spokes
+> dial out, and a CoreDNS-named L7 backbone connects clusters without a CNI or vendor dependency. Not updated for anything after that date.
+
 > **Status: research, not implemented.** Third document in the multi-cluster family: [`multi-cluster.md`](multi-cluster.md) is the option space,
 > [`multi-cluster-proposal.md`](multi-cluster-proposal.md) is the chosen path and prototype, and this document is what lies *beyond* the prototype — the three
 > axes a platform grows along when it serves a genuinely large project, the tooling landscape for each, and what each axis concretely demands from W'xOps Core.

@@ -2,8 +2,8 @@
 
 > **Status: research + direction, not implemented.** This document connects five existing docs into one operational story:
 > [`observability.md`](observability.md) (signals), [`status-contract.md`](../../docs/api-reference/status-contract.md) (the first diagnostic surface),
-> [`darlane.md`](darlane.md) (the reproduction/validation environment), [`guardian.md`](guardian.md) (the safety layer), and the multi-cluster family
-> ([research](multi-cluster.md) · [proposal](multi-cluster-proposal.md) · [scale](multi-cluster-scale.md)) — and asks: what must exist so that **most incidents
+> [`darlane.md`](darlane.md) (the reproduction/validation environment), [`access-model.md`](access-model.md) (who may do what, and the agent data boundary), and [`multi-cluster.md`](multi-cluster.md)
+> (the fleet; the CAPI-era [research](../_archives/multi-cluster.md) · [proposal](../_archives/multi-cluster-proposal.md) · [scale](../_archives/multi-cluster-scale.md) are archived) — and asks: what must exist so that **most incidents
 > are diagnosed, and patches proposed, without a ticket to the infra team?**
 
 ---
@@ -26,7 +26,7 @@ Every step is a queue. The infra team becomes the serial bottleneck for a parall
 heads.** An IDP that provisions apps in seconds but troubleshoots them through tickets has only moved the bottleneck, not removed it.
 
 The thesis: self-service operations is not one tool. It is **three pillars that must reference each other** — signals a tenant can see, runbooks keyed to those
-signals, and an intelligence layer that walks both faster than a human — with the platform's existing safety machinery (RBAC seams, Guardian, the test suite)
+signals, and an intelligence layer that walks both faster than a human — with the platform's existing safety machinery (RBAC seams, session audit, the test suite)
 deciding what the intelligence may *do* about what it finds.
 
 ---
@@ -44,7 +44,7 @@ Where a platform sits on this ladder determines who gets paged:
 | **L4** | **Suggested patch** — the diagnosis arrives as a reviewable change (an XR field bump, a values PR), pre-validated | Tenant approves; nobody "troubleshoots" |
 | **L5** | Auto-remediation — the change applies itself | Nobody (and nobody *chose* — which is why this is gated, below) |
 
-**W'xOps should target L4 and treat L5 as Guardian-gated, not default.** The platform's own architecture makes L4 unusually reachable — and makes L5 cheap to
+**W'xOps should target L4 and treat L5 as audit-gated, not default.** The platform's own architecture makes L4 unusually reachable — and makes L5 cheap to
 gate — for reasons the rest of this document develops. The one-line version: *every fix on this platform is a declarative change, so "suggest a patch" means
 "open a PR that the existing test suite validates" — the safety harness for machine-suggested fixes is already built and already gating humans.*
 
@@ -54,8 +54,8 @@ gate — for reasons the rest of this document develops. The one-line version: *
 
 ### What exists, and why it matters more than it looks
 
-**The XR status contract is the top of the diagnostic funnel.** Phase 0's status parity work means every one of the seven packages exposes `created`/`ready`
-(plus `dependenciesReady` and `darlane.*` on `tenant-app`) — see [`status-contract.md`](../../docs/api-reference/status-contract.md). Before any dashboard is
+**The XR status contract is the top of the diagnostic funnel.** Every one of the eleven packages exposes `created`, `ready`, `synced` and `syncMessage` —
+`synced: false` with the provider's own error in `syncMessage` the moment an apply fails (plus `dependenciesReady` and `darlane.*` on `tenant-app`) — see [`status-contract.md`](../../docs/api-reference/status-contract.md). Before any dashboard is
 opened, the portal can already narrow an incident to *which composed thing is unhealthy*:
 
 ```
@@ -103,13 +103,21 @@ status:
 A `safe`-tier additive change in every package (the dxr already exists), a golden case per package, and suddenly the portal's error card, the runbook index,
 *and* the diagnosis agent all key off the same field. This is the cheapest rung of the entire ladder.
 
-**2. No global query layer across spokes.** The multi-cluster proposal gives the hub XR *status* from every spoke natively — but metrics, logs, and events stay
-per-spoke. On-call across a fleet needs one query surface:
+**2. No global query layer across spokes.** XR status lives where the XR lives — with Crossplane on each spoke
+([multi-cluster.md](multi-cluster.md#where-compositions-run)), that is the spoke, and the hub sees none of it natively. Two ways bring it together, both
+outbound from the spoke:
+
+- **Argo CD Agent** already reports every Application's sync and health to the principal — a fleet view of *is it deployed and healthy*, coarse but free.
+- **Status as metrics** — `kube-state-metrics`' custom-resource-state export turns `status.ready`, `status.synced` and `status.syncMessage` of every XR into
+  series, and Alloy pushes them to the observability cluster with everything else. *Is it ready, and why not* then has one query surface across the fleet,
+  for the portal and the diagnosis agent alike.
+
+Metrics, logs and events need the same: one query surface, fed by push.
 
 | Option | Shape | Fit |
 |---|---|---|
 | **Thanos Receive** | Spokes `remote_write`; object-store model | The ecosystem-familiar choice |
-| **Grafana Mimir** | Central multi-tenant backend; spokes `remote_write` | The multi-*tenant* choice — per-tenant isolation maps onto the tenancy tiers in [`multi-cluster-scale.md`](multi-cluster-scale.md) |
+| **Grafana Mimir** | Central multi-tenant backend; spokes `remote_write` | The multi-*tenant* choice — per-tenant isolation maps onto the tenancy tiers in [`multi-cluster-scale.md`](../_archives/multi-cluster-scale.md) |
 | **VictoriaMetrics** | Near-drop-in, lightest ops; spokes `remote_write` to vmcluster | The pragmatic choice when metrics-only and ops-light matters most |
 
 > **The full option space — six signal classes, the push-vs-pull topology fork and why it is really a security decision, a detailed tool matrix, the label
@@ -118,7 +126,7 @@ per-spoke. On-call across a fleet needs one query surface:
 > query fan-out is the wrong variant here**, because it requires the hub to dial each spoke. Only the `remote_write` variants preserve the outbound-only
 > posture.
 
-Plus **Loki** for logs (same agent-per-spoke, central store shape — and already named as Guardian's Phase 2 SIEM sink, so one decision serves two docs) and
+Plus **Loki** for logs (same agent-per-spoke, central store shape — and also the Darlane session-audit sink, so one decision serves two docs) and
 **OpenTelemetry → Tempo** for traces *later, per-app opt-in* — the `darlane.telemetryPort` field is the existing hook. Spokes push outbound (`remote_write`),
 which preserves the proposal's connectivity posture: no new inbound paths to spokes, no observability credentials on the hub.
 
@@ -218,35 +226,23 @@ fixes the incident. A PR carrying both is reviewable in minutes. Under the `XDar
 ttl-bounded) with its own auditable SA identity — the RBAC seam decided in Phase 0 (`status.darlane.serviceAccountName`, GitOps-authored binding) is exactly
 what makes an agent identity scopeable without touching core.
 
-### The guardrails — Guardian's job, stated from this side
+### The guardrails
 
-[`guardian.md`](guardian.md) already carries the principles; this document inherits four of them as hard constraints on any intelligence layer:
+The [access model](access-model.md#data-boundary-and-audit) carries the principles; this document inherits four of them as hard constraints on any
+intelligence layer:
 
-- **Read-only by default; the only write path is a PR.** No agent holds
-  kubectl write on any cluster. (L5 — an agent applying its own change — is
-  not "more automation", it is a *different trust decision*, and it waits for
-  Guardian's audit phase to exist.)
-- **In-cluster inference for anything that sees production data.** Guardian's
-  exfiltration argument — a sidecar that forwards live user payloads to an
-  external LLM API is a data-leak path the audit layer itself would flag —
-  applies with equal force to a diagnosis agent reading production logs.
-  Diagnosis over *metadata* (statuses, events, manifests) is a lighter
-  boundary than diagnosis over *payloads*; the corpus an agent may read
-  should be tiered accordingly.
-- **The agent is a principal.** Pinniped identity or a dedicated SA per
-  agent, scoped by the same GitOps-authored RBAC as humans, sessions
-  TTL-bounded (the `XDarlane` claim model), all activity through the audit
-  stack. "The AI did it" must resolve to a name in a log.
-- **Advisory posture** — Guardian's findings do not block the inner loop, and
-  neither does the diagnosis layer: it accelerates the human decision, it is
-  not the decision.
+- **Read-only by default; the only write path is a PR.** No agent holds kubectl write on any cluster. (L5 — an agent applying its own change — is not "more automation", it is a *different trust decision*, and it waits for session and agent audit to exist.)
+- **In-cluster inference for anything that sees production data.** The exfiltration argument — a sidecar that forwards live user payloads to an external LLM API is a data-leak path the audit layer itself would flag — applies with equal force to a diagnosis agent reading production logs. Diagnosis over *metadata* (statuses, events, manifests) is a lighter boundary than diagnosis over *payloads*; the corpus an agent may read should be tiered accordingly.
+- **The agent is a principal.** Pinniped identity or a dedicated SA per agent, scoped by the same GitOps-authored RBAC as humans, sessions TTL-bounded (the `XDarlane` claim model), all activity through the audit stack. "The AI did it" must resolve to a name in a log.
+- **Advisory posture** — session scanning does not block the inner loop, and neither does the diagnosis layer: it accelerates the human decision, it is not the decision.
 
 ### Multi-cluster on-call, assembled
 
-Across the fleet, the pieces land where the proposal already put them: **the hub is the single pane** (XR status arrives natively cross-cluster; the global
-query layer adds metrics/logs), **spokes push signals outbound** (no new credentials, no inbound paths), **humans reach spokes through Pinniped + the tunnel**
-(Option D — and the tunnel serves the *agent's* Darlane sessions identically), and **edge reports up** (the intelligence layer's writ, like GitOps's, ends at
-the regional spoke).
+Across the fleet ([multi-cluster.md](multi-cluster.md)): **status comes up, never down** — Argo CD Agent for deployment and health, XR status exported as
+metrics for readiness and the reason; **every spoke pushes its signals** — metrics, logs, events, status — through Alloy to the **observability cluster**, reached
+by name over the backbone, so the hub is not the telemetry sink; **people reach any cluster through Pinniped**, as themselves, with their persona's rights
+([access model](access-model.md)); **agents run in-cluster** and reach other clusters, their tools and their in-cluster inference over the same backbone — no
+tunnel product; and **edge reports up** (the intelligence layer's writ, like GitOps's, ends at the regional spoke).
 
 ---
 
@@ -263,15 +259,8 @@ them — is **whose error is this?** Three classes, three owners, three differen
 
 Two triage rules fall straight out of the status contract:
 
-1. **`ready: true` + users hurting ⇒ user-side.** The declarative layer has
-   converged; the problem lives in runtime behaviour. Skip the tree walk, go
-   to metrics/traces — this is HolmesGPT territory, not k8sgpt territory.
-2. **Many tenants' XRs degrading at once ⇒ platform-side, stop self-serving.**
-   One tenant's `notReady` is their runbook; twenty tenants' identical
-   `notReady` is an infra page. The portal (or the diagnosis agent) should
-   make this fork automatically — correlation across XRs is exactly what the
-   hub's single-pane position is for, and it is the difference between twenty
-   confused tickets and one pre-diagnosed page.
+1. **`ready: true` + users hurting ⇒ user-side.** The declarative layer has converged; the problem lives in runtime behaviour. Skip the tree walk, go to metrics/traces — this is HolmesGPT territory, not k8sgpt territory.
+2. **Many tenants' XRs degrading at once ⇒ platform-side, stop self-serving.** One tenant's `notReady` is their runbook; twenty tenants' identical `notReady` is an infra page. The portal (or the diagnosis agent) should make this fork automatically — correlation across XRs is exactly what the hub's single-pane position is for, and it is the difference between twenty confused tickets and one pre-diagnosed page.
 
 The taxonomy is also an honesty mechanism in the escalation path: a runbook's final "hand to infra" step is legitimate **only** for the third column.
 Developer-side errors escalated to infra are the bottleneck reasserting itself; platform-side errors left with the tenant are the platform hiding behind
@@ -286,7 +275,7 @@ real. This is the "which plan makes these work together" view:
 |---|:-:|:-:|:-:|---|---|
 | XR status contract + `notReady` reasons | ● primary | ○ rules it out | ● primary | 1 — Signals | 1 |
 | Composition tree walk (`resourceRefs` → Objects → events) | ● | — | ● | 1 | exists |
-| `monitoring` block (ServiceMonitor/PodMonitor) | ○ | ● primary | — | 1 | exists (v0.4.0) |
+| `monitoring` block (ServiceMonitor/PodMonitor) | ○ | ● primary | — | 1 | exists |
 | `monitoring.alerts` + `runbook_url` | ○ | ● | ○ | 1→2 bridge | 4 |
 | Global metrics (Thanos/Mimir/VM) + Loki | ○ | ● | ● cross-tenant correlation | 1 | 5 |
 | Failure-mode runbooks, RBAC-annotated | ● | ● | ● (escalation evidence) | 2 | 2–3 |
@@ -295,8 +284,8 @@ real. This is the "which plan makes these work together" view:
 | Darlane (fileSync, exec, twin) | ● reproduce & fix | — | — | 3 (validation) | exists |
 | Darlane + mirrord (SRE-agent flow) | — | ● validate under real traffic | — | 3 | 7 |
 | pr-validate gate (tests, invariants) | ● gates the fix | ● gates the fix | ● gates the fix | 3 (safety) | exists |
-| Guardian (tools/scan/audit/ai) | ○ session tooling | ● audits hotfix sessions | — | 3 (guardrail) | 8 |
-| Pinniped + tunnel (Option D) | ● reach the spoke | ● | ● | cross-cutting | proposal |
+| Darlane session safety (tools/scan/audit) | ○ session tooling | ● audits hotfix sessions | — | 3 (guardrail) | 8 |
+| Pinniped + the backbone ([access model](access-model.md), [multi-cluster](multi-cluster.md)) | ● reach the spoke | ● | ● | cross-cutting | designed |
 | Portal (status cards, correlation fork) | ● entry point | ● entry point | ● auto-escalate | consumer of all | portal project |
 
 ● = primary instrument for that class · ○ = supporting · — = not its job
@@ -327,10 +316,10 @@ Ordered so each step pays for itself before the next; the first three need no ne
 | 2 | **"Failure modes" section per package doc**, RBAC-annotated commands, escalation-with-evidence as the last step | Docs only | L2 for humans; grounding corpus for L3 |
 | 3 | **Publish the docs site** (mkdocs + Pages — already an open Phase 4 item; this is the operational argument for it) | Docs infra | Runbook URLs become real |
 | 4 | **`monitoring.alerts`** — `PrometheusRule` emission with `runbook_url` stamped, same pattern/tier as the monitor emission | Core, `safe` (+ provider RBAC for `prometheusrules`) | Signals → runbooks wiring |
-| 5 | **Global query layer decision** (Thanos as default candidate; Mimir if tenancy tiers win; VM if ops-light wins) + Loki (double-serves Guardian Phase 2) | Platform infra | Multi-cluster L1 |
+| 5 | **Global query layer decision** (Thanos as default candidate; Mimir if tenancy tiers win; VM if ops-light wins) + Loki (double-serves Darlane session audit) | Platform infra | Multi-cluster L1 |
 | 6 | **Read-only diagnosis pilot** — HolmesGPT (or k8sgpt) on the hub, grounded on items 1–3, metadata-tier corpus only | Pilot, no core change | L3 |
 | 7 | **Agent→PR loop** — diagnosis output lands as a PR through pr-validate; Darlane validation evidence attached per the SRE-agent flow | Ecosystem | L4 — the target |
-| 8 | **Guardian Phase 1→2** (tools, scan, then audit) | Per guardian.md | The precondition for ever discussing L5 |
+| 8 | **Darlane session safety** (tools, scan, then audit) | Per [darlane.md](darlane.md#session-safety--tools-audit-data-boundary) | The precondition for ever discussing L5 |
 
 Items 1–4 are core-repo work in existing patterns. Items 5–8 are the ecosystem: they belong to the platform around wxops-core (GitOps repo, portal, agent
 infra), with core contributing only fields, docs, and the gate it already runs.
@@ -343,8 +332,8 @@ infra), with core contributing only fields, docs, and the gate it already runs.
 - [`knowledge-architecture.md`](knowledge-architecture.md) — the knowledge substrate under Pillar 3: taxonomy, representations, and the SRE-agent skill mindmap
 - [`status-contract.md`](../../docs/api-reference/status-contract.md) · [`observability.md`](observability.md) — Pillar 1's foundations
 - [`darlane.md`](darlane.md) — the AI-agent and SRE-agent flows; the validation environment
-- [`guardian.md`](guardian.md) — the safety principles Pillar 3 inherits
-- [`multi-cluster.md`](multi-cluster.md) · [`multi-cluster-proposal.md`](multi-cluster-proposal.md) · [`multi-cluster-scale.md`](multi-cluster-scale.md) — the fleet topology on-call runs across
+- [`access-model.md`](access-model.md#data-boundary-and-audit) — the safety principles Pillar 3 inherits; [`guardian.md`](../_archives/guardian.md) (archived) — where they came from
+- [`multi-cluster.md`](multi-cluster.md) — the fleet today; archived: [`multi-cluster.md`](../_archives/multi-cluster.md) · [`multi-cluster-proposal.md`](../_archives/multi-cluster-proposal.md) · [`multi-cluster-scale.md`](../_archives/multi-cluster-scale.md) — the fleet topology on-call runs across
 
 **Diagnosis / intelligence**
 - [k8sgpt](https://k8sgpt.ai/) — analyzer-based cluster diagnosis (CNCF)
@@ -353,7 +342,7 @@ infra), with core contributing only fields, docs, and the gate it already runs.
 
 **Signals at fleet scale**
 - [Thanos](https://thanos.io/) · [Grafana Mimir](https://grafana.com/oss/mimir/) · [VictoriaMetrics](https://victoriametrics.com/) — the global-metrics options
-- [Loki](https://grafana.com/oss/loki/) — logs; also Guardian's Phase 2 sink
+- [Loki](https://grafana.com/oss/loki/) — logs; also the Darlane session-audit sink
 - [OpenTelemetry](https://opentelemetry.io/) · [Tempo](https://grafana.com/oss/tempo/) — traces, later and opt-in
 
 **Runbook practice**
