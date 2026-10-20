@@ -48,4 +48,4 @@ problem statement* → *Motivation*.
 | [005](005-git-mapped-authorization.md) | Authorization mapped one-to-one to Git — RBAC for who may act, Kyverno ABAC for on what | Draft |
 | [006](006-cloudflare-r2-object-storage-and-backup.md) | Cloudflare R2 as the first third-party service — provisioned backup and object storage | Draft |
 | [007](007-package-layout-by-api-group.md) | Package layout by API group, with a Kustomization per category | Implemented |
-| [008](008-openbao-as-a-platform-api.md) | The secret store as a platform API — OpenBao mounts, policies and access as resources | Draft |
+| [008](008-platform-tools-as-apis.md) | Platform tools as APIs — secrets, monitoring and GitOps configured through one pattern | Draft |

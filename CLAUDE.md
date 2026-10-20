@@ -106,9 +106,9 @@ version, not the release name — see [`release-notes/README.md`](release-notes/
   `development-docs/core-ideas/solution-matrix.md`:
   - `development-docs/development/` — the development guide (`README.md`), `releasing.md`
   - `development-docs/core-ideas/` — design, proposal and research docs about the platform's own future —
-    `solution-matrix.md` (the idea map), `darlane.md`, `guardian.md`,
-    `multi-cluster{,-proposal,-connectivity,-scale}.md`, `observability.md`,
-    `self-service-operations.md`, `knowledge-architecture.md`, `security-threat-model.md`
+    `solution-matrix.md` (the idea map), `darlane.md`,
+    `multi-cluster.md`, `observability.md`,
+    `self-service-operations.md`, `knowledge-architecture.md`, `access-model.md`, `security-threat-model.md`
   - `development-docs/adr/` — one committed file per decision of lasting consequence (`TEMPLATE.md`, `README.md`
     for the lifecycle); breaking or architectural changes get one, so the reasoning survives
     independent of any single conversation — see [ADR-001](development-docs/adr/001-package-channel-label.md)

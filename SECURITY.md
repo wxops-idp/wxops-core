@@ -39,5 +39,5 @@ its own XR should grant — see
 guards.
 
 Out of scope: the operators this project composes but does not implement (CloudNativePG, Vault,
-cert-manager, Traefik, Kyverno — report to those projects directly), and the portal / CLI / Guardian
-sidecars, which live in separate repositories.
+cert-manager, Traefik, Kyverno — report to those projects directly), and the portal / CLI, which live in
+separate repositories.

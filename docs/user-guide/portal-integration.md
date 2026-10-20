@@ -98,7 +98,7 @@ escalated", with the evidence bundle attached
   display binding targets, link the process.
 - Fan an XR out to multiple clusters itself by mutating one XR — multi-region
   is *N* XRs, one per cluster
-  ([multi-cluster-proposal.md](../../development-docs/core-ideas/multi-cluster-proposal.md)); the portal owns
+  ([multi-cluster.md](../../development-docs/core-ideas/multi-cluster.md#where-compositions-run)); the portal owns
   the fan-out UX, one claim per target.
 - Render secrets or connection strings from any source.
 - Trust `metadata` it wrote to survive — labels on XRs are portal-owned, but

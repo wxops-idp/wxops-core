@@ -1,5 +1,10 @@
 # Hub→Spoke API Connectivity — securing the join, for new and existing clusters
 
+> [!NOTE]
+> **Archived 2026-10-20 — kept for the record, no longer the live design.** Part of the CAPI-era multi-cluster family (hub provisions spokes and
+> holds their credentials). Superseded by [`core-ideas/multi-cluster.md`](../core-ideas/multi-cluster.md): W'xOps manages clusters it is given, spokes
+> dial out, and a CoreDNS-named L7 backbone connects clusters without a CNI or vendor dependency. Not updated for anything after that date.
+
 > **Status: options analysis, nothing implemented.** The other three multi-cluster documents answer *which architecture* ([multi-cluster.md](multi-cluster.md)
 > surveys, [multi-cluster-proposal.md](multi-cluster-proposal.md) prescribes) and *how far it stretches* ([multi-cluster-scale.md](multi-cluster-scale.md)).
 > This one answers a narrower question they only touch in passing: **when the hub opens a connection to a spoke's `kube-apiserver`, what exactly makes that
@@ -48,14 +53,14 @@ Two observations that shape the rest of this document.
 tokens — which is P4 — and short-lived credentials genuinely are better. But a short-lived credential that still maps to one shared `wxops:hub-controllers`
 identity gives a spoke audit log that cannot distinguish Crossplane reconciling a `tenant-app` from ArgoCD syncing an Application from an operator debugging by
 hand. For W'xOps that matters more than usual, because [`guardian.md`](guardian.md)'s entire audit premise and
-[`self-service-operations.md`](self-service-operations.md)'s diagnosis story both assume the platform can say *who did what, where*.
+[`self-service-operations.md`](../core-ideas/self-service-operations.md)'s diagnosis story both assume the platform can say *who did what, where*.
 
 **P2 is where W'xOps is unusually well positioned, and it is free.** The spoke-side ClusterRole is not a design exercise —
 [`providers/rbac-provider-kubernetes.yaml`](../../providers/rbac-provider-kubernetes.yaml) already enumerates exactly the API groups compositions emit, because
 the single-cluster deployment needed the same list. Copying that file to a spoke produces a correctly scoped grant on the first try, including its deliberate
 omission of `rbac.authorization.k8s.io`. That omission is mechanically protected by the `no-rbac-emitted` invariant in `tests/invariants.py`, so the property
 "the hub cannot mint privilege on any spoke" is enforced by the merge gate rather than by reviewer memory — see
-[`security-threat-model.md`](security-threat-model.md) B3. Very little of a multi-cluster security posture is normally this cheap; this part is, and it should
+[`security-threat-model.md`](../core-ideas/security-threat-model.md) B3. Very little of a multi-cluster security posture is normally this cheap; this part is, and it should
 be claimed rather than redesigned.
 
 ---
@@ -625,7 +630,7 @@ Two further hazards specific to expressing clusters as XRs:
 ### The graduation this suggests
 
 The repo already anticipates the shape: `XPlatformCluster` is recorded as out of scope in [multi-cluster.md](multi-cluster.md#out-of-scope), graduating "when
-manual provisioning is stable", and [solution-matrix.md](solution-matrix.md) M2/M10 tracks it as composing CAPI clusters. Splitting it in two makes that
+manual provisioning is stable", and [solution-matrix.md](../core-ideas/solution-matrix.md) M2/M10 tracks it as composing CAPI clusters. Splitting it in two makes that
 graduation concrete and lets the valuable half ship years earlier:
 
 ```
@@ -805,8 +810,8 @@ These block nothing today but should be answered before the first *production* s
 - [`multi-cluster.md`](multi-cluster.md) — the full Layer 1/2/3 option space this document narrows
 - [`multi-cluster-proposal.md`](multi-cluster-proposal.md) — the chosen architecture and its prototype
 - [`multi-cluster-scale.md`](multi-cluster-scale.md) — regions, tenancy tiers, and heterogeneous hardware
-- [`security-threat-model.md`](security-threat-model.md) — boundary B3 and the fleet-compromise threat row
-- [`solution-matrix.md`](solution-matrix.md) — rows M3, M4, M5 index into this material
+- [`security-threat-model.md`](../core-ideas/security-threat-model.md) — boundary B3 and the fleet-compromise threat row
+- [`solution-matrix.md`](../core-ideas/solution-matrix.md) — rows M3, M4, M5 index into this material
 - [`providers/rbac-provider-kubernetes.yaml`](../../providers/rbac-provider-kubernetes.yaml) — the scoped
   ClusterRole every spoke needs, already written
 

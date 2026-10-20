@@ -1,5 +1,12 @@
 # Guardian Framework
 
+> [!NOTE]
+> **Archived 2026-10-20 — kept for the record, not planned.** A sidecar framework injected into Darlane pods needs an adapter into the existing
+> compositions that does not exist, and adds a workload no current package can carry. Its lasting rules live on where they are used:
+> [Darlane session safety](../core-ideas/darlane.md#session-safety--tools-audit-data-boundary) (tools, audit, advisory scanning),
+> [the access model](../core-ideas/access-model.md#data-boundary-and-audit) (in-cluster inference, agents as principals, auto-remediation gated on audit) and
+> [the threat model](../core-ideas/security-threat-model.md) (B5). Revive it from here if the opportunity comes.
+
 Guardian is the platform's long-term safety layer for Darlane — a set of sidecars injected into the developer workspace pod that provide scanning, audit, and
 AI-assisted code review without requiring any developer action or configuration.
 

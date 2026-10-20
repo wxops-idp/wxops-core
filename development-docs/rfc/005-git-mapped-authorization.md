@@ -16,7 +16,7 @@ composition.
 
 [RFC-004](004-dex-identity-and-portal-authentication.md) makes a person's identity and Git memberships available. Nothing yet uses them:
 
-1. **Every Core kind is cluster-scoped** (`scope: Cluster` on all eight XRDs), so Kubernetes RBAC has no namespace to bind a team
+1. **Every Core kind is cluster-scoped** (`scope: Cluster` on all eleven XRDs), so Kubernetes RBAC has no namespace to bind a team
    to. RBAC can grant "create `XTenantApp`", but it cannot say "only for `team-alpha`'s apps" — the only per-object RBAC lever
    is `resourceNames`, which does not help when the name is chosen at creation. Today, anyone allowed to create an XR can create
    it for any tenant.
@@ -164,7 +164,7 @@ request, and whether Argo's tracking annotation is present on the object at admi
 
 - **Namespaced XRs.** Crossplane v2 makes composite resources namespaced by default and its own guidance reserves cluster scope
   for platform-level resources; with a namespace per tenant, plain RBAC binds a Dex group to a namespace and most of rules 1–4
-  disappear. This is the better long-term shape and the strongest argument against this RFC. It is not additive: all eight
+  disappear. This is the better long-term shape and the strongest argument against this RFC. It is not additive: all eleven
   XRDs are `scope: Cluster` today, and a scope change is a new kind, not an evolution of a released one. This RFC takes the
   non-breaking path first and picks the `owner` value so it maps onto a future namespace name one-to-one; **whether to do the
   namespaced move instead of, or after, Kyverno is the central decision for this RFC's review.**

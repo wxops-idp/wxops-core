@@ -1,144 +1,125 @@
-# Solution Matrix — AI Intelligence × Multi-Cluster × Observability
+# Solution Matrix — where every idea stands
 
 > [!NOTE]
-> **Status: summary index, kept current by hand.** One page over the whole doc family: every problem across the three domains, the chosen tool or solution,
-> **what W'xOps solves today with existing packages** vs. what must be introduced, the detail doc for each, and the publicly documented industry practice to
-> learn from. Read it as a map for brainstorming and prioritising — each row links to the place where the reasoning lives.
+> **Status: index, kept current by hand.** One row per problem: the chosen answer, where W'xOps is today, and the doc that holds the reasoning. Read a row,
+> then its doc — the row is the claim, the doc is the argument. Row IDs are stable; a retired ID is never reused.
 
-**Legend — W'xOps state**
-
-| Symbol | Meaning |
+| | Meaning |
 |---|---|
-| ✅ | Solved today, shipping in a current package |
-| 🔶 | Partially solved — mechanism exists, a piece is missing |
-| 📋 | Designed in the docs, not implemented |
-| ❌ | Not started — needs the named component |
-| ⛔ | Deliberately rejected — do not reopen without new information |
+| ✅ | Shipping in a current package |
+| 🔶 | Mechanism exists, a named piece is missing |
+| 📋 | Designed in a doc or RFC, not built |
+| ❌ | Not started |
+| ⛔ | Rejected — do not reopen without new information |
+
+**Contents:** [Next up](#next-up) · [Identity & access](#identity--access) · [Multi-cluster](#multi-cluster) · [Observability](#observability) ·
+[AI & self-service](#ai--self-service) · [Rejected](#rejected) · [Where the work lands](#where-the-work-lands)
 
 ---
 
-**Table of Conents**
+## Next up
 
-- [Solution Matrix — AI Intelligence × Multi-Cluster × Observability](#solution-matrix--ai-intelligence--multi-cluster--observability)
-  - [Domain 1 — Observability](#domain-1--observability)
-  - [Domain 2 — Multi-Cluster \& Multi-Region](#domain-2--multi-cluster--multi-region)
-  - [Domain 3 — AI Intelligence \& Self-Service Operations](#domain-3--ai-intelligence--self-service-operations)
-  - [What must be introduced — consolidated](#what-must-be-introduced--consolidated)
-  - [How to use this page](#how-to-use-this-page)
+The current focus, in order. Everything else on this page waits behind it.
 
----
-
-## Domain 1 — Observability
-
-| # | Problem | Solution / tool | W'xOps state | Detail doc | Industry practice to study |
-|---|---|---|---|---|---|
-| O1 | Per-app metrics scrape that actually works | `ServiceMonitor`/`PodMonitor` emission, `kind: auto` | ✅ `XTenantApp` `spec.parameters.monitoring` (v0.4.0) | [observability.md](observability.md) | Prometheus Operator model — standard kube-prometheus-stack practice |
-| O2 | Portal-pollable readiness per resource | `status.created`/`ready` derived from `ocds`, uniform across packages | ✅ all seven packages (v0.4.0) | [status-contract.md](../../docs/api-reference/status-contract.md) | Kubernetes operator status conventions; conditions done honestly |
-| O3 | Partial-health honesty (app up, TLS pending) | `ready` / `dependenciesReady` split | ✅ `XTenantApp` | [status-contract.md](../../docs/api-reference/status-contract.md#tenant-app--the-one-package-that-needs-two-fields-not-one) | — |
-| O4 | Cardinality protection in multi-tenant Prometheus | `sampleLimit` set by the composition, not the tenant | ✅ `XTenantApp` monitoring block | [observability.md](observability.md#cardinality) | Multi-tenant Prometheus guardrail practice (limits at ingest) |
-| O5 | Status says *which*, should say *why* | `status.notReady` reasons list | ❌ proposed — `safe`-tier KCL change, all packages | [self-service-operations.md](self-service-operations.md#whats-missing) | Operator `reason`/`message` condition discipline |
-| O6 | Alerts that carry their runbook | `PrometheusRule` emission + `runbook_url` annotation | ❌ proposed — future `monitoring.alerts` on `XTenantApp` | [self-service-operations.md](self-service-operations.md#pillar-2--runbooks-as-platform-contract) | [Prometheus alerting best practices](https://prometheus.io/docs/practices/alerting/) — `runbook_url` convention |
-| O7 | One metrics view across all spokes | **Push (`remote_write`) not pull** — VictoriaMetrics / Mimir / Thanos Receive; **not** Thanos Sidecar fan-out | ❌ platform-infra decision, not a package | [observability.md §the decisive fork](observability.md#the-decisive-fork-push-or-pull) | Thanos (born at Improbable); Grafana Mimir multi-tenancy; VictoriaMetrics ingest efficiency |
-| O8 | Central logs (also Guardian's audit sink) | Loki + **Grafana Alloy** (Promtail is EOL since Mar 2026), push outbound | ❌ platform infra — one decision serves two docs | [observability.md §tool options](observability.md#logs-traces-events-profiles) · [guardian.md](guardian.md#phase-2--audit-and-compliance) | Grafana Loki label-first log model; Alloy as the consolidated agent |
-| O9 | Traces | OpenTelemetry → Tempo, per-app opt-in, later | ❌ deferred; `darlane.telemetryPort` is the existing hook | [observability.md §signal matrix](observability.md#the-signal-matrix--what-to-collect-per-tier) | OTel as the vendor-neutral default |
-| O10 | Observing *edge* fleets | Report up to regional spoke, never query down | 📋 rule stated | [self-service-operations.md](self-service-operations.md#the-edge-caveat) | Edge telemetry downsampling practice (KubeEdge/OpenYurt ecosystems) |
-| O11 | Kubernetes events as a signal | Event exporter → log store; named object + reason | ❌ **not collected anywhere** — the best signal-per-effort item on this page | [observability.md §signal matrix](observability.md#the-signal-matrix--what-to-collect-per-tier) | `kubernetes-event-exporter`; OTel `k8sobjects` receiver |
-| O12 | Cross-cluster label contract | `externalLabels.cluster` **equal to** `spec.parameters.cluster` | ❌ free today, impossible to retrofit onto stored data | [observability.md §label contract](observability.md#the-label-contract--the-cheap-prerequisite) | Prometheus `external_labels` discipline in federated estates |
-| O13 | Network flow visibility (who talks to whom) | **Hubble** — a flag on Cilium **if Cilium is the CNI (unverified — see the doc)**; ship flow *metrics*, ⛔ not central Relay (hub→spoke, same failure as Thanos Sidecar) | ❌ not collected — near-zero cost *conditional on* Cilium, which this repo assumes but has not confirmed; non-uniform on managed spokes (M3b) | [observability.md §the kernel plane](observability.md#the-kernel-plane--flows-and-runtime-security) | Cilium/Hubble in production fleets; Microsoft Retina for CNI-agnostic estates |
-| O14 | Declared vs observed dependency graph | Diff the XR tree (declared) against flow data (observed) — undeclared egress, undocumented dependencies | ❌ **the strongest flow argument here** — needs O13 + the existing XR topology | [observability.md §where this pays off](observability.md#where-this-pays-off-for-the-sre-agent-goal) | Service-map drift detection; the ops and security cases coincide |
-| O15 | Runtime security signal (kernel) | Falco (detect-only, CNCF-graduated) → `falcosidekick` push; Tetragon/KubeArmor add enforcement | ❌ not started — **detect-only, advisory**, mirroring Guardian Phase 1; *what* to detect is the threat model's call | [security-threat-model.md](security-threat-model.md) · [observability.md §detect vs enforce](observability.md#detect-versus-enforce-is-the-real-axis) | Falco rule-tuning practice — the cost is tuning, not install |
-
-## Domain 2 — Multi-Cluster & Multi-Region
-
-| # | Problem | Solution / tool | W'xOps state | Detail doc | Industry practice to study |
-|---|---|---|---|---|---|
-| M1 | Target cluster as an XR parameter | `spec.parameters.cluster` → `providerConfigRef` threading | ✅ threaded (30 sites, v0.4.0) — 🔶 inactive until a spoke `ProviderConfig` exists | [multi-cluster-proposal.md](multi-cluster-proposal.md#why-this-shape) | Crossplane multi-cluster `ProviderConfig` pattern |
-| M2 | Spoke provisioning & bootstrap | CAPI + `ClusterResourceSet` | ❌ prototype item 1–3 | [multi-cluster-proposal.md](multi-cluster-proposal.md#the-prototype) | Mercedes-Benz's publicly presented CAPI fleet (hundreds of clusters, KubeCon talks) |
-| M3 | Machine identity hub→spoke without standing creds | Structured `AuthenticationConfiguration`, projected SA tokens | ❌ prototype; GA in K8s 1.35 | [multi-cluster.md](multi-cluster.md#machine-identity--hub-to-spoke) · [connectivity §Path N](multi-cluster-connectivity.md#path-n--new-clusters-provisioned-by-capi) | K8s structured authn (KEP-3331); Microsoft's practical guide |
-| M3b | Joining a spoke you **didn't** provision (managed/opaque) | Cloud workload identity via `ProviderConfig.spec.identity` → managed OIDC association → Vault dynamic SA tokens | ❌ options analysed; `spec.identity` cloud types are a **verified** built-in path | [multi-cluster-connectivity.md](multi-cluster-connectivity.md#path-e--existing-clusters) | EKS external OIDC providers; GKE Identity Service; Vault K8s secrets engine |
-| M3c | Hardening *all* hub→spoke doors, not one | Three independent trust paths — Crossplane `ProviderConfig`, ArgoCD cluster Secret, CAPI kubeconfig | ❌ named and separated; ArgoCD and Crossplane **cannot** share one credential mechanism | [multi-cluster-connectivity.md](multi-cluster-connectivity.md#the-three-trust-paths-the-thing-most-designs-miss) | — (the CAPI trust-root discussion is the closest published analogue) |
-| M4 | Human identity to any spoke | Pinniped Supervisor (Gitea OIDC) + Concierge | ❌ prototype item 3 | [multi-cluster.md](multi-cluster.md#human-identity--developer-to-spoke) | Pinniped on EKS multi-cluster (AWS open-source blog) |
-| M5 | Registration without cluster-admin | ApplicationSet Cluster generator + scoped SA minting; **never** `argocd cluster add` | ❌ prototype item 5 | [multi-cluster.md](multi-cluster.md#option-a2--push-with-brokered-just-in-time-credentials) · [connectivity §anti-patterns](multi-cluster-connectivity.md#anti-patterns-in-the-order-people-hit-them) | argocd-agent (shipped in OpenShift GitOps 1.19) as the evolution |
-| M6 | Delivery at fleet scale (100s of spokes) | OCM `ManifestWork` — spokes pull, hub keeps `InjectedIdentity` | 📋 planned second step, deliberately not first | [multi-cluster-proposal.md](multi-cluster-proposal.md#the-join-mechanism-capi--argocd-now-ocm-later--not-karmada-not-fleet) · [scale](multi-cluster-scale.md#hub-scale--where-the-proposals-push-model-runs-out) | OCM (CNCF); Red Hat ACM in production fleets |
-| M7 | Fleet API | Crossplane XRs — one XR per cluster, portal does fan-out | ✅ by architecture | [multi-cluster-proposal.md](multi-cluster-proposal.md) | — (Karmada `PropagationPolicy` is the ⛔ counter-example: competes with the XR as fleet API) |
-| M8 | Multi-region traffic routing | ExternalDNS + Route 53 policies (field-tested, ~39 s failover) → k8gb → anycast | ❌ infra config; sequencing decided | [multi-cluster-scale.md](multi-cluster-scale.md#gslb-implementations--three-options-one-field-tested) | The author's own field notes (References there); k8gb (ABSA) |
-| M9 | Multi-region *data* | Region-pinned default → CNPG replica DR tier → distributed SQL only if RPO≈0 | ❌ decision framework written; `XTenantDatabase`/`XPlatformDatabaseCluster` are the vehicles | [multi-cluster-scale.md](multi-cluster-scale.md#the-data-layer-decides-the-region-strategy-not-the-other-way-round) | CNPG replica clusters; CockroachDB/Yugabyte for the RPO≈0 corner |
-| M10 | Tenancy isolation tiers | Capsule → vCluster → Kamaji-via-CAPI → dedicated cluster | 📋 direction — generalises `XTenantDatabase`'s existing `tier: shared\|dedicated` | [multi-cluster-scale.md](multi-cluster-scale.md#axis-2--multi-tenancy-the-isolation-spectrum) | vCluster in AI-cloud tenancy; Kamaji as CAPI control-plane provider |
-| M11 | ARM/edge sites (IoT, EV charging) | Node-vs-cluster rule: k3s/Talos per autonomous site, KubeEdge/OpenYurt nodes otherwise | ❌ direction + worked use case | [multi-cluster-scale.md](multi-cluster-scale.md#worked-use-cases) | Chick-fil-A's publicly presented per-restaurant edge clusters; KubeEdge (Huawei origin), OpenYurt (Alibaba origin) |
-| M12 | Mixed hardware scheduling | `scheduling:` block (nodeSelector/tolerations/spread) + multi-arch images | ❌ **verified gap** — no scheduling fields in any XRD; `resources` schema also prunes GPU keys | [multi-cluster-scale.md](multi-cluster-scale.md#the-verified-wxops-gaps) | buildx manifest-list practice; `kubernetes.io/arch` labels |
-| M13 | Darlane interactive access across clusters | Tunnel (Tailscale incl. laptops; Teleport if audited sessions) | ❌ prototype; identity stays Pinniped | [multi-cluster.md](multi-cluster.md#darlane-across-clusters) | Tailscale K8s operator; Teleport session recording |
-| M14 | Composition-emitted RBAC | — | ⛔ rejected permanently — SA published in status, GitOps binds | `development-docs/_archives/ROADMAP.md` §Decided and rejected | — |
-
-## Domain 3 — AI Intelligence & Self-Service Operations
-
-| # | Problem | Solution / tool | W'xOps state | Detail doc | Industry practice to study |
-|---|---|---|---|---|---|
-| A1 | Machine-readable diagnosis graph | XR tree walk: `resourceRefs` → Objects → events | ✅ structural — exists in every package today | [self-service-operations.md](self-service-operations.md#pillar-1--signals-what-exists-whats-missing) | GraphRAG-over-topology root-cause analysis — W'xOps gets the topology half free |
-| A2 | Whose error is it? (dev / user / platform) | Taxonomy + two triage rules off the status contract | 📋 written; portal implements the fork | [self-service-operations.md](self-service-operations.md#the-error-taxonomy--developer-side-user-side-platform-side) | Google SRE workbook — on-call triage discipline |
-| A3 | Runbooks reachable from the signal | `trigger` frontmatter keyed to status shapes; docs site as runbook CDN | ❌ format proposed; first three runbooks named | [knowledge-architecture.md](knowledge-architecture.md#runbook-anatomy--the-format-worth-standardizing) | Google SRE playbook culture; `runbook_url` convention |
-| A4 | Decisions addressable by humans *and* agents | ADR/RFC **issue templates** + ROADMAP "Decided and rejected" as the accepted-log | 🔶 templates in `.github/ISSUE_TEMPLATE/`; ROADMAP table is the index of accepted decisions | [knowledge-architecture.md](knowledge-architecture.md#what-wxops-already-has-mapped-honestly) | [ADR practice](https://adr.github.io/) |
-| A5 | Episodic memory (what happened before) | `docs/incidents/` post-mortem convention | ❌ step 3 of adoption | [knowledge-architecture.md](knowledge-architecture.md) | SRE postmortem culture (blameless, distill-or-it-didn't-happen) |
-| A6 | Quick cluster health scan | k8sgpt (analyzers, operator mode) | ❌ read-only pilot, step 6 | [self-service-operations.md](self-service-operations.md#the-landscape-honestly) | k8sgpt (CNCF) |
-| A7 | Alert investigation to root cause | HolmesGPT — read-only toolsets, consumes runbooks | ❌ same pilot — the closest existing shape to the target | [self-service-operations.md](self-service-operations.md#the-landscape-honestly) | Robusta HolmesGPT |
-| A8 | Agent procedural knowledge | Agent Skills (SKILL.md open standard, progressive disclosure) | ❌ pilot step 4; `CLAUDE.md` is the existing proof of the pattern | [knowledge-architecture.md](knowledge-architecture.md#3-skills--procedural-knowledge-as-the-open-standard) | Cross-vendor Skills adoption (Claude, Codex, Gemini CLI, Copilot) |
-| A9 | Suggested patch, safely (L4) | Agent output = PR through pr-validate | 🔶 **the gate exists and runs today**; the agent side doesn't | [self-service-operations.md](self-service-operations.md#the-suggest-patch-loop--why-l4-is-structurally-cheap-here) | "AI investigates, human merges" — the 2026 AI-SRE consensus shape |
-| A10 | Validate a fix under real traffic | Darlane SRE-agent flow: twin + fileSync + mirrord, evidence on the PR | 📋 designed in full; needs `XDarlane` + tunnel | [darlane.md](darlane.md#sre-agent--intelligence-injector) | mirrord/Telepresence traffic-mirroring practice |
-| A11 | Agent safety, audit, data boundary | Guardian phases; in-cluster inference for payload-touching work; agent-as-principal | 📋 designed | [guardian.md](guardian.md) | In-cluster LLM as exfiltration control |
-| A12 | Evaluating agent changes | **Golden incidents** — replay past incidents as eval fixtures | ❌ step 5; the ops analogue of `tests/` golden cases | [knowledge-architecture.md](knowledge-architecture.md#architecture-around-the-agent) | LLM-agent eval-set practice, applied to ops |
-| A13 | Auto-remediation (L5) | — | ⛔ gated behind Guardian audit, deliberately not a default | [self-service-operations.md](self-service-operations.md#the-operability-ladder) | — |
+1. **The label foundation** — `wxops.cloud/owner` required, immutable, stamped onto workloads, not forgeable ([access model](access-model.md#the-label-foundation)).
+2. **[RFC-008](../rfc/008-platform-tools-as-apis.md) Phase 1** — `XSecretConnection` and `XSecretStore`, replacing the hand-made OpenBao setup (I4).
+3. **[RFC-005](../rfc/005-git-mapped-authorization.md)** — trimmed to Pinniped, persona roles and the Kyverno rules, after its spikes (I5, I6).
 
 ---
 
-## What must be introduced — consolidated
+## Identity & access
 
-The "or more should be introduced" answer, split by where the work lands:
+| # | Problem | Answer | State | Where |
+|---|---|---|---|---|
+| I1 | One login for every tool | SCM → Dex; `groups: <org>:<team>`; one `XOIDCClient` per tool | ✅ | [RFC-004](../rfc/004-dex-identity-and-portal-authentication.md) |
+| I2 | Which teams reach the `groups` claim | Generated from `XScmTeam`s labelled `scm.wxops.cloud/oidc-login` | ✅ | [oidc-connector](../../docs/api-reference/oidc-connector.md#choosing-which-teams-can-sign-in) |
+| I3 | What a team may reach, in every tool | **Personas** — team × persona × scope, compiled from one file | 📋 | [access model](access-model.md#the-scm-persona) |
+| I4 | Tool configuration nobody converges on | Platform tools as APIs — secrets, then monitoring, then GitOps | 📋 Phase 1 next | [RFC-008](../rfc/008-platform-tools-as-apis.md) |
+| I5 | Who may write which XR | `wxops.cloud/owner` label + Kyverno CEL policies; RBAC stays coarse | 📋 label gaps first | [RFC-005](../rfc/005-git-mapped-authorization.md) · [access model](access-model.md#the-label-foundation) |
+| I6 | `kubectl` on any cluster, as yourself | Pinniped (Supervisor trusts Dex, Concierge per cluster) → RBAC → Kyverno | 📋 spike | [access model](access-model.md#kubernetes-pinniped--rbac--kyverno) |
+| I7 | Access that ends on its own | `expires-at` annotation + Kyverno `DeletingPolicy`; Crossplane revokes in the tool | 📋 | [access model](access-model.md#temporary-access-generated-checked-terminated) |
+| I8 | Explaining access — who can reach X, what a PR changes | Compile-time relationship graph; effective-access diff on the PR | 📋 | [access model](access-model.md#changing-access-is-a-pull-request-that-explains-itself) |
 
-**Changes to existing packages** (all `safe`-tier, all follow the `monitoring` pattern):
+## Multi-cluster
 
-| Change | Package | Serves |
-|---|---|---|
-| `status.notReady` reasons | all seven | O5, A1–A3 — the cheapest, highest-leverage item on this page |
-| `monitoring.alerts` (PrometheusRule + `runbook_url`) | `XTenantApp` | O6, A3 |
-| `scheduling:` block | `XTenantApp`, `XPlatformDatabaseCluster` | M11–M12 |
-| Widen `resources` for extended keys (GPU) | `XTenantApp` | M12 |
-| `ingress.gslb` block | `XTenantApp` | M8 — blocked on the Traefik↔k8gb spike |
+Direction since 2026-10-20: W'xOps **manages clusters it is given**, spokes dial out, a CoreDNS-named L7 backbone connects them. IDs M2–M6 and M13 belonged to
+the archived CAPI-era design and are retired.
 
-**New XRDs / packages** (both already named in the docs, neither committed):
+| # | Problem | Answer | State | Where |
+|---|---|---|---|---|
+| M1 | Target cluster as an XR parameter | `spec.parameters.cluster` → `providerConfigRef` | 🔶 threaded, unused; becomes the single-cluster case if Crossplane runs per spoke (M18) | [multi-cluster](multi-cluster.md#where-compositions-run) |
+| M7 | Fleet API | One XR per cluster; the portal fans out | ✅ by architecture | [multi-cluster](multi-cluster.md#where-core-fits) |
+| M15 | Join a cluster without holding its credentials | Argo CD Agent (spoke dials out, gRPC + mTLS) + one membership XR per cluster | 📋 | [multi-cluster](multi-cluster.md#the-management-plane) |
+| M16 | Reach another cluster's service without CNI lock-in | W'xOps CoreDNS resolver per cluster, DoT between peers, one mTLS gateway per cluster | 📋 | [multi-cluster](multi-cluster.md#the-naming-plane--coredns-as-the-backbone) |
+| M17 | Specialised clusters — OpenBao, GPU inference, the LGTM stack — used fleet-wide | Reached by name over the backbone | 📋 | [multi-cluster](multi-cluster.md#problems-the-backbone-solves) |
+| M18 | Where compositions run | Crossplane on each spoke, packages and XRs delivered by Argo | 📋 open decision | [multi-cluster](multi-cluster.md#where-compositions-run) |
+| M8 | Users routed to the nearest healthy cluster | k8gb (CoreDNS) or DNS-provider routing policies | ❌ | [archived scale study](../_archives/multi-cluster-scale.md#gslb-implementations--three-options-one-field-tested) |
+| M9 | Multi-region data | Region-pinned by default → CNPG replicas for DR → distributed SQL only if RPO≈0 | ❌ framework written | [archived scale study](../_archives/multi-cluster-scale.md#the-data-layer-decides-the-region-strategy-not-the-other-way-round) |
+| M10 | Tenancy isolation tiers | Namespace → vCluster → dedicated cluster | 📋 direction | [archived scale study](../_archives/multi-cluster-scale.md#axis-2--multi-tenancy-the-isolation-spectrum) |
+| M11 | Edge and ARM sites | k3s or Talos per autonomous site, joined like any cluster | ❌ direction | [archived scale study](../_archives/multi-cluster-scale.md#worked-use-cases) |
+| M12 | Mixed hardware (GPU, ARM) | `scheduling:` block + widened `resources` keys + multi-arch images | ❌ verified gap | [archived scale study](../_archives/multi-cluster-scale.md#the-verified-wxops-gaps) |
 
-| Candidate | Serves | Where argued |
-|---|---|---|
-| `XDarlane` — standalone workspace claim (per-developer, per-agent, TTL) | A10–A11, Guardian's stated prerequisite | [darlane.md](darlane.md#whats-next-xdarlane-xrd) |
-| `XPlatformCluster` — CAPI cluster as a platform API, the cluster-scope `tier: dedicated` | M2, M10 | [multi-cluster-scale.md](multi-cluster-scale.md) (currently out-of-scope in [multi-cluster.md](multi-cluster.md#out-of-scope) — graduates when manual provisioning is stable) |
+## Observability
 
-**Platform infrastructure** (not packages — installed once, per hub or per spoke): spoke `ProviderConfig` + credentials · CAPI + `ClusterResourceSet` · Pinniped
-Supervisor/Concierge · tunnel (Tailscale/Teleport) · Thanos-or-equivalent + Loki · event exporter (O11) · ExternalDNS routing policies / k8gb · **kernel plane**
-— Hubble (O13), runtime-security DaemonSet (O15).
+| # | Problem | Answer | State | Where |
+|---|---|---|---|---|
+| O1 | Per-app metrics scrape | `ServiceMonitor`/`PodMonitor` emission | ✅ `XTenantApp` `monitoring` | [observability](observability.md) |
+| O2 | Readiness the portal can poll | `created`/`ready`/`synced`/`syncMessage` on every package | ✅ all eleven | [status contract](../../docs/api-reference/status-contract.md) |
+| O3 | Partial health (app up, TLS pending) | `ready` / `dependenciesReady` split | ✅ `XTenantApp` | [status contract](../../docs/api-reference/status-contract.md) |
+| O4 | Cardinality in a shared Prometheus | `sampleLimit` set by the composition | ✅ | [observability](observability.md#cardinality) |
+| O5 | Status says *which*, not *why* | `status.notReady` reasons | ❌ `safe`, all packages | [self-service](self-service-operations.md#whats-missing) |
+| O6 | Alerts that carry their runbook | `PrometheusRule` + `runbook_url` | ❌ future `monitoring.alerts` | [self-service](self-service-operations.md#pillar-2--runbooks-as-platform-contract) |
+| O7 | One metrics view across clusters | Push, not pull — Alloy `remote_write` to an observability cluster over the backbone | ❌ platform infra | [observability](observability.md#the-decisive-fork-push-or-pull) · [multi-cluster](multi-cluster.md#problems-the-backbone-solves) |
+| O8 | Central logs (also the Darlane session-audit sink) | Loki + Alloy | ❌ platform infra | [observability](observability.md#logs-traces-events-profiles) |
+| O9 | Traces | OpenTelemetry → Tempo, per-app opt-in | ❌ deferred | [observability](observability.md#the-signal-matrix--what-to-collect-per-tier) |
+| O10 | Edge fleets | Report up, never query down | 📋 rule stated | [self-service](self-service-operations.md#the-edge-caveat) |
+| O11 | Kubernetes events | Event exporter → log store | ❌ — best signal per effort on this page | [observability](observability.md#the-signal-matrix--what-to-collect-per-tier) |
+| O12 | Cross-cluster label contract | `externalLabels.cluster` = the cluster's name | ❌ free now, impossible to retrofit | [observability](observability.md#the-label-contract--the-cheap-prerequisite) |
+| O13 | Network flows | Hubble where a cluster runs Cilium; nothing assumed elsewhere | ❌ per cluster — W'xOps does not choose the CNI | [observability](observability.md#the-kernel-plane--flows-and-runtime-security) |
+| O14 | Declared vs observed dependencies | Diff the XR tree against flow data | ❌ needs O13 | [observability](observability.md#where-this-pays-off-for-the-sre-agent-goal) |
+| O15 | Runtime security signal | Falco, detect-only | ❌ the cost is rule tuning | [threat model](security-threat-model.md) · [observability](observability.md#detect-versus-enforce-is-the-real-axis) |
 
-The kernel plane is the one bucket where cost is wildly uneven, so it does not collapse into a single line:
+## AI & self-service
 
-| Component | Serves | Cost | Note |
+| # | Problem | Answer | State | Where |
+|---|---|---|---|---|
+| A1 | Machine-readable diagnosis graph | XR tree: `resourceRefs` → Objects → events | ✅ every package | [self-service](self-service-operations.md#pillar-1--signals-what-exists-whats-missing) |
+| A2 | Whose error is it? | Taxonomy + two triage rules off the status contract | 📋 the portal implements it | [self-service](self-service-operations.md#the-error-taxonomy--developer-side-user-side-platform-side) |
+| A3 | Runbooks reachable from the signal | `trigger` frontmatter keyed to status shapes | ❌ format proposed | [knowledge](knowledge-architecture.md#runbook-anatomy--the-format-worth-standardizing) |
+| A4 | Decisions addressable by humans and agents | RFC and ADR files + their indexes; issue templates for intake | 🔶 indexes exist; not machine-tagged | [RFC index](../rfc/README.md) · [ADR index](../adr/README.md) |
+| A5 | What happened before | `docs/incidents/` post-mortems | ❌ | [knowledge](knowledge-architecture.md) |
+| A6 | Quick cluster health scan | k8sgpt, read-only | ❌ pilot | [self-service](self-service-operations.md#the-landscape-honestly) |
+| A7 | Alert investigation to root cause | HolmesGPT, read-only, consuming runbooks | ❌ pilot | [self-service](self-service-operations.md#the-landscape-honestly) |
+| A8 | Agent procedural knowledge | Agent Skills; `CLAUDE.md` is the existing proof | ❌ pilot | [knowledge](knowledge-architecture.md#3-skills--procedural-knowledge-as-the-open-standard) |
+| A9 | A suggested fix, safely | Agent output = a PR through `pr-validate` | 🔶 the gate runs today; the agent side does not | [self-service](self-service-operations.md#the-suggest-patch-loop--why-l4-is-structurally-cheap-here) |
+| A10 | Validate a fix under real traffic | Darlane twin + mirrord, evidence on the PR | 📋 needs `XDarlane` | [darlane](darlane.md#agents) |
+| A11 | Agent safety and data boundary | Agents as principals with personas; in-cluster inference for payloads; session audit | 📋 | [access model](access-model.md#data-boundary-and-audit) · [darlane](darlane.md#session-safety--tools-audit-data-boundary) |
+| A12 | Evaluating agent changes | Golden incidents replayed as fixtures | ❌ | [knowledge](knowledge-architecture.md#architecture-around-the-agent) |
+
+## Rejected
+
+| # | What | Why | Where |
 |---|---|---|---|
-| **Hubble** — enable on existing Cilium | O13, O14 | **~zero, if Cilium** | ⚠️ Confirm the CNI first — Cilium is assumed in a *proposed* spoke bootstrap, never confirmed for the running cluster. Set flow-label granularity (L1b) *before* enabling |
-| **Retina** — only for non-Cilium spokes | O13 | Medium, per spoke | Optional. The alternative is accepting a non-uniform signal across the fleet, which is probably the right call |
-| **Falco** — detect-only, `falcosidekick` push | O15 | Medium + **ongoing tuning** | A privileged DaemonSet on every node. Budget the tuning or do not start |
-
-**No XRD or composition change is required for any of it** — which is the point of the ownership split in
-[observability.md](observability.md#ownership-what-belongs-here-and-what-does-not). The kernel plane is collected like every other signal: same push direction,
-same label contract, same cardinality ladder. If it ever needs a field on `XTenantApp`, that is the signal something has gone wrong in the design.
-
-**Ecosystem** (around core, not in it): portal correlation fork (A2) · docs site as runbook CDN · ADR/RFC issue templates + `docs/incidents/` convention ·
-SRE-agent skill tree ([knowledge-architecture.md](knowledge-architecture.md#the-darlane-sre-agent-mindmap)) · Guardian sidecars · declared-vs-observed
-dependency diff (O14 — the XR tree supplies the declared graph, flow data the observed one; the delta is the artefact).
+| M14 | Composition-emitted RBAC | The provider would become a privilege-escalation path, and RBAC belongs in a reviewed diff | [ROADMAP](../_archives/ROADMAP.md#decided-and-rejected) · [access model](access-model.md#open-decisions) (a bind-only exception would need an ADR) |
+| A13 | Auto-remediation by default | A different trust decision from a PR; gated until session and agent audit exist | [self-service](self-service-operations.md#the-operability-ladder) |
+| — | Cluster provisioning (CAPI) inside W'xOps | Pulls in node lifecycle and makes the hub a fleet trust root | [multi-cluster](multi-cluster.md#what-changed-and-why) |
+| — | A CNI-level flat network between clusters | Ties the fleet to one CNI; names at L7 do the job | [multi-cluster](multi-cluster.md#the-idea) |
+| — | A runtime authorization engine, or grants generated per login | No login hook, cleanup on every session, worse audit | [access model](access-model.md#what-wxops-does-not-build) |
+| — | Third-party writes from Kyverno admission | Admission must be side-effect free; Crossplane writes | [access model](access-model.md#temporary-access-generated-checked-terminated) |
+| — | A competing fleet API (Karmada `PropagationPolicy`) | The XR is the fleet API | M7 |
 
 ---
 
-## How to use this page
+## Where the work lands
 
-Brainstorming: pick a row, read its detail doc, then its industry reference — the row is the claim, the doc is the reasoning, the reference is the practiced
-version at scale. Prioritising: everything ✅ needed no decision; everything 🔶 has a named missing piece; the ❌ rows are ordered inside their detail docs' own
-sequenced-adoption sections, not here. And the two ⛔ rows exist so this page also records what *not* to reopen.
+**Existing packages** (all `safe`): `status.notReady` (O5) · `monitoring.alerts` (O6) · `scheduling:` and wider `resources` (M12) · `wxops.cloud/owner`
+stamped onto workloads (I5).
 
-The single thread across all three domains, stated once: **the platform's declarative core is what makes every hard problem cheaper** — status makes diagnosis
-walkable (A1), one-XR-per-cluster makes fleets portal-shaped (M7), the declared dependency graph makes drift detectable by subtraction (O14), and
-PR-through-the-gate makes even AI-suggested fixes as safe as human ones (A9). Every new component above either feeds that core or consumes it; anything that
-competes with it (Karmada's API composition-emitted RBAC, ungated auto-remediation) is where the ⛔ rows come from.
+**New packages:** `secret-connection`, `secret-store`, `secret-access` (RFC-008 Phases 1–3) · `monitoring-connection`, `monitoring-folder`,
+`gitops-project` (RFC-008 Phases 4–5) · a cluster membership kind (M15) · `XDarlane` (A10, A11).
+
+**Platform infrastructure** (installed, not composed): Pinniped · Kyverno CEL policies · Argo CD Agent principal and agents · the W'xOps mesh resolver and
+gateways · Alloy and the LGTM stack · an event exporter (O11) · k8gb (M8) · Hubble or Falco where chosen (O13, O15).
+
+**Around core:** the persona compiler (I3, I8) · the portal's triage fork (A2) · a docs site serving runbooks (A3) · `docs/incidents/` (A5) · the SRE-agent
+skill tree (A8).

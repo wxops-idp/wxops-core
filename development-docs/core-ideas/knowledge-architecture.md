@@ -64,11 +64,11 @@ The repo is further along this taxonomy than most — largely by accident of dis
 
 | Taxonomy slot | Existing artifact | Gap |
 |---|---|---|
-| RFC | [`multi-cluster.md`](multi-cluster.md) is a full RFC (option space, trade-offs, no prescription); [`multi-cluster-proposal.md`](multi-cluster-proposal.md) is its acceptance | Convention: new proposals open as **RFC issues** (`.github/ISSUE_TEMPLATE/rfc.md`); accepted ones graduate to a design doc |
-| ADR | `development-docs/_archives/ROADMAP.md` §"Decided and rejected" is the decision log — decision + why, marked "do not re-litigate". [`development-docs/adr/`](../adr/README.md) now holds the permanent record itself, one committed file per decision (started with [ADR-001](../adr/001-package-channel-label.md)) | Convention: new decisions are proposed as **ADR issues** (`.github/ISSUE_TEMPLATE/adr.md`); once accepted, the issue becomes the discussion trail and a `development-docs/adr/NNN-title.md` file becomes the permanent record — a deliberate small reversal of "no parallel file tree," because a committed file outlives and out-diffs an issue |
+| RFC | [`development-docs/rfc/`](../rfc/README.md) — one file per proposal (RFC-002 to 008), argued before it is built; the index's `Status` column is the record of what's next. Intake through the RFC issue template (`.github/ISSUE_TEMPLATE/rfc.md`) | Machine-readable tags — status and affected kinds — so an agent can ask *which RFC touches `XScmTeam`* without reading prose |
+| ADR | [`development-docs/adr/`](../adr/README.md) — one committed file per decision of lasting consequence (ADR-001 to 004); a rejection is recorded in the RFC or ADR it belongs to. The archived [`ROADMAP.md`](../_archives/ROADMAP.md) keeps the older *Decided and rejected* table as history | The same tags, so *what constrains this package* is a lookup, not a search |
 | Runbook | None yet — planned as the "Failure modes" sections ([`self-service-operations.md`](self-service-operations.md) Pillar 2) | The whole slot; format proposed below |
 | Reference | [`status-contract.md`](../../docs/api-reference/status-contract.md), per-package docs, [`tests/README.md`](../../tests/README.md) | Healthy — Phase 0 built this deliberately |
-| Explanation | [`darlane.md`](darlane.md), [`guardian.md`](guardian.md), [`observability.md`](observability.md), the multi-cluster family | Healthy |
+| Explanation | [`darlane.md`](darlane.md), [`access-model.md`](access-model.md), [`observability.md`](observability.md), [`multi-cluster.md`](multi-cluster.md) | Healthy |
 | Post-mortem | Nothing — no incident record convention | `docs/incidents/` with a template; the loop's input arc |
 | **Agent-facing operational memory** | `CLAUDE.md` — procedural knowledge written *for an agent*: conventions, gotchas (`_get`/Undefined, `crossplane render` vs `beta render`), the working model. Plus `tests/` as a machine-checkable behavioural spec | This is the embryo of the Skills layer below — currently one monolithic file rather than progressively-disclosed units |
 
@@ -125,23 +125,105 @@ telemetry correlation.
 
 The observation this document exists to make: **the expensive half of that graph — live topology — is what Crossplane already maintains.**
 
+```mermaid
+flowchart LR
+    subgraph CODE["Code-time — in Git · free"]
+        direction TB
+        RFC["RFC · ADR"]
+        PKG["package<br/>VERSIONS.yaml"]
+        COMP["composition"]
+        KCL["kcl/&lt;pkg&gt;/main.k"]
+        GOLD["golden case<br/>what healthy renders to"]
+        PFILE["persona file"]
+    end
+
+    subgraph RUN["Runtime — Kubernetes API · free"]
+        direction TB
+        XR["XR"]
+        OBJ["Object · Workspace"]
+        RES["Deployment · Certificate · Secret …"]
+        ST["status<br/>ready · synced · syncMessage"]
+        CL["cluster"]
+        FLEET["fleet<br/>membership XR"]
+    end
+
+    subgraph IDN["Identity — XR status · free"]
+        direction TB
+        CONN["XScmConnection<br/>the org"]
+        TEAM["XScmTeam"]
+        DEX["XOIDCConnector"]
+    end
+
+    subgraph ACC["Access — compile-time · designed"]
+        direction TB
+        PERSONA["persona"]
+        TGT["namespace · OpenBao path<br/>Argo project · Grafana folder"]
+    end
+
+    subgraph KNOW["Knowledge-time · to build"]
+        direction TB
+        RB["runbook"]
+        INC["incident"]
+        PR["pull request"]
+        SK["skill"]
+    end
+
+    RFC -->|constrains| PKG
+    PKG -->|ships| COMP
+    COMP -->|source| KCL
+    GOLD -->|"pins the output of"| COMP
+    COMP -->|renders| XR
+
+    XR -->|resourceRefs| OBJ -->|wraps| RES
+    XR -->|reports| ST
+    XR -->|lives-in| CL -->|member-of| FLEET
+
+    XR -->|"owned-by · wxops.cloud/owner"| TEAM
+    TEAM -->|in-org| CONN
+    DEX -->|"admits · status.oidcGroup"| TEAM
+
+    PFILE -->|defines| PERSONA
+    TEAM -->|has-persona| PERSONA
+    PERSONA -->|reaches| TGT
+
+    RB -->|"triggers-on"| ST
+    INC -->|"occurred-on"| XR
+    INC -->|"resolved-by"| PR
+    INC -->|"distilled-into"| RB
+    SK -->|"procedure-for"| RB
+    PR -->|"lands in"| PKG
+
+    classDef free fill:#dcfce7,stroke:#16a34a,color:#052e16
+    classDef designed fill:#fef9c3,stroke:#ca8a04,color:#422006
+    classDef tobuild fill:#e0e7ff,stroke:#4f46e5,color:#1e1b4b,stroke-dasharray:4 3
+    class RFC,PKG,COMP,KCL,GOLD,XR,OBJ,RES,ST,CL,FLEET,CONN,TEAM,DEX free
+    class PFILE,PERSONA,TGT designed
+    class RB,INC,PR,SK tobuild
 ```
-Ontology sketch — W'xOps knowledge graph
 
-  RUNTIME (free — exists now, machine-readable)
-    XTenantApp ──resourceRefs──▶ Object ──wraps──▶ Deployment/Certificate/…
-    XTenantApp ──cluster=──▶ spoke          (the v0.4.0 field)
-    XTenantDatabase ──clusterRef──▶ XPlatformDatabaseCluster
-    XR ──status──▶ ready/notReady           (the diagnosis entry point)
+Green is free today, yellow is designed, dashed blue is the actual project. Two edges carry most of the value: `owned-by` ties every runtime object to a Git
+team, so the same walk answers *who owns this* for diagnosis and *who can reach this* for the [access model](access-model.md); and `pr → package` closes
+the loop, so every fix re-enters the graph through the same reviewed path it came from.
 
-  CODE-TIME (free — in git)
-    package ──version──▶ VERSIONS.yaml      composition ──source──▶ kcl/main.k
-    golden case ──expects──▶ rendered shape (what "healthy" looks like, byte-level)
+The workflow that walks it — the same for an on-call human and an SRE agent:
 
-  KNOWLEDGE-TIME (to build — the actual project)
-    runbook ──triggers-on──▶ status shape   ADR ──constrains──▶ package/behaviour
-    incident ──occurred-on──▶ XR/cluster    incident ──resolved-by──▶ PR
-    incident ──distilled-into──▶ runbook    skill ──procedure-for──▶ task
+```mermaid
+flowchart LR
+    A["alert · portal card"] --> S["XR status<br/>synced=false · syncMessage"]
+    S --> T["tree walk<br/>resourceRefs → Object → events"]
+    T --> R["runbook<br/>matched by its trigger"]
+    R --> H["incident history<br/>same XR, same shape"]
+    H --> F["fix in the Darlane twin<br/>validated on mirrored traffic"]
+    F --> P["pull request<br/>+ evidence"]
+    P --> G["pr-validate<br/>goldens · invariants"]
+    G --> M["human merge<br/>→ Argo → cluster"]
+    M --> D["post-mortem<br/>distilled into runbook · skill"]
+    D -.->|"next time, one hop shorter"| R
+
+    classDef free fill:#dcfce7,stroke:#16a34a,color:#052e16
+    classDef tobuild fill:#e0e7ff,stroke:#4f46e5,color:#1e1b4b,stroke-dasharray:4 3
+    class A,S,T,P,G,M free
+    class R,H,F,D tobuild
 ```
 
 The build order falls out: **don't start by building a graph database.** Start by making the knowledge-time artifacts exist with stable IDs and typed
@@ -184,8 +266,8 @@ XR's tree, not the fleet) + relevant ADRs. Progressive disclosure at every layer
 *knows how to do*; the two compose — a skill's steps invoke the toolset. Keeping tools read-only keeps the entire knowledge layer side-effect-free; the single
 write path stays the PR.
 
-**Tier the corpus by data sensitivity.** Metadata (statuses, events, manifests, docs) is one boundary; payloads (logs with user data, traffic) are Guardian's
-in-cluster-only boundary. The knowledge architecture must tag which tier each source belongs to *before* an agent is wired, because retrofitting a data boundary
+**Tier the corpus by data sensitivity.** Metadata (statuses, events, manifests, docs) is one boundary; payloads (logs with user data, traffic) are the
+in-cluster-only boundary ([access model](access-model.md#data-boundary-and-audit)). The knowledge architecture must tag which tier each source belongs to *before* an agent is wired, because retrofitting a data boundary
 onto a working agent never happens.
 
 **Evaluate with golden incidents.** The repo's deepest habit — golden render tests as a behavioural spec — has an exact operational analogue: **replay past
@@ -249,9 +331,9 @@ itself with humans before an agent touches it**, because knowledge that only an 
 
 **Internal**
 - [`self-service-operations.md`](self-service-operations.md) — the pillars this substrate serves
-- [`darlane.md`](darlane.md) — the SRE-agent flow the mindmap details; [`guardian.md`](guardian.md) — the data-boundary and audit rules
+- [`darlane.md`](darlane.md) — the SRE-agent flow the mindmap details; [`access-model.md`](access-model.md#data-boundary-and-audit) — the data-boundary and audit rules
 - [`status-contract.md`](../../docs/api-reference/status-contract.md) — the semantic layer's anchor; `CLAUDE.md` — the existing proof of agent-facing operational memory
-- [`multi-cluster.md`](multi-cluster.md) / [`multi-cluster-proposal.md`](multi-cluster-proposal.md) — the RFC → acceptance pair the ADR convention formalizes
+- [`multi-cluster.md`](../_archives/multi-cluster.md) / [`multi-cluster-proposal.md`](../_archives/multi-cluster-proposal.md) — the RFC → acceptance pair the ADR convention formalizes
 
 **Concepts and standards**
 - [Agent Skills — the open standard](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview) · [progressive disclosure as a design pattern](https://www.newsletter.swirlai.com/p/agent-skills-progressive-disclosure)
@@ -259,6 +341,9 @@ itself with humans before an agent touches it**, because knowledge that only an 
 - [ADR — architecture decision records](https://adr.github.io/)
 - [Model Context Protocol](https://modelcontextprotocol.io/)
 - [Google SRE workbook — postmortem culture](https://sre.google/workbook/postmortem-culture/)
+- [MADR (Markdown Architectural Decision Records)](https://adr.github.io/madr/)
+- [GitHub - gitnodes](https://github.com/AndreaBozzo/gitnodes)
+- [GitHub - adr-tools](https://github.com/npryce/adr-tools)
 
 **Knowledge graphs for operations**
 - [Knowledge graphs as the SRE agent's map](https://stackgen.com/blog/knowledge-graphs-the-missing-brain-your-sre-agents-desperately-need)
