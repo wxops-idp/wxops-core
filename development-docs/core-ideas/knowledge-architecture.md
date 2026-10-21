@@ -134,7 +134,6 @@ flowchart LR
         COMP["composition"]
         KCL["kcl/&lt;pkg&gt;/main.k"]
         GOLD["golden case<br/>what healthy renders to"]
-        PFILE["persona file"]
     end
 
     subgraph RUN["Runtime — Kubernetes API · free"]
@@ -154,9 +153,9 @@ flowchart LR
         DEX["XOIDCConnector"]
     end
 
-    subgraph ACC["Access — compile-time · designed"]
+    subgraph ACC["Access — XR status · designed"]
         direction TB
-        PERSONA["persona"]
+        PERSONA["XPersona<br/>XPersonaBinding · XPlatformPolicy"]
         TGT["namespace · OpenBao path<br/>Argo project · Grafana folder"]
     end
 
@@ -182,8 +181,7 @@ flowchart LR
     TEAM -->|in-org| CONN
     DEX -->|"admits · status.oidcGroup"| TEAM
 
-    PFILE -->|defines| PERSONA
-    TEAM -->|has-persona| PERSONA
+    TEAM -->|member-of| PERSONA
     PERSONA -->|reaches| TGT
 
     RB -->|"triggers-on"| ST
@@ -197,7 +195,7 @@ flowchart LR
     classDef designed fill:#fef9c3,stroke:#ca8a04,color:#422006
     classDef tobuild fill:#e0e7ff,stroke:#4f46e5,color:#1e1b4b,stroke-dasharray:4 3
     class RFC,PKG,COMP,KCL,GOLD,XR,OBJ,RES,ST,CL,FLEET,CONN,TEAM,DEX free
-    class PFILE,PERSONA,TGT designed
+    class PERSONA,TGT designed
     class RB,INC,PR,SK tobuild
 ```
 

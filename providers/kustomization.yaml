@@ -15,7 +15,6 @@
 #
 # Not listed, on purpose:
 #   archive/   — retired or legacy manifests (see archive/README.md); apply by hand if you still need them.
-#   policies/  — Kyverno policies, which need Kyverno installed first (see policies/ and RFC-005).
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:

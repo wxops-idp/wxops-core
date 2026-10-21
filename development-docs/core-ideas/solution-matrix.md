@@ -22,8 +22,9 @@
 The current focus, in order. Everything else on this page waits behind it.
 
 1. **The label foundation** — `wxops.cloud/owner` required, immutable, stamped onto workloads, not forgeable ([access model](access-model.md#the-label-foundation)).
-2. **[RFC-008](../rfc/008-platform-tools-as-apis.md) Phase 1** — `XSecretConnection` and `XSecretStore`, replacing the hand-made OpenBao setup (I4).
-3. **[RFC-005](../rfc/005-git-mapped-authorization.md)** — trimmed to Pinniped, persona roles and the Kyverno rules, after its spikes (I5, I6).
+2. **[RFC-008](../rfc/008-built-in-tools-identity-and-catalog.md) Phase 1** — OpenBao on `provider-vault` (hub only), adopting the hand-made setup (I4).
+3. **[RFC-009](../rfc/009-scm-personas.md)** — `XPersona`, `XPersonaBinding`, `XPlatformPolicy`, after the Pinniped/Kyverno `userInfo` spike (I3, I5, I6);
+   RFC-005's owner rules ride on its `XPlatformPolicy` templates.
 
 ---
 
@@ -33,12 +34,13 @@ The current focus, in order. Everything else on this page waits behind it.
 |---|---|---|---|---|
 | I1 | One login for every tool | SCM → Dex; `groups: <org>:<team>`; one `XOIDCClient` per tool | ✅ | [RFC-004](../rfc/004-dex-identity-and-portal-authentication.md) |
 | I2 | Which teams reach the `groups` claim | Generated from `XScmTeam`s labelled `scm.wxops.cloud/oidc-login` | ✅ | [oidc-connector](../../docs/api-reference/oidc-connector.md#choosing-which-teams-can-sign-in) |
-| I3 | What a team may reach, in every tool | **Personas** — team × persona × scope, compiled from one file | 📋 | [access model](access-model.md#the-scm-persona) |
-| I4 | Tool configuration nobody converges on | Platform tools as APIs — secrets, then monitoring, then GitOps | 📋 Phase 1 next | [RFC-008](../rfc/008-platform-tools-as-apis.md) |
-| I5 | Who may write which XR | `wxops.cloud/owner` label + Kyverno CEL policies; RBAC stays coarse | 📋 label gaps first | [RFC-005](../rfc/005-git-mapped-authorization.md) · [access model](access-model.md#the-label-foundation) |
-| I6 | `kubectl` on any cluster, as yourself | Pinniped (Supervisor trusts Dex, Concierge per cluster) → RBAC → Kyverno | 📋 spike | [access model](access-model.md#kubernetes-pinniped--rbac--kyverno) |
-| I7 | Access that ends on its own | `expires-at` annotation + Kyverno `DeletingPolicy`; Crossplane revokes in the tool | 📋 | [access model](access-model.md#temporary-access-generated-checked-terminated) |
-| I8 | Explaining access — who can reach X, what a PR changes | Compile-time relationship graph; effective-access diff on the PR | 📋 | [access model](access-model.md#changing-access-is-a-pull-request-that-explains-itself) |
+| I3 | What a team may reach, in every tool | **Personas** — `XPersona` collects teams; `XPersonaBinding` binds `view`/`edit`/`admin` (extended by aggregation) per owned namespace; `XPlatformPolicy` renders Kyverno guardrails | 📋 | [RFC-009](../rfc/009-scm-personas.md) · [access model](access-model.md#the-scm-persona) |
+| I4 | Tool configuration nobody converges on | Built-in tools on their own native objects — OpenBao (`provider-vault`), Argo CD (`AppProject`), Grafana (grafana-operator) — one login, persona groups, a catalog; no W'xOps kind per tool | 📋 Phase 1 next | [RFC-008](../rfc/008-built-in-tools-identity-and-catalog.md) |
+| I5 | Who may write which XR | Core kinds stay cluster-scoped: `wxops:platform-*` bound by `XPersonaBinding`, sealed by the `wxops.cloud/owner` label (`owner-seal`) | 📋 label gaps first | [RFC-005](../rfc/005-git-mapped-authorization.md) · [access model](access-model.md#the-label-foundation) |
+| I6 | `kubectl` on any cluster, as yourself | Pinniped (Supervisor trusts Dex, Concierge per cluster, bootstrap) → RBAC → Kyverno | 🔶 Pinniped installed; `userInfo` in Kyverno to spike | [access model](access-model.md#kubernetes-pinniped--rbac--kyverno) |
+| I7 | Access that ends on its own | A time-bound `XPersonaBinding` with `expires-at`; a Kyverno `DeletingPolicy` deletes it and Crossplane removes its RoleBindings | 📋 | [access model](access-model.md#temporary-access-checked-then-terminated) |
+| I8 | Explaining access — who can reach X, what a PR changes | Kubernetes answers it (`kubectl auth can-i --list --as-group`); a PR report built on it later; the API server audit log and PolicyReports for what happened | 📋 | [RFC-009](../rfc/009-scm-personas.md#audit) · [access model](access-model.md#changing-access-is-a-pull-request) |
+| I9 | Tenant kinds other teams cannot even read | Namespaced tenant kinds in the `XTenantApp` / `XTenantDatabase` redesign; the namespace is the owner, bound per owned namespace | 📋 direction — needs namespaced managed resources in each provider | [darlane](darlane.md#xdarlane--a-workspace-claim-of-its-own) · [RFC-005](../rfc/005-git-mapped-authorization.md#alternatives) |
 
 ## Multi-cluster
 
@@ -69,7 +71,7 @@ the archived CAPI-era design and are retired.
 | O4 | Cardinality in a shared Prometheus | `sampleLimit` set by the composition | ✅ | [observability](observability.md#cardinality) |
 | O5 | Status says *which*, not *why* | `status.notReady` reasons | ❌ `safe`, all packages | [self-service](self-service-operations.md#whats-missing) |
 | O6 | Alerts that carry their runbook | `PrometheusRule` + `runbook_url` | ❌ future `monitoring.alerts` | [self-service](self-service-operations.md#pillar-2--runbooks-as-platform-contract) |
-| O7 | One metrics view across clusters | Push, not pull — Alloy `remote_write` to an observability cluster over the backbone | ❌ platform infra | [observability](observability.md#the-decisive-fork-push-or-pull) · [multi-cluster](multi-cluster.md#problems-the-backbone-solves) |
+| O7 | One metrics view across clusters | Push, not pull — Alloy `remote_write` to the LGTM stack on the hub (or a dedicated observability cluster) over the backbone | ❌ platform infra | [observability](observability.md#the-decisive-fork-push-or-pull) · [multi-cluster](multi-cluster.md#problems-the-backbone-solves) |
 | O8 | Central logs (also the Darlane session-audit sink) | Loki + Alloy | ❌ platform infra | [observability](observability.md#logs-traces-events-profiles) |
 | O9 | Traces | OpenTelemetry → Tempo, per-app opt-in | ❌ deferred | [observability](observability.md#the-signal-matrix--what-to-collect-per-tier) |
 | O10 | Edge fleets | Report up, never query down | 📋 rule stated | [self-service](self-service-operations.md#the-edge-caveat) |
@@ -105,7 +107,7 @@ the archived CAPI-era design and are retired.
 | — | Cluster provisioning (CAPI) inside W'xOps | Pulls in node lifecycle and makes the hub a fleet trust root | [multi-cluster](multi-cluster.md#what-changed-and-why) |
 | — | A CNI-level flat network between clusters | Ties the fleet to one CNI; names at L7 do the job | [multi-cluster](multi-cluster.md#the-idea) |
 | — | A runtime authorization engine, or grants generated per login | No login hook, cleanup on every session, worse audit | [access model](access-model.md#what-wxops-does-not-build) |
-| — | Third-party writes from Kyverno admission | Admission must be side-effect free; Crossplane writes | [access model](access-model.md#temporary-access-generated-checked-terminated) |
+| — | Third-party writes from Kyverno admission | Admission must be side-effect free; Crossplane writes | [access model](access-model.md#temporary-access-checked-then-terminated) |
 | — | A competing fleet API (Karmada `PropagationPolicy`) | The XR is the fleet API | M7 |
 
 ---
@@ -115,11 +117,10 @@ the archived CAPI-era design and are retired.
 **Existing packages** (all `safe`): `status.notReady` (O5) · `monitoring.alerts` (O6) · `scheduling:` and wider `resources` (M12) · `wxops.cloud/owner`
 stamped onto workloads (I5).
 
-**New packages:** `secret-connection`, `secret-store`, `secret-access` (RFC-008 Phases 1–3) · `monitoring-connection`, `monitoring-folder`,
-`gitops-project` (RFC-008 Phases 4–5) · a cluster membership kind (M15) · `XDarlane` (A10, A11).
+**New packages:** a cluster membership kind (M15) · `XDarlane` (A10, A11) · `persona`, `persona-binding`, `platform-policy` in `package/auth/`, with `rbac-aggregate-*` in `providers/` (I3, I5).
 
-**Platform infrastructure** (installed, not composed): Pinniped · Kyverno CEL policies · Argo CD Agent principal and agents · the W'xOps mesh resolver and
+**Platform infrastructure** (installed, not composed): Pinniped and the Kyverno controller, at bootstrap · grafana-operator and `provider-vault` on the hub (RFC-008) · Argo CD Agent principal and agents · the W'xOps mesh resolver and
 gateways · Alloy and the LGTM stack · an event exporter (O11) · k8gb (M8) · Hubble or Falco where chosen (O13, O15).
 
-**Around core:** the persona compiler (I3, I8) · the portal's triage fork (A2) · a docs site serving runbooks (A3) · `docs/incidents/` (A5) · the SRE-agent
+**Around core:** the portal's triage fork (A2) · a docs site serving runbooks (A3) · `docs/incidents/` (A5) · the SRE-agent
 skill tree (A8).

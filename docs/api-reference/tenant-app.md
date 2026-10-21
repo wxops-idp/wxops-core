@@ -147,7 +147,7 @@ See [darlane.md](../../development-docs/core-ideas/darlane.md) for the full deve
 | `darlane.resources` | `object` | — | Resource requests/limits for the darlane pod, independent of the main app. Omit to inherit main app resources. |
 | `darlane.securityContext` | `object` | — | Security context overrides (`runAsUser`, `runAsGroup`, `readOnlyRootFilesystem`, etc). Applied on top of main app `securityContext`. `readOnlyRootFilesystem` defaults to `false` for darlane so `apt`/`pip` installs work without a custom image. |
 | `darlane.productionOverride` | `boolean` | `false` | Required when `environment: prod` to enable darlane. Double opt-in — visible in XR diffs and PRs. |
-| `darlane.ttl` | `string` | — | Adds `wxops.cloud/darlane-ttl` annotation to the dev Deployment (e.g. `"4h"`). Enforcement is a separate Kyverno policy. |
+| `darlane.ttl` | `string` | — | Adds the `wxops.cloud/darlane-ttl` annotation to the dev Deployment (e.g. `"4h"`). **(Not enforced)** — expiry was dropped until the `XTenantApp` redesign; set `replicas: 0` to stop a twin. |
 
 
 #### Traffic routing

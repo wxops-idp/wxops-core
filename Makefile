@@ -11,8 +11,8 @@ CRDS_CATALOG_REF ?= 52b0261318acc7dd0b66e032759b1f218216b980
 WAIT_TIMEOUT ?= 300s
 
 # The two install phases, split by file name. `provider-*` does not match `providerconfig-*` —
-# the hyphen is what separates them. providers/archive/ and providers/policies/ are excluded on
-# purpose: archived manifests are not applied, and the Kyverno policies need Kyverno first.
+# the hyphen is what separates them. providers/archive/ is excluded on purpose: archived
+# manifests are not applied.
 PROVIDER_MANIFESTS := $(wildcard providers/function-*.yaml providers/provider-*.yaml \
                                  providers/runtimeconfig-*.yaml providers/rbac-*.yaml)
 PROVIDERCONFIG_MANIFESTS := $(wildcard providers/providerconfig-*.yaml)

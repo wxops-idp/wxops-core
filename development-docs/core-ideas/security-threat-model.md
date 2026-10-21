@@ -30,7 +30,8 @@ developer / SRE agent ──▶ Darlane pod (real secrets, real traffic)   ← B
 ```
 
 - **B1 — who may act**: human identity via Dex in front of the SCM (GitHub or Gitea), Pinniped for
-  `kubectl`; agent identity via dedicated SAs and agent personas ([access model](access-model.md)); RBAC authored only in GitOps
+  `kubectl`; agent identity via dedicated SAs and agent personas ([access model](access-model.md)); RBAC authored only in GitOps — RFC-009 proposes bindings
+  from `XPersonaBinding` as the one exception
   (`development-docs/_archives/ROADMAP.md` §Decided and rejected; the seam in [tenant-app.md](../../docs/api-reference/tenant-app.md#developer-access-and-rbac)).
 - **B2 — what may enter the system**: XRD schema validation at admission
   (B2a) and, for changes to the platform itself, the pr-validate gate — XRD
@@ -46,7 +47,7 @@ developer / SRE agent ──▶ Darlane pod (real secrets, real traffic)   ← B
   known honest limit is `pods/exec` being namespace-wide (documented wherever
   exec appears, sized-namespace guidance).
 - **B5 — production data in debug sessions**: `productionOverride` double
-  opt-in, TTL + Kyverno cleanup, a composed session-audit record required for
+  opt-in (session expiry dropped 2026-10-22 until the `XTenantApp` redesign), a composed session-audit record required for
   production steal mode ([session safety](darlane.md#session-safety--tools-audit-data-boundary)), and the
   **in-cluster-inference rule**: nothing that sees payloads may call an external
   model API ([access model](access-model.md#data-boundary-and-audit)).
@@ -60,7 +61,7 @@ developer / SRE agent ──▶ Darlane pod (real secrets, real traffic)   ← B
 | **Secret leakage via status** | Terraform outputs / composition writing sensitive values to world-readable XR status | `initial_password` marked sensitive (never patched); `no-secrets-in-status` invariant; connection creds only via Vault/ESO path | Invariant is name-heuristic; a poorly named secret field could slip |
 | **Supply chain — schema source** | Upstream CRDs-catalog changes what CI accepts | Catalog pinned by SHA in three places, bumped only by commit | Function/provider images pinned by tag, not digest; no image signing/verification yet |
 | **Hub compromise → fleet compromise** | Hub holds spoke credentials | Today: no spokes. Design: spokes dial out (Argo CD Agent, Alloy), the hub holds no spoke kubeconfig and no spoke's `:6443` is exposed ([multi-cluster](multi-cluster.md#principles)) | The hub still issues fleet certificates and runs the Argo CD principal; agents in managed mode accept its desired state, so prod spokes default to autonomous mode |
-| **Darlane data exfiltration** | Dev/agent session with real traffic forwards data out | Session audit (designed, [session safety](darlane.md#session-safety--tools-audit-data-boundary)), in-cluster inference rule, TTL bounds, per-identity SAs | Session audit is 📋 designed, not built — today the mitigation is the opt-in gates + platform logging only |
+| **Darlane data exfiltration** | Dev/agent session with real traffic forwards data out | Session audit (designed, [session safety](darlane.md#session-safety--tools-audit-data-boundary)), in-cluster inference rule, per-identity SAs (session expiry dropped 2026-10-22) | Session audit is 📋 designed, not built — today the mitigation is the opt-in gates + platform logging only |
 | **Forge/workflow tampering** | Malicious PR edits CI to exfiltrate or self-approve | pr-validate on PRs; `no-commit-to-branch` local hook; release commits via explicit `SKIP` | **No branch protection asserted server-side** (the hook is local/bypassable); GitHub env secrets exposure via workflow edits unreviewed |
 | **DoS / noisy tenant** | Metrics cardinality bombs, resource exhaustion | Composition-enforced `sampleLimit`; quotas via Kyverno policies | No `NetworkPolicy` emission; ResourceQuota not composed per tenant |
 | **Information disclosure — infra details** | Docs/changelog leaking internal endpoints | Deliberate line drawn: Gitea hostname public (access-gated), SSH port never published; install manifests scrubbed to public registry | Periodic re-scan is manual; no CI check for hostname/port patterns |
@@ -76,7 +77,7 @@ developer / SRE agent ──▶ Darlane pod (real secrets, real traffic)   ← B
 ## Gaps — ordered, honest
 
 1. **Server-side branch protection** on GitHub before external contributors arrive — the local hook is advisory.
-2. ~~`SECURITY.md`~~ — done: GitHub Security Advisories as the private disclosure channel; this doc is its content.
+2. ~~`SECURITY.md`~a~ — done: GitHub Security Advisories as the private disclosure channel; this doc is its content.
 3. **Image digests + signing** (cosign or equivalent) for functions/providers and published packages.
 4. **NetworkPolicy story** — direction decided, not built: Kyverno generates per-namespace NetworkPolicies from the owner label — generating restrictions is allowed, grants are not ([access model](access-model.md#what-kyverno-may-generate)). Note the ordering: **flow data is how a NetworkPolicy gets authored without breaking production** — observe what actually talks, then deny the rest. Doing this without O13 is guesswork.
 5. **No runtime (kernel-level) detection** — Falco/Tetragon/KubeArmor are all absent, so a container that is compromised *after* admission is unobserved. The mitigations above are all preventive (admission, schema, RBAC); nothing detects post-exploitation. Deliberately not urgent at Tier 1 — every option is a privileged fleet-wide DaemonSet, and the real cost is rule tuning rather than install — but it is the largest structural blind spot in this table. Collection path and tool trade-offs: [`observability.md §the kernel plane`](observability.md#the-kernel-plane--flows-and-runtime-security); *what* to detect belongs here.

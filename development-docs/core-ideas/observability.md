@@ -604,7 +604,7 @@ deploys it, not after.
 - [`tenant-app.md`](../../docs/api-reference/tenant-app.md) — the full `XTenantApp` schema
 - [`development-docs/_archives/ROADMAP.md`](../_archives/ROADMAP.md) — archived; the work item this describes
 - [`release-notes/README.md`](../../release-notes/README.md) — the `safe`/`careful`/`breaking` change-tier taxonomy
-- [`multi-cluster.md`](multi-cluster.md) — Alloy pushing over mTLS to an observability cluster reached by name; the archived
+- [`multi-cluster.md`](multi-cluster.md) — Alloy pushing over mTLS to the LGTM stack on the hub (or a dedicated observability cluster) reached by name; the archived
   [`multi-cluster.md`](../_archives/multi-cluster.md) — per-cluster observability endpoints, later
 - [`multi-cluster-connectivity.md`](../_archives/multi-cluster-connectivity.md#observability-plane) — the
   observability plane in the four-plane architecture, and why the push topology follows from the
