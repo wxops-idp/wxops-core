@@ -1,0 +1,12 @@
+# A shared namespace every subject of the persona reaches — groups, users and an agent's ServiceAccount alike.
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPersonaBinding
+metadata:
+  name: agents-view-tools
+spec:
+  parameters:
+    personaRef:
+      name: agents
+    role: wxops:persona-viewers
+    scope: namespaces
+    namespaces: [shared-tools, observability]

@@ -121,8 +121,7 @@ spec:
     description: Builds and deploys outside production
     environments: [dev, staging]                   # clusters this persona's bindings and rules apply on
     members:
-      teamSelector:                                # generated: every labelled XScmTeam contributes status.oidcGroup
-        matchLabels: {auth.wxops.cloud/persona-developers: "true"}
+      teams: true                                  # generated: every XScmTeam labelled auth.wxops.cloud/persona-developers contributes status.oidcGroup
       groups: []                                   # by hand: "<org>:<team>" strings outside XScmTeam
       users: []                                    # by hand: a Dex username, for the rare individual
       serviceAccounts: []                          # agents: {namespace, name}
@@ -165,7 +164,7 @@ spec:
 | `scope` | Renders | Subjects |
 |---|---|---|
 | **`owned`** (default) | one `RoleBinding` in every namespace labelled `wxops.cloud/owner: <team>` | only the persona's members **whose team is that owner** — `wxops-idp:payment` in `payment`'s namespaces, never in `checkout`'s |
-| **`namespaces`** | one `RoleBinding` in each listed or selected namespace (`names: [shared-tools]`, or a label `selector`) | every subject of the persona |
+| **`namespaces`** | one `RoleBinding` in each listed or selected namespace (`namespaces: [shared-tools]`) | every subject of the persona |
 | **`platform`** | one `ClusterRoleBinding` to a `wxops:platform-*` role | every subject of the persona; ownership of each Core XR is RFC-005's Kyverno seal |
 
 - **Environments gate the render.** The composition reads its own cluster's environment; if it is not in the persona's `environments`, it renders no binding
@@ -199,7 +198,7 @@ namespace, so one role serves both: cluster-scoped kinds through the `ClusterRol
 team can no longer read them.
 
 Adding a permission is one small `ClusterRole` with one label; every persona bound to that role gains it, in every cluster. The pieces live in `providers/` as
-`rbac-aggregate-*.yaml`, one file per API group, applied once per cluster with the providers — **compositions write bindings, never roles**.
+`rbac/aggregate-*.yaml`, applied once per cluster with the providers — **compositions write bindings, never roles**.
 
 #### Promotion
 
@@ -223,7 +222,7 @@ would need RBAC-writing power. This RFC narrows the rule instead of dropping it:
 | Allowed | Not allowed |
 |---|---|
 | The `XPersonaBinding` composition, and only it, emits `RoleBinding` and `ClusterRoleBinding` | Any other composition emitting `rbac.authorization.k8s.io` — enforced by `tests/invariants.py` |
-| provider-kubernetes holds `bind` on `clusterroles`, restricted by `resourceNames` to `view`, `edit`, `admin`, the three `wxops:platform-*` roles and each listed `wxops:*` role — granted in `providers/rbac-provider-kubernetes.yaml` | `escalate`; any write to `Role` or `ClusterRole`; `bind` on `cluster-admin` |
+| provider-kubernetes holds `bind` on `clusterroles`, restricted by `resourceNames` to `view`, `edit`, `admin`, the three `wxops:platform-*` roles and each listed `wxops:*` role — granted in `providers/rbac/provider-kubernetes.yaml` | `escalate`; any write to `Role` or `ClusterRole`; `bind` on `cluster-admin` |
 | The platform writes `XPersona`, `XPersonaBinding`, `XPlatformPolicy` | Tenants writing any `auth.wxops.cloud` kind — no role aggregates them, and an `XPlatformPolicy` guard refuses it |
 
 `bind` lets the provider create a binding to a role without holding the role's permissions, so the provider does not become `admin` everywhere to grant
@@ -244,8 +243,9 @@ metadata:
 spec:
   parameters:
     template: exec-guard
-    personas: [owners]                              # optional — omitted, the rule applies to every SCM user
-    environments: [dev, staging, prod]
+    scmOrgs: [wxops-idp]                            # the orgs whose "<org>:<team>" groups make a caller an SCM user
+    personaRef: {name: owners}                      # exec-guard only: the persona that may exec
+    exemptPersonaRef: {name: platform}              # optional: a persona the policy does not apply to
     mode: Audit                                     # Audit | Deny — every policy starts in Audit
 ```
 
@@ -366,6 +366,24 @@ Every decision leaves a record a person can be named in:
 | [RFC-008](008-built-in-tools-identity-and-catalog.md) | Each tool's native grant (an `AppProject` role, a `GrafanaFolder`, an OpenBao group alias) names the groups of the persona that reaches it |
 | [Access model](../core-ideas/access-model.md) | Personas as XRs; Kyverno may mutate once — `owner-stamp` |
 
+### As built (2026-10-26)
+
+Where the first implementation chose differently from the sketches above:
+
+- **`XPersona.members.teams` is a switch, not a selector.** The label key holds the persona's name (`auth.wxops.cloud/persona-<name>`), which a fixed pipeline
+  selector cannot express; the composition fetches every sign-in-able `XScmTeam` and filters in KCL.
+- **An unlabelled namespaced object takes its namespace's owner.** `owner-seal` reads the object's `wxops.cloud/owner`, else the namespace's — so objects that
+  predate the label stay sealed. A cluster-scoped object has no namespace, so Core XRs must carry the label. `owner-seal` also has the Core options RFC-005 asks for:
+  `ownerPattern` and `immutableOwner`.
+- **`environments` is declared, not yet enforced** — on `XPersona` it is echoed to status; `exec-guard` takes no `environments` until the multi-cluster feature gives
+  clusters an environment.
+- **Persona refs are always present** (`personaRef`, `exemptPersonaRef` default to an empty name), because `function-extra-resources` fails on a missing optional field
+  path. A missing persona renders the policy stricter and says so in `syncMessage`.
+- **Access reviews, events and leases are excluded** from `owner-seal` and `protected`, or `kubectl auth can-i` would be refused.
+- **Policies run no background scan** — they read `request.userInfo`, which a scan does not have; PolicyReports come from admission.
+- **Persona `ClusterRole`s are `wxops:persona-*`** and aggregate the standard `view`/`edit`/`admin` pieces by their own labels; `XPersonaBinding` accepts exactly the
+  roles `provider-kubernetes` holds `bind` on, and an invariant keeps the two lists equal.
+
 ### Compatibility and change tier
 
 Three new packages under `package/auth/` with new XRDs at `v1alpha1`, `scope: Cluster` like the rest of `auth.wxops.cloud`. No existing XRD changes. The
@@ -433,11 +451,12 @@ Run on one cluster with two test teams, `team-a` and `team-b`, before this RFC i
   `RoleBinding` to `edit` with only `bind`; **Kyverno unavailable** — with policies matching SCM users only, do controller and Argo CD writes still pass, or
   does the webhook (`failurePolicy: Fail`) refuse every request it is registered for? Check whether Kyverno carries the policies' `matchConditions` into its
   webhook configuration, where the API server evaluates them before calling Kyverno.
-- [ ] **Phase 1 — `XPersona`.** Members resolved into status; nothing granted.
-- [ ] **Phase 2 — `XPersonaBinding`.** `owned` and `namespaces` with `view` and `edit`; the aggregation pieces; then `wxops:platform-*` and `scope: platform`.
-  The narrowed rule's ADR lands here. **`rbac-guard` ships with this phase, in `Deny`**, and `admin` is not bound to anyone before it enforces.
-- [ ] **Phase 3 — `XPlatformPolicy` in `Audit`.** `owner-stamp`, `owner-seal`, `secret-readonly`, `exec-guard`, `protected`; label existing namespaces and objects from
-  the reports. The acceptance matrix passes.
+- [x] **Phase 1 — `XPersona`.** Built (2026-10-26): `package/auth/persona`, offline tests green; cluster proof pending.
+- [x] **Phase 2 — `XPersonaBinding`,** built: `owned`, `namespaces` and `platform`, the aggregated roles under `providers/rbac/aggregate-*.yaml`, `provider-kubernetes`'s
+  `bind` grant, and the narrowed invariant. Cluster proof and the ADR pending. **`rbac-guard` ships with this phase, in `Deny`**, and `admin` is not bound to anyone before
+  it enforces.
+- [ ] **Phase 3 — `XPlatformPolicy` in `Audit`.** Built (all six templates render and compile on the cluster's Kyverno, checked by a server-side dry run); behaviour is
+  unproven until the acceptance matrix passes. Label existing namespaces and objects from the reports.
 - [ ] **Phase 4 — `Deny`,** template by template, once its reports are clean.
 - [ ] **Phase 5 — audit pipeline.** The API server audit policy at bootstrap, shipped with PolicyReports to Loki.
 - [ ] **Phase 6 — tools.** Argo CD, Grafana and OpenBao grants name persona groups, per [RFC-008](008-built-in-tools-identity-and-catalog.md).
@@ -456,7 +475,7 @@ Settled 2026-10-24:
 1. **Kind names — settled:** `XPersona`, `XPersonaBinding`, `XPlatformPolicy`. "Guardrail" is left to the AI topics it usually names.
 2. **A dedicated identity for binding writes — settled:** not now. The `resourceNames` list and the invariant hold the provider path; a dedicated identity comes
    only if a composition ever passes user-supplied manifests through.
-3. **Where the aggregation pieces live — settled:** `providers/rbac-aggregate-*.yaml`, beside `rbac-provider-kubernetes.yaml`, which also carries the `bind`
+3. **Where the aggregation pieces live — settled:** `providers/rbac/aggregate-*.yaml`, beside `rbac/provider-kubernetes.yaml`, which also carries the `bind`
    grant. The three `wxops:platform-*` roles are defined there too.
 4. **`exec` in production — settled:** allowed to `owners` through `exec-guard`, audited. Darlane finds its own path in its redesign.
 5. **Free-form CEL — settled:** templates only. Each template offers a few options a user can choose from; the template set grows from what users actually

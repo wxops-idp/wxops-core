@@ -278,7 +278,7 @@ cert-manager requests the certificate via the named `ClusterIssuer` and writes t
 **Prerequisites:** cert-manager installed in-cluster (`kubectl get crd certificates.cert-manager.io`), and the named `ClusterIssuer` exists and is ready
 (`kubectl get clusterissuer letsencrypt-prod`).
 
-**RBAC:** provider-kubernetes requires `cert-manager.io/certificates` in its ClusterRole — this is included in `providers/rbac-provider-kubernetes.yaml`.
+**RBAC:** provider-kubernetes requires `cert-manager.io/certificates` in its ClusterRole — this is included in `providers/rbac/provider-kubernetes.yaml`.
 
 #### SSO via oauth2-proxy
 
@@ -314,7 +314,7 @@ endpoint list and **stops being scraped — exactly when its metrics matter most
 The emitted monitor carries `release: kube-prometheus-stack`, which the Operator filters on (`serviceMonitorSelectorNilUsesHelmValues: true`), and selects on
 `app.kubernetes.io/component: app` so the Darlane twin's metrics never merge into the app's own series.
 
-> Requires `monitoring.coreos.com` in `providers/rbac-provider-kubernetes.yaml`. Without it every emitted monitor fails `forbidden` at reconcile.
+> Requires `monitoring.coreos.com` in `providers/rbac/provider-kubernetes.yaml`. Without it every emitted monitor fails `forbidden` at reconcile.
 
 ## Developer access and RBAC
 

@@ -1,0 +1,11 @@
+# expect: mode
+# expect: is not one of
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPlatformPolicy
+metadata:
+  name: nope
+spec:
+  parameters:
+    template: secret-readonly
+    scmOrgs: [wxops-idp]
+    mode: Warn

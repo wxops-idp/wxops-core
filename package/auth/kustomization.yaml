@@ -1,4 +1,4 @@
-# The `auth.wxops.cloud` category: OIDC configuration, Dex the first broker (RFC-004).
+# The `auth.wxops.cloud` category: OIDC configuration, Dex the first broker (RFC-004), and SCM personas (RFC-009).
 #
 #   kubectl apply -k package/auth/     — install just this category from source
 #
@@ -11,3 +11,6 @@ resources:
   - oidc-static-password
   - oidc-client
   - oidc-connector
+  - persona
+  - persona-binding
+  - platform-policy

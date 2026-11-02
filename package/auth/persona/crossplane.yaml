@@ -1,0 +1,17 @@
+apiVersion: meta.pkg.crossplane.io/v1
+kind: Configuration
+metadata:
+  name: persona
+  annotations:
+    meta.crossplane.io/maintainer: W'xOps Platform Team
+    meta.crossplane.io/description: A persona — a title that collects SCM teams, users and agents into RBAC subjects, with the environments it applies on. Grants nothing by itself.
+    meta.crossplane.io/source: github.com/wxops-idp/wxops-core
+    meta.crossplane.io/license: Apache-2.0
+spec:
+  crossplane:
+    version: ">=v2.3.0-0"
+  dependsOn:
+    - function: xpkg.upbound.io/crossplane-contrib/function-kcl
+      version: ">=v0.12.1"
+    - function: xpkg.upbound.io/crossplane-contrib/function-extra-resources
+      version: ">=v0.3.0"

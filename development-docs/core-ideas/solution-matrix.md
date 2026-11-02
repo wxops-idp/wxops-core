@@ -40,7 +40,7 @@ The current focus, in order. Everything else on this page waits behind it.
 | I6 | `kubectl` on any cluster, as yourself | Pinniped (Supervisor trusts Dex, Concierge per cluster, bootstrap) → RBAC → Kyverno | 🔶 Pinniped installed; `userInfo` in Kyverno to spike | [access model](access-model.md#kubernetes-pinniped--rbac--kyverno) |
 | I7 | Access that ends on its own | A time-bound `XPersonaBinding` with `expires-at`; a Kyverno `DeletingPolicy` deletes it and Crossplane removes its RoleBindings | 📋 | [access model](access-model.md#temporary-access-checked-then-terminated) |
 | I8 | Explaining access — who can reach X, what a PR changes | Kubernetes answers it (`kubectl auth can-i --list --as-group`); a PR report built on it later; the API server audit log and PolicyReports for what happened | 📋 | [RFC-009](../rfc/009-scm-personas.md#audit) · [access model](access-model.md#changing-access-is-a-pull-request) |
-| I9 | Tenant kinds other teams cannot even read | Namespaced tenant kinds in the `XTenantApp` / `XTenantDatabase` redesign; the namespace is the owner, bound per owned namespace | 📋 direction — needs namespaced managed resources in each provider | [darlane](darlane.md#xdarlane--a-workspace-claim-of-its-own) · [RFC-005](../rfc/005-git-mapped-authorization.md#alternatives) |
+| I9 | Tenant kinds other teams cannot even read | Namespaced tenant kinds in the `XTenantApp` / `XTenantDatabase` redesign; the namespace is the owner, bound per owned namespace | 📋 direction — namespaced managed resources exist in every installed provider (`.m` kinds) | [darlane](darlane.md#xdarlane--a-workspace-claim-of-its-own) · [RFC-005](../rfc/005-git-mapped-authorization.md#alternatives) |
 
 ## Multi-cluster
 
@@ -66,7 +66,7 @@ the archived CAPI-era design and are retired.
 | # | Problem | Answer | State | Where |
 |---|---|---|---|---|
 | O1 | Per-app metrics scrape | `ServiceMonitor`/`PodMonitor` emission | ✅ `XTenantApp` `monitoring` | [observability](observability.md) |
-| O2 | Readiness the portal can poll | `created`/`ready`/`synced`/`syncMessage` on every package | ✅ all eleven | [status contract](../../docs/api-reference/status-contract.md) |
+| O2 | Readiness the portal can poll | `created`/`ready`/`synced`/`syncMessage` on every package | ✅ all fourteen | [status contract](../../docs/api-reference/status-contract.md) |
 | O3 | Partial health (app up, TLS pending) | `ready` / `dependenciesReady` split | ✅ `XTenantApp` | [status contract](../../docs/api-reference/status-contract.md) |
 | O4 | Cardinality in a shared Prometheus | `sampleLimit` set by the composition | ✅ | [observability](observability.md#cardinality) |
 | O5 | Status says *which*, not *why* | `status.notReady` reasons | ❌ `safe`, all packages | [self-service](self-service-operations.md#whats-missing) |
@@ -117,7 +117,7 @@ the archived CAPI-era design and are retired.
 **Existing packages** (all `safe`): `status.notReady` (O5) · `monitoring.alerts` (O6) · `scheduling:` and wider `resources` (M12) · `wxops.cloud/owner`
 stamped onto workloads (I5).
 
-**New packages:** a cluster membership kind (M15) · `XDarlane` (A10, A11) · `persona`, `persona-binding`, `platform-policy` in `package/auth/`, with `rbac-aggregate-*` in `providers/` (I3, I5).
+**New packages:** a cluster membership kind (M15) · `XDarlane` (A10, A11) · `persona`, `persona-binding`, `platform-policy` in `package/auth/`, with `aggregate-*` roles in `providers/rbac/` (I3, I5).
 
 **Platform infrastructure** (installed, not composed): Pinniped and the Kyverno controller, at bootstrap · grafana-operator and `provider-vault` on the hub (RFC-008) · Argo CD Agent principal and agents · the W'xOps mesh resolver and
 gateways · Alloy and the LGTM stack · an event exporter (O11) · k8gb (M8) · Hubble or Falco where chosen (O13, O15).

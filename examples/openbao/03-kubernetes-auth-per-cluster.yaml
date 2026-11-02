@@ -1,0 +1,51 @@
+# Design — see development-docs/core-ideas/multi-cluster.md ("Secrets across clusters"). Workloads (External Secrets Operator first) log in with Kubernetes auth,
+# ONE MOUNT PER CLUSTER, created when the cluster joins the fleet. OpenBao checks a ServiceAccount token with a TokenReview against that cluster's API, reached by its
+# mesh name over mTLS; removing the mount revokes the cluster. JWT/OIDC login (02-) is for people only.
+apiVersion: auth.vault.upbound.io/v1alpha1
+kind: Backend
+metadata:
+  name: kubernetes-spoke-a
+spec:
+  providerConfigRef:
+    name: vault-provider-config
+  forProvider:
+    type: kubernetes
+    path: kubernetes-spoke-a
+    description: Workload login for cluster spoke-a
+---
+apiVersion: kubernetes.vault.upbound.io/v1alpha1
+kind: AuthBackendConfig
+metadata:
+  name: kubernetes-spoke-a
+spec:
+  providerConfigRef:
+    name: vault-provider-config
+  forProvider:
+    backend: kubernetes-spoke-a
+    kubernetesHost: https://kubernetes.default.spoke-a.wxops.internal:443
+    kubernetesCaCert: |
+      -----BEGIN CERTIFICATE-----
+      (the spoke API server's CA)
+      -----END CERTIFICATE-----
+    disableLocalCaJwt: true
+    # The reviewer: a ServiceAccount token bound to system:auth-delegator on the spoke, handed over at join (multi-cluster open decision 8).
+    tokenReviewerJwtSecretRef:
+      name: spoke-a-token-reviewer
+      namespace: crossplane-system
+      key: token
+---
+# ESO's way in: only its ServiceAccount, only the policies for this cluster's tenants.
+apiVersion: kubernetes.vault.upbound.io/v1alpha1
+kind: AuthBackendRole
+metadata:
+  name: kubernetes-spoke-a-eso
+spec:
+  providerConfigRef:
+    name: vault-provider-config
+  forProvider:
+    backend: kubernetes-spoke-a
+    roleName: external-secrets
+    boundServiceAccountNames: [external-secrets]
+    boundServiceAccountNamespaces: [external-secrets]
+    tokenPolicies: [wxops-payment-read]
+    tokenTtl: 3600

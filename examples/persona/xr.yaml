@@ -1,0 +1,15 @@
+# The persona most teams are in (RFC-009). A persona only collects who it applies to; XPersonaBinding grants kinds to it and XPlatformPolicy seals objects for it
+# (see examples/persona-binding and examples/platform-policy). Siblings in this folder: viewers, owners, platform — the four default personas.
+#
+# A team joins a persona with a label on its XScmTeam (platform-only — see examples/scm-team/xr.yaml), one label per persona:
+#   labels:
+#     scm.wxops.cloud/oidc-login: "true"
+#     auth.wxops.cloud/persona-developers: "true"
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPersona
+metadata:
+  name: developers
+spec:
+  parameters:
+    description: Builds and deploys outside production
+    environments: [dev, staging]

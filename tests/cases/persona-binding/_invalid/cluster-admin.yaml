@@ -1,0 +1,14 @@
+# expect: role
+# expect: 'cluster-admin' is not one of
+#
+# cluster-admin is never bindable — and neither is any role outside the XRD's list, which is exactly the list provider-kubernetes holds `bind` on.
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPersonaBinding
+metadata:
+  name: nope
+spec:
+  parameters:
+    personaRef:
+      name: platform
+    role: cluster-admin
+    scope: platform

@@ -1,6 +1,6 @@
 # W'xOps Core
 
-[![Release](https://img.shields.io/github/v/release/wxops-idp/wxops-core?label=release)](https://github.com/wxops-idp/wxops-core/releases)<!-- badges-dynamic-start --> [![Packages](https://img.shields.io/badge/packages-11-blue)](#packages) [![API](https://img.shields.io/badge/API-v1alpha1-orange)](docs/api-reference/status-contract.md#api-version)<!-- badges-dynamic-end --> [![Crossplane](https://img.shields.io/badge/Crossplane-v2.3-blueviolet)](https://docs.crossplane.io/v2.3/) [![License](https://img.shields.io/github/license/wxops-idp/wxops-core)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/wxops-idp/wxops-core?label=release)](https://github.com/wxops-idp/wxops-core/releases)<!-- badges-dynamic-start --> [![Packages](https://img.shields.io/badge/packages-14-blue)](#packages) [![API](https://img.shields.io/badge/API-v1alpha1-orange)](docs/api-reference/status-contract.md#api-version)<!-- badges-dynamic-end --> [![Crossplane](https://img.shields.io/badge/Crossplane-v2.3-blueviolet)](https://docs.crossplane.io/v2.3/) [![License](https://img.shields.io/github/license/wxops-idp/wxops-core)](LICENSE)
 
 ***"Ask Kubernetes for a GitHub repository, a PostgreSQL database, or a full application deployment — get a real one back."***
 
@@ -53,6 +53,9 @@ actually executes underneath (HCL run in-cluster against a Gitea or GitHub provi
 | [`oidc-static-password`](package/auth/oidc-static-password/) | `XOIDCStaticPassword` | `auth.wxops.cloud` | `v1alpha1` | `release-2026-10-16` |
 | [`oidc-client`](package/auth/oidc-client/) | `XOIDCClient` | `auth.wxops.cloud` | `v1alpha1` | `release-2026-10-16` |
 | [`oidc-connector`](package/auth/oidc-connector/) | `XOIDCConnector` | `auth.wxops.cloud` | `v1alpha1` | `release-2026-10-16` |
+| [`persona`](package/auth/persona/) | `XPersona` | `auth.wxops.cloud` | `v1alpha1` | `unreleased` |
+| [`persona-binding`](package/auth/persona-binding/) | `XPersonaBinding` | `auth.wxops.cloud` | `v1alpha1` | `unreleased` |
+| [`platform-policy`](package/auth/platform-policy/) | `XPlatformPolicy` | `auth.wxops.cloud` | `v1alpha1` | `unreleased` |
 <!-- packages-table-end -->
 
 > [!NOTE]
@@ -279,8 +282,8 @@ kubectl get clustersecretstores.external-secrets.io vault-platform
 Next setup CrossPlane Providers, Functions, and Configuration required to operate these packages each others
 
 ```bash
-make providers                                            # providers once per cluster
-make provider-configs                                     # ProviderConfigs, once their CRDs are served
+make providers                                            # functions, provider packages, RBAC, then ProviderConfigs — once per cluster
+                                                          # (or one category: providers-functions · -packages · -rbac · -config)
 bao kv put platform/scm/github-wxops-idp/credentials token="your-admin-or-pat-token"
 make install                                              # packages from the OCI registry
 kubectl api-resources | grep -i "wxops.cloud"             # check the packages worked in your cluster as CRDs

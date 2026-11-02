@@ -1,0 +1,8 @@
+# ProviderConfigs — how each provider reaches what it manages. They can only be created once their provider's CRDs are served, so a cold cluster
+# applies them last: `make providers-config` (alias `make provider-configs`) waits for each ProviderConfig API, then applies this directory.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - providerconfig-kubernetes.yaml      # provider-kubernetes: InjectedIdentity, in-cluster
+  - providerconfig-opentofu.yaml        # provider-opentofu: Kubernetes state backend, secret_suffix tofu-state
+  - providerconfig-vault.yaml           # provider-vault: OpenBao address and the out-of-band vault-credentials Secret

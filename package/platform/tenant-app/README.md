@@ -16,11 +16,11 @@ in KCL — see [`kcl/tenant-app/main.k`](../../../kcl/tenant-app/main.k).
 Install once per cluster (`make providers`):
 
 ```bash
-kubectl apply -f providers/provider-kubernetes.yaml
-kubectl apply -f providers/rbac-provider-kubernetes.yaml
-kubectl apply -f providers/runtimeconfig-provider-kubernetes.yaml
-kubectl apply -f providers/providerconfig-kubernetes.yaml
-kubectl apply -f providers/function-kcl.yaml
+kubectl apply -f providers/packages/provider-kubernetes.yaml
+kubectl apply -f providers/rbac/provider-kubernetes.yaml
+kubectl apply -f providers/packages/runtimeconfig-provider-kubernetes.yaml
+kubectl apply -f providers/config/providerconfig-kubernetes.yaml
+kubectl apply -f providers/functions/function-kcl.yaml
 ```
 
 Optional, depending on which fields are enabled:

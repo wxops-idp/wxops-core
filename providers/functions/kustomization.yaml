@@ -1,0 +1,7 @@
+# Crossplane Functions — the composition pipeline steps. Apply: `make providers-functions` (or `kubectl apply -k providers/functions`).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - function-patch-and-transform.yaml   # single-resource Workspaces and Objects (scm-*, oidc-connection)
+  - function-kcl.yaml                   # multi-resource compositions (platform-database-clusters, tenant-*, oidc-*, persona*, platform-policy)
+  - function-extra-resources.yaml       # discovery of existing XRs and namespaces (tenant-database, oidc-*, persona*, platform-policy)

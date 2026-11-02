@@ -74,6 +74,9 @@ API group (`platform`, `scm`, ...) is per package — see [ADR-002](../developme
 | [oidc-static-password](api-reference/oidc-static-password.md) | `XOIDCStaticPassword` | A local broker user — bootstrap admin, break-glass — ESO-generated or operator-defined |
 | [oidc-client](api-reference/oidc-client.md) | `XOIDCClient` | A downstream OAuth client that logs in through the broker |
 | [oidc-connector](api-reference/oidc-connector.md) | `XOIDCConnector` | An upstream Git vendor connector, team allow-list generated from `XScmTeam` |
+| [persona](api-reference/persona.md) | `XPersona` | A title that collects SCM teams, users and agents into RBAC subjects |
+| [persona-binding](api-reference/persona-binding.md) | `XPersonaBinding` | Binds a persona to a standard, persona or Platform API role, per owned namespace |
+| [platform-policy](api-reference/platform-policy.md) | `XPlatformPolicy` | One reviewed Kyverno CEL policy per resource — owner seal, read-only Secrets, exec, protected, RBAC guard |
 | [status-contract](api-reference/status-contract.md) | all | Every package's `status` fields on one page: the absent-vs-`false` split, `ready` vs `dependenciesReady` |
 
 ### User guide

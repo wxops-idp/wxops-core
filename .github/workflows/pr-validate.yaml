@@ -156,7 +156,7 @@ jobs:
           # Cache key derived from the pinned function versions, so a version bump
           # invalidates the cache and anything else reuses it.
           printf 'key=%s\n' \
-            "$(cat providers/function-*.yaml | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+            "$(cat providers/functions/function-*.yaml | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
 
       - name: Restore function image cache
         id: imgcache
@@ -173,7 +173,7 @@ jobs:
         if: steps.imgcache.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
-          imgs=$(grep -h 'package:' providers/function-*.yaml | awk '{print $2}')
+          imgs=$(grep -h 'package:' providers/functions/function-*.yaml | awk '{print $2}')
           imgs="$imgs xpkg.crossplane.io/crossplane/crossplane:stable"
           for i in $imgs; do
             echo "pulling $i"

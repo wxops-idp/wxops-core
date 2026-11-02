@@ -23,9 +23,9 @@ CASES = ROOT / "tests" / "cases"
 # Every function any composition references. Missing one fails with the
 # unhelpful "unknown function ... is it listed in the render input?".
 FUNCTIONS = [
-    "providers/function-kcl.yaml",
-    "providers/function-patch-and-transform.yaml",
-    "providers/function-extra-resources.yaml",
+    "providers/functions/function-kcl.yaml",
+    "providers/functions/function-patch-and-transform.yaml",
+    "providers/functions/function-extra-resources.yaml",
 ]
 
 # Fields stripped before comparison: values change on every render and carry no

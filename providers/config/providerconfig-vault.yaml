@@ -1,0 +1,15 @@
+# provider-vault → OpenBao, in-cluster on the hub. The credentials Secret is created by hand (out of band — the first credential of a secret store cannot come
+# from the store): a periodic, non-root token whose policy can configure auth backends, mounts, policies and identity groups but cannot read a KV value.
+#   kubectl -n crossplane-system create secret generic vault-credentials --from-literal=credentials=<token>
+apiVersion: vault.upbound.io/v1beta1
+kind: ProviderConfig
+metadata:
+  name: vault-provider-config
+spec:
+  address: http://openbao.openbao.svc.cluster.local:8200
+  credentials:
+    source: Secret
+    secretRef:
+      namespace: crossplane-system
+      name: vault-credentials
+      key: credentials

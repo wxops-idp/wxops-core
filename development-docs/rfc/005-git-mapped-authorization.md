@@ -118,7 +118,7 @@ rules 1–3 — it onboards every team — and every one of its writes is in the
 ### RBAC — the coarse layer
 
 Three aggregated Platform API roles, defined in [RFC-009](009-scm-personas.md#extending-the-standard-roles-by-aggregation) and built from one piece per package
-in `providers/rbac-aggregate-*.yaml`:
+in `providers/rbac/aggregate-*.yaml`:
 
 | Role | Core kinds |
 |---|---|

@@ -13,7 +13,7 @@
 | Spoke cluster credentials | **Nowhere, by design goal** — the multi-cluster architecture is largely shaped by refusing to create this asset | Fleet-wide compromise |
 | Production traffic & payloads | In-cluster; reachable in Darlane steal-mode sessions | Data exfiltration |
 | The composition supply chain | `kcl/` → `composition.yaml` → OCI packages → every cluster | Malicious resources rendered fleet-wide |
-| provider-kubernetes's ClusterRole | `providers/rbac-provider-kubernetes.yaml` | The platform's own privilege ceiling becomes the attacker's |
+| provider-kubernetes's ClusterRole | `providers/rbac/provider-kubernetes.yaml` | The platform's own privilege ceiling becomes the attacker's |
 | The Gitea archive / GitHub repo | Forges | History tampering, workflow injection |
 
 ## Trust boundaries

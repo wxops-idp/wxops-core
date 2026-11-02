@@ -14,7 +14,7 @@ spec:
   # (cluster-scoped) the same way. The Crossplane SA needs RBAC for
   # providerconfigs.postgresql.sql.crossplane.io and roles.postgresql.sql.crossplane.io
   # (create/get/update/delete) for these to apply successfully — see
-  # providers/provider-sql.yaml.
+  # providers/packages/provider-sql.yaml.
   #
   # tenant-app additionally wraps deployments.apps, services, and
   # ingresses.networking.k8s.io (always), plus

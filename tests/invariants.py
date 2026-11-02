@@ -80,20 +80,64 @@ def _is_k8s_rbac(doc) -> bool:
             and str(doc.get("apiVersion", "")).split("/")[0] == RBAC_GROUP)
 
 
-@rule("no-rbac-emitted",
-      "Compositions must never emit Kubernetes RBAC. provider-kubernetes is "
-      "deliberately not granted rbac.authorization.k8s.io, so these would fail "
-      "`forbidden` — and granting it would make the provider a "
-      "privilege-escalation vector. RBAC belongs in the GitOps repo. "
-      "See development-docs/ROADMAP.md 'Decided and rejected'.")
-def no_rbac(docs, ctx):
+# RFC-009 narrows the old "compositions never emit RBAC" rule: ONE composition may emit bindings, and only to roles provider-kubernetes may `bind`.
+BINDING_KINDS = {"RoleBinding", "ClusterRoleBinding"}
+BINDING_PACKAGE = "persona-binding"
+PROVIDER_RBAC = R.ROOT / "providers" / "rbac" / "provider-kubernetes.yaml"
+
+
+def _bindable_roles() -> set[str]:
+    """The ClusterRoles provider-kubernetes holds `bind` on — the `resourceNames` of its `bind` rule."""
+    import yaml
+    for doc in yaml.safe_load_all(PROVIDER_RBAC.read_text()):
+        for r in (doc or {}).get("rules") or []:
+            if "bind" in (r.get("verbs") or []) and "clusterroles" in (r.get("resources") or []):
+                return set(r.get("resourceNames") or [])
+    return set()
+
+
+@rule("rbac-only-bindings-from-persona-binding",
+      "Compositions must not emit Kubernetes RBAC, with one narrow exception (RFC-009): the persona-binding composition may emit RoleBinding and "
+      "ClusterRoleBinding, only to a role provider-kubernetes holds `bind` on, never cluster-admin. A Role or ClusterRole is never emitted — that would let a "
+      "composition change what a role means everywhere at once — and no other composition emits a binding. Anything else would fail `forbidden`: "
+      "providers/rbac/provider-kubernetes.yaml grants no write on roles, and granting it would make the provider a privilege-escalation vector.")
+def rbac_only_bindings(docs, ctx):
     bad = []
+    bindable = _bindable_roles()
     for d in _composed(docs):
-        m = _wrapped(d)
-        if m and _is_k8s_rbac(m):
-            bad.append(f"{_name(d)} wraps a {m['apiVersion']} {m['kind']}")
-        if _is_k8s_rbac(d):
-            bad.append(f"{_name(d)} is a {d['apiVersion']} {d['kind']}")
+        for doc, label in ((_wrapped(d), "wraps a"), (d, "is a")):
+            if not doc or not _is_k8s_rbac(doc):
+                continue
+            kind = doc["kind"]
+            what = f"{_name(d)} {label} {doc['apiVersion']} {kind}"
+            if kind not in BINDING_KINDS:
+                bad.append(f"{what} — roles are static manifests under providers/, never composed")
+            elif ctx.get("package") != BINDING_PACKAGE:
+                bad.append(f"{what} — only the {BINDING_PACKAGE} composition may emit bindings")
+            else:
+                role = ((doc.get("roleRef") or {}).get("name"))
+                if role == "cluster-admin" or role not in bindable:
+                    bad.append(f"{what} to {role!r}, which provider-kubernetes may not bind")
+    return bad
+
+
+@rule("persona-binding-roles-match-provider-bind",
+      "The roles XPersonaBinding accepts (its XRD enum) and the roles provider-kubernetes may bind (its `bind` resourceNames) are two lists of the same names. "
+      "A role in the enum but not the grant is accepted by the API and then fails `forbidden` at reconcile; a role in the grant but not the enum is power "
+      "no one can use and no one reviews.")
+def persona_binding_roles_match(docs, ctx):
+    if ctx.get("package") != BINDING_PACKAGE:
+        return []
+    import yaml
+    xrd = yaml.safe_load((R.ROOT / "package" / "auth" / "persona-binding" / "xrd.yaml").read_text())
+    props = xrd["spec"]["versions"][0]["schema"]["openAPIV3Schema"]["properties"]["spec"]["properties"]["parameters"]["properties"]
+    enum = set(props["role"]["enum"])
+    bindable = _bindable_roles()
+    bad = []
+    if enum - bindable:
+        bad.append(f"in the XRD enum but not bindable by the provider: {sorted(enum - bindable)}")
+    if bindable - enum:
+        bad.append(f"bindable by the provider but not in the XRD enum: {sorted(bindable - enum)}")
     return bad
 
 

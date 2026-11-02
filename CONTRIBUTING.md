@@ -133,7 +133,7 @@ A package lives at `package/<group>/<name>/`, where the group is the API group i
 - [ ] `docs/api-reference/<name>.md` + a row in [`docs/api-reference/README.md`](docs/api-reference/README.md)
 - [ ] **`tests/cases/<name>/` — see below**
 - [ ] A commit scope in [`cliff.toml`](cliff.toml)
-- [ ] Any new API group the composition targets → `providers/rbac-provider-kubernetes.yaml`
+- [ ] Any new API group the composition targets → `providers/rbac/provider-kubernetes.yaml`
 
 That last one has no offline test. provider-kubernetes runs with
 `InjectedIdentity` and Crossplane's RBAC manager grants it nothing on

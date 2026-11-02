@@ -1,0 +1,46 @@
+# OpenBao configuration as provider-vault managed resources (RFC-008) — configuration only, never a secret value (External Secrets Operator writes those).
+# Applied on the hub, through the ProviderConfig in providers/config/providerconfig-vault.yaml. Mounts are the Vault path convention's: `platform/` and `tenants/`, KV v2.
+#
+# Adopting what the hand-made setup already created: start every resource with  managementPolicies: ["Observe"]  and an `external-name` annotation naming the
+# existing object; once the observed state matches, drop the line to let Crossplane manage it.
+apiVersion: vault.vault.upbound.io/v1alpha1
+kind: Mount
+metadata:
+  name: platform
+spec:
+  providerConfigRef:
+    name: vault-provider-config
+  forProvider:
+    path: platform
+    type: kv
+    options:
+      version: "2"
+    description: Platform secrets — SCM credentials, database clusters, Dex records
+---
+apiVersion: vault.vault.upbound.io/v1alpha1
+kind: Mount
+metadata:
+  name: tenants
+spec:
+  providerConfigRef:
+    name: vault-provider-config
+  forProvider:
+    path: tenants
+    type: kv
+    options:
+      version: "2"
+    description: Per-team secrets under tenants/<owner>/
+---
+# A team's read access to its own prefix. KV v2 policy paths carry the data/ and metadata/ segments the mount-relative remoteKeys leave out.
+apiVersion: vault.vault.upbound.io/v1alpha1
+kind: Policy
+metadata:
+  name: wxops-payment-read
+spec:
+  providerConfigRef:
+    name: vault-provider-config
+  forProvider:
+    name: wxops-payment-read
+    policy: |
+      path "tenants/data/payment/*"     { capabilities = ["read"] }
+      path "tenants/metadata/payment/*" { capabilities = ["read", "list"] }

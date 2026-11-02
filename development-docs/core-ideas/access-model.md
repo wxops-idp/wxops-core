@@ -275,6 +275,44 @@ What to hold to:
 
 ---
 
+## Guardrail templates — built and next
+
+RBAC answers *which kinds, where*; it cannot say *only your team's object*, *not if it is protected*, or *only this persona, only where its team owns*. Those
+are the templates. Each is one reviewed KCL function in [`platform-policy`](../../docs/api-reference/platform-policy.md), matches SCM users only, and denies —
+it never grants. Free-form policies are not offered: [RFC-009](../rfc/009-scm-personas.md#open-questions) keeps it to templates.
+
+**Built (2026-10-26), exercised by [`examples/platform-policy/scenarios/`](../../examples/platform-policy/scenarios):**
+
+| Template | Protects |
+|---|---|
+| `owner-stamp` | An object created without an owner takes its namespace's `wxops.cloud/owner` — so `owner-seal` has something to check |
+| `owner-seal` | Write, relabel and delete only what one of your teams owns — two teams share a namespace without harming each other |
+| `secret-readonly` | Secrets come from External Secrets Operator out of OpenBao, never by hand |
+| `exec-guard` | `exec`, `attach`, `port-forward` only for one persona, only where its team owns — the doorway into a running workload's secrets |
+| `protected` | Objects labelled `wxops.cloud/protected: "true"` change only by the exempt (platform) persona |
+| `rbac-guard` | Bindings come only from `XPersonaBinding`; personas and policies only from the platform team |
+
+**Next, in this order:**
+
+| Addition | Why |
+|---|---|
+| **A scope on every template** — optional `namespaceSelector`, later `environments` | Today each policy is cluster-wide. A scope lets `exec-guard` run in `Deny` for production namespaces and `Audit` elsewhere; additive to the XRD, and `environments` waits on the cluster identity object ([multi-cluster](multi-cluster.md#open-decisions)) |
+| **`namespace-guard`** | SCM users cannot create Namespaces or change their `wxops.cloud/owner` and `auth.wxops.cloud/tenant-namespace` labels — the labels every other rule trusts |
+| **`break-glass`** | An exemption that expires (`until`, compared with `time.now()`) instead of a permanent `exemptPersonaRef` — the policy-side twin of [temporary access](#temporary-access-checked-then-terminated) |
+| **`env-gate`** | Stricter rules where the namespace's environment is production — no `exec`, `Deny` only |
+
+**What a template brings with it:** its KCL function, golden cases, a row in the scenario kit, and an offline `kyverno test` case built from the same rows.
+Workload rules — allowed registries, resource limits, pod security — are good Kyverno policies but not authorization, and stay out of `XPlatformPolicy` so the
+kind keeps one meaning.
+
+**Sources to check a new template against:**
+
+- [`kubescape/cel-admission-library`](https://github.com/kubescape/cel-admission-library) — Kubescape controls as native `ValidatingAdmissionPolicy` CEL
+- [`kubescape/regolibrary`](https://github.com/kubescape/regolibrary) — the same controls in Rego, scan-time, grouped into NSA, MITRE ATT&CK and CIS frameworks
+- [ARMO controls hub](https://hub.armosec.io/docs/controls) — one page per control
+
+---
+
 ## Third-party tools
 
 Login is the same everywhere — one `XOIDCClient` per tool, the same Dex, the same `groups` claim. Authorization stays in each tool's **own native objects**;
@@ -389,6 +427,54 @@ packages. Four rules keep it that way:
 4. **Kyverno denies**, mutates only to copy a namespace's owner, and generates only objects that narrow — never a grant; Crossplane makes
    every third-party write and every binding.
 
+### Kyverno alone, or behind `XPlatformPolicy`
+
+Kyverno enforces on its own; the layer above it is about where a policy's inputs come from and how a change to them is tested and delivered.
+
+| | Kyverno alone | Behind `XPlatformPolicy` |
+|---|---|---|
+| Who is an SCM user, who is exempt | Group lists hand-written into each policy's CEL, edited as teams change | Resolved from `XScmTeam` and `XPersona`, rendered in — a team joining is a label, not a policy edit |
+| What a rule may say | Any CEL, per author | Reviewed templates with parameters; one definition of *SCM user* and *owner* |
+| Tested by | Whatever each author writes | Golden renders, invariants, the scenario kit |
+| Relation to RBAC | Separate files, separate reviews | The same group and inputs as `XPersonaBinding` |
+| Status | Kyverno's own | `created`/`ready`/`synced`, like every W'xOps kind |
+
+A static policy could instead read an `XPersona` at admission time through Kyverno's `resource.Get` — no propagation delay, but an API read on every request
+and a policy no longer reviewable as a whole. Rendering is kept.
+
+### Related projects
+
+Most of these are authorization or tenancy; on authentication W'xOps composes Dex and Pinniped rather than competing. Checked 2026-10-28.
+
+| Project | What it is | Against W'xOps |
+|---|---|---|
+| [Capsule](https://projectcapsule.dev/) — CNCF Sandbox (accepted 2022) | A `Tenant` kind: owners (users, groups, ServiceAccounts) get `admin` over the tenant's namespaces, plus quotas and allowed classes and registries, enforced by its own controller and webhook | The closest overlap. Its tenants are declared by hand; W'xOps derives owners from SCM membership. Running both makes two owners of *tenant* |
+| [rbac-manager](https://github.com/FairwindsOps/rbac-manager) (Fairwinds) | `RBACDefinition` → `RoleBinding`s and `ClusterRoleBinding`s | `XPersonaBinding`'s job, without personas or guardrails |
+| [HNC](https://github.com/kubernetes-retired/hierarchical-namespaces) — **archived April 2025** (`kubernetes-retired`) | Namespace trees passing RBAC and objects down | A different shape — a tree instead of an owner label — and no longer maintained |
+| [vcluster](https://www.vcluster.com/) | A virtual control plane per tenant | Stronger isolation (its own API server); for a tenant that needs cluster-admin of its own |
+| [Gatekeeper](https://open-policy-agent.github.io/gatekeeper/website/), [Kubewarden](https://www.kubewarden.io/) | Other policy engines | Alternatives to Kyverno; the templates would port |
+| [ValidatingAdmissionPolicy](https://kubernetes.io/docs/reference/access-authn-authz/validating-admission-policy/) — GA in Kubernetes 1.30; MutatingAdmissionPolicy beta in 1.34 | CEL policies evaluated inside the API server, no webhook | Kyverno can generate one from a `ValidatingPolicy` (`spec.autogen.validatingAdmissionPolicy`) — the way to drop Kyverno from the request path; an open decision below |
+| [Teleport](https://goteleport.com/) | Access proxy: single sign-on, just-in-time access requests, session recording | Strong where W'xOps is thin — just-in-time access and audit — but a whole access platform on the request path |
+| [OpenFGA](https://openfga.dev/) — CNCF Incubating (2025), [SpiceDB](https://github.com/authzed/spicedb) | Relationship-based authorization | Expressive, but needs an authorization webhook and its own copy of the relationships; only behind AuthZEN (rule 3 above) |
+
+### Relationship-based access — above Kubernetes, never in it
+
+ReBAC (OpenFGA, SpiceDB) answers questions labels cannot carry far: many-to-many sharing between teams and apps, inheritance from org to team to app to
+environment, *why* someone holds a grant. It has three possible places, and only one fits:
+
+| Where | How | Fit |
+|---|---|---|
+| Kubernetes decides through it | An authorization webhook, or Kyverno's `http`/`globalContext`, asks *can X do Y on Z?* per request | No — a new engine on every request path, and an availability dependency for all of them ([what W'xOps does not build](#what-wxops-does-not-build)) |
+| It is the source; a controller expands it into bindings | Relationships live in the store; a custom controller turns them into personas and `RoleBinding`s | No — a second distribution mechanism beside Crossplane, which cannot do the expansion itself: compositions read Kubernetes objects, never call out |
+| **The Portal or a platform API decides through it; Crossplane feeds it** | Personas and teams stay the source. Crossplane writes them into the store as relationship tuples, like any projected tool; the Portal asks it for its own decisions and explanations, over AuthZEN | **Yes, when needed** — Kubernetes keeps RBAC and Kyverno, and Crossplane stays the one place access is distributed from |
+
+The feed is available off the shelf: the [OpenFGA Terraform provider](https://pkg.go.dev/github.com/openfga/terraform-provider-openfga) (`openfga/openfga`)
+manages authorization models and relationship tuples, so provider-opentofu can run it — the store itself must exist first; the provider does not create it.
+[SpiceDB has an official Kubernetes operator](https://authzed.com/docs/spicedb/getting-started/install/kubernetes) for running it, but only a community Terraform provider for its relationships (checked 2026-10-28).
+
+Not yet: the gaps it would close today — a maintainers team, a guest team — close with a label and a persona ([open decisions](#open-decisions) 6). It becomes
+worth a store when sharing outgrows labels, or the Portal must explain every grant.
+
 ---
 
 ## What W'xOps does not build
@@ -409,6 +495,8 @@ packages. Four rules keep it that way:
 - **Claims are a login-time snapshot.** Leaving a Git team takes effect at the next token; token lifetimes are the lever.
 - **Kubernetes reads stop at the namespace.** Admission never sees `get`, `list`, `watch` or `logs`; Core XRs are readable cluster-wide under `wxops:platform-view`.
 - **Access converges, it is not instant** — Argo sync, Crossplane reconcile, `DeletingPolicy` schedule.
+- **Separate on writes, shared on reads.** Two teams in one namespace cannot change each other's objects, but read everything their role allows; a person in
+  both teams owns both. A guest team must label its objects with its own owner — unlabelled, they take the namespace's owner and are refused.
 - **Gitea team names keep their case** (`wxops:Owners`) while GitHub groups are slugs, and RBAC matches groups exactly — the choices are
   [RFC-005 open question 11](../rfc/005-git-mapped-authorization.md#open-questions).
 
@@ -423,6 +511,24 @@ packages. Four rules keep it that way:
 4. **Grafana per-team access** — [RFC-008 open question 4](../rfc/008-built-in-tools-identity-and-catalog.md#open-questions); no W'xOps kind manages Grafana
    teams.
 5. **Elevation** — a time-bound `XPersonaBinding`; its maximum lifetime and who approves are [RFC-009](../rfc/009-scm-personas.md#rollout-plan)'s *Later*.
+6. **A second team on one owner.** A group is matched to an owner by its team slug, so `payment-maintainers` does not own what `payment` owns — not under
+   `scope: owned`, `owner-seal` or `exec-guard`. Needs a mapping, for example a `wxops.cloud/owner` label on that `XScmTeam`.
+7. **Reads are not sealed.** `edit` reads every Secret in its namespaces; `secret-readonly` blocks writes only. Accept and document it, or bind a role
+   without Secret reads.
+8. **Namespaces Kyverno skips.** This cluster's Kyverno `resourceFilters` exclude `kube-system` and `kyverno`, where the platform persona holds `admin`.
+   Whether those filters also apply to the CEL policy types is unverified; one scenario row settles it.
+9. **Native admission policies.** Generate a `ValidatingAdmissionPolicy` from each validating template, so a Kyverno outage stops blocking SCM users'
+   writes. Which templates translate, and what it costs in `Audit` reporting, is a spike.
+10. **Capsule or not.** Decide once, explicitly, that W'xOps's personas own the tenant concept — so Capsule is not added beside it later.
+11. **Relationship-based access for the Portal.** Whether the Portal or a platform API gets an OpenFGA store, fed by Crossplane, for its own decisions — never
+    for Kubernetes ([above](#relationship-based-access--above-kubernetes-never-in-it)).
+12. **System groups as persona members.** An `XPersona` listing `system:authenticated`, `system:unauthenticated` or any `system:` user binds everyone, or
+    no one accountable. Reject them in the XRD's CEL — one rule, no template (Kubescape C-0262, C-0265).
+13. **Acting as a ServiceAccount.** `edit`, and so `admin` and every persona role built on them, lets an SCM user impersonate any ServiceAccount in the
+    namespace and request its tokens — and as `system:serviceaccount:…` the templates no longer match. Inside a team's own namespace that is the accepted
+    meaning of `edit`; it matters where SCM users hold `edit`/`admin` beside platform ServiceAccounts (`wxops-platform`, `crossplane-system`, `kube-system`).
+    Options: no such grants outside the platform persona; a template denying SCM users `serviceaccounts/token`; persona roles built from W'xOps pieces instead
+    of the standard `edit`/`admin`. Impersonation itself is decided by RBAC before admission, so only the audit log records who acted.
 
 ---
 

@@ -113,7 +113,7 @@ discovered monitors on the Helm release name. The release name comes from the di
 [`kcl/tenant-app/main.k:663`](../../kcl/tenant-app/main.k) has an unnamed port. Two ways out, and the choice is a genuine trade-off — see [What
 changes](#what-changes) below.
 
-**4. Provider RBAC.** `providers/rbac-provider-kubernetes.yaml` enumerates every API group composed `Object` manifests may touch, and `monitoring.coreos.com` is
+**4. Provider RBAC.** `providers/rbac/provider-kubernetes.yaml` enumerates every API group composed `Object` manifests may touch, and `monitoring.coreos.com` is
 absent. Without it every emitted monitor fails `forbidden` at reconcile time.
 
 ## Cardinality
@@ -136,7 +136,7 @@ Classified against the tiers [`tests/README.md`](../../tests/README.md#test-api-
 | Add `monitoring` optional object with defaults | `package/platform/tenant-app/xrd.yaml` | `safe` |
 | Add ServiceMonitor, conditional emit | `kcl/tenant-app/main.k` | `safe` |
 | Add PodMonitor, conditional emit | `kcl/tenant-app/main.k` | `safe` |
-| Grant `monitoring.coreos.com` to the provider | `providers/rbac-provider-kubernetes.yaml` | prerequisite — not a composition change |
+| Grant `monitoring.coreos.com` to the provider | `providers/rbac/provider-kubernetes.yaml` | prerequisite — not a composition change |
 | Add `tenant-app` to the validation array | `.github/scripts/validate-packages.sh` | CI only |
 | **Name the existing Service port `http`** | `kcl/tenant-app/main.k:663` | **`careful`** |
 

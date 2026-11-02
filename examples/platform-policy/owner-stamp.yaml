@@ -1,0 +1,10 @@
+# The one Kyverno mutation: a new object in a tenant namespace (labelled auth.wxops.cloud/tenant-namespace) gets that namespace's wxops.cloud/owner label if it has none.
+# It copies a fact, never decides one, and never blocks a request.
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPlatformPolicy
+metadata:
+  name: owner-stamp
+spec:
+  parameters:
+    template: owner-stamp
+    scmOrgs: [wxops-idp]

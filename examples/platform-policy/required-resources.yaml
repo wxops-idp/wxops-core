@@ -1,0 +1,27 @@
+# Fixture for `make render`: the personas the example XRs name — platform (exempt) and owners (exec-guard).
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPersona
+metadata:
+  name: platform
+  labels:
+    crossplane.io/composite: platform
+spec:
+  parameters:
+    description: Takes responsibility across every org, team and cluster
+status:
+  subjects:
+    - {kind: Group, name: "wxops-idp:platform", apiGroup: rbac.authorization.k8s.io}
+---
+# The persona exec-guard.yaml names in personaRef.
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPersona
+metadata:
+  name: owners
+  labels:
+    crossplane.io/composite: owners
+spec:
+  parameters:
+    description: As developers, and production — a team's maintainers
+status:
+  subjects:
+    - {kind: Group, name: "wxops-idp:owners", apiGroup: rbac.authorization.k8s.io}

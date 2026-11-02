@@ -1,0 +1,65 @@
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPersonaBinding
+metadata:
+  name: platform-admin
+spec:
+  crossplane:
+    resourceRefs:
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: f8320953-platform-admin
+status:
+  bindings:
+    - kind: ClusterRoleBinding
+      name: wxops-platform-admin-platform-admin
+      subjects: 1
+  conditions:
+    - reason: WatchCircuitClosed
+      status: 'True'
+      type: Responsive
+    - reason: ReconcileSuccess
+      status: 'True'
+      type: Synced
+    - message: 'Unready resources: f8320953-platform-admin'
+      reason: Creating
+      status: 'False'
+      type: Ready
+  created: false
+  ready: false
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: f8320953-platform-admin
+  labels:
+    crossplane.io/composite: platform-admin
+  name: f8320953-platform-admin
+  ownerReferences:
+    - apiVersion: auth.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XPersonaBinding
+      name: platform-admin
+      uid: f8320953-7223-582f-b672-0e148cecf65b
+spec:
+  forProvider:
+    manifest:
+      apiVersion: rbac.authorization.k8s.io/v1
+      kind: ClusterRoleBinding
+      metadata:
+        labels:
+          auth.wxops.cloud/binding: platform-admin
+          auth.wxops.cloud/persona: platform
+          wxops.cloud/managed-by: persona-binding
+        name: wxops-platform-admin-platform-admin
+      roleRef:
+        apiGroup: rbac.authorization.k8s.io
+        kind: ClusterRole
+        name: wxops:platform-admin
+      subjects:
+        - apiGroup: rbac.authorization.k8s.io
+          kind: Group
+          name: wxops-idp:platform
+  providerConfigRef:
+    name: default

@@ -1,0 +1,112 @@
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPersonaBinding
+metadata:
+  name: developers-edit
+spec:
+  crossplane:
+    resourceRefs:
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: 656a5d17-checkout-web-edit
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: 656a5d17-payment-api-edit
+status:
+  bindings:
+    - kind: RoleBinding
+      name: wxops-developers-edit-edit
+      namespace: checkout-web
+      subjects: 1
+    - kind: RoleBinding
+      name: wxops-developers-edit-edit
+      namespace: payment-api
+      subjects: 1
+  conditions:
+    - reason: WatchCircuitClosed
+      status: 'True'
+      type: Responsive
+    - reason: ReconcileSuccess
+      status: 'True'
+      type: Synced
+    - reason: Available
+      status: 'True'
+      type: Ready
+  created: true
+  ready: true
+  synced: true
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: 656a5d17-checkout-web-edit
+  labels:
+    crossplane.io/composite: developers-edit
+  name: 656a5d17-checkout-web-edit
+  ownerReferences:
+    - apiVersion: auth.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XPersonaBinding
+      name: developers-edit
+      uid: 656a5d17-808a-5ad8-87d3-5e18c7f2c2fb
+spec:
+  forProvider:
+    manifest:
+      apiVersion: rbac.authorization.k8s.io/v1
+      kind: RoleBinding
+      metadata:
+        labels:
+          auth.wxops.cloud/binding: developers-edit
+          auth.wxops.cloud/persona: developers
+          wxops.cloud/managed-by: persona-binding
+        name: wxops-developers-edit-edit
+        namespace: checkout-web
+      roleRef:
+        apiGroup: rbac.authorization.k8s.io
+        kind: ClusterRole
+        name: edit
+      subjects:
+        - apiGroup: rbac.authorization.k8s.io
+          kind: Group
+          name: wxops-idp:checkout
+  providerConfigRef:
+    name: default
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: 656a5d17-payment-api-edit
+  labels:
+    crossplane.io/composite: developers-edit
+  name: 656a5d17-payment-api-edit
+  ownerReferences:
+    - apiVersion: auth.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XPersonaBinding
+      name: developers-edit
+      uid: 656a5d17-808a-5ad8-87d3-5e18c7f2c2fb
+spec:
+  forProvider:
+    manifest:
+      apiVersion: rbac.authorization.k8s.io/v1
+      kind: RoleBinding
+      metadata:
+        labels:
+          auth.wxops.cloud/binding: developers-edit
+          auth.wxops.cloud/persona: developers
+          wxops.cloud/managed-by: persona-binding
+        name: wxops-developers-edit-edit
+        namespace: payment-api
+      roleRef:
+        apiGroup: rbac.authorization.k8s.io
+        kind: ClusterRole
+        name: edit
+      subjects:
+        - apiGroup: rbac.authorization.k8s.io
+          kind: Group
+          name: wxops-idp:payment
+  providerConfigRef:
+    name: default

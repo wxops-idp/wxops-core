@@ -1,0 +1,123 @@
+apiVersion: apiextensions.crossplane.io/v2
+kind: CompositeResourceDefinition
+metadata:
+  name: xpersonabindings.auth.wxops.cloud
+spec:
+  group: auth.wxops.cloud
+  scope: Cluster
+  names:
+    kind: XPersonaBinding
+    plural: xpersonabindings
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - parameters
+              properties:
+                parameters:
+                  type: object
+                  required:
+                    - personaRef
+                    - role
+                  x-kubernetes-validations:
+                    - rule: "self.scope != 'platform' || self.role.startsWith('wxops:platform-')"
+                      message: "scope 'platform' binds only a wxops:platform-* role — a built-in or persona role cluster-wide would reach every namespace"
+                    - rule: "self.scope == 'platform' || !self.role.startsWith('wxops:platform-')"
+                      message: "a wxops:platform-* role is bound with scope 'platform' only"
+                    - rule: "self.scope != 'namespaces' || size(self.namespaces) > 0"
+                      message: "scope 'namespaces' needs at least one namespace"
+                    - rule: "self.scope == 'namespaces' || size(self.namespaces) == 0"
+                      message: "namespaces is for scope 'namespaces' only"
+                  properties:
+                    personaRef:
+                      type: object
+                      description: The XPersona whose subjects are bound.
+                      required:
+                        - name
+                      properties:
+                        name:
+                          type: string
+                    role:
+                      type: string
+                      description: |
+                        The ClusterRole to bind. The built-in `view`, `edit` and `admin`; the persona roles `wxops:persona-*`, which add W'xOps extras to them by
+                        aggregation; or a Platform API role `wxops:platform-*`. `cluster-admin` is never bindable, and so is any role outside this list — the provider
+                        holds `bind` on exactly these names.
+                      enum:
+                        - view
+                        - edit
+                        - admin
+                        - wxops:persona-viewers
+                        - wxops:persona-developers
+                        - wxops:persona-owners
+                        - wxops:persona-platform
+                        - wxops:platform-view
+                        - wxops:platform-edit
+                        - wxops:platform-admin
+                    scope:
+                      type: string
+                      description: |
+                        Where the role is granted.
+
+                        `owned` — a `RoleBinding` in every namespace labelled `auth.wxops.cloud/tenant-namespace: "true"`, for the persona's groups whose
+                        team is that namespace's `wxops.cloud/owner` — never another team's.
+
+                        `namespaces` — a `RoleBinding` in each namespace listed in `namespaces`, for every subject of the persona.
+
+                        `platform` — a `ClusterRoleBinding`, for every subject of the persona; only with a `wxops:platform-*` role.
+                      enum:
+                        - owned
+                        - namespaces
+                        - platform
+                      default: owned
+                    namespaces:
+                      type: array
+                      description: The namespaces to bind in, for scope `namespaces`.
+                      items:
+                        type: string
+                      default: []
+            status:
+              type: object
+              properties:
+                created:
+                  type: boolean
+                  description: |
+                    True once every binding has been applied at least once.
+
+                    Absent — not false — until then. Treat absent as false.
+                ready:
+                  type: boolean
+                  description: True when every binding is applied and in sync; false while the persona cannot be read.
+                synced:
+                  type: boolean
+                  description: |
+                    False while a binding failed its last apply, or the persona or parameters cannot be resolved. `syncMessage` says what.
+                    Absent until the first reconcile.
+                syncMessage:
+                  type: string
+                  description: The failing binding and the provider's own message, or what could not be resolved; truncated.
+                bindings:
+                  type: array
+                  description: Every binding this resource renders, with how many subjects each carries.
+                  items:
+                    type: object
+                    required:
+                      - kind
+                      - name
+                    properties:
+                      kind:
+                        type: string
+                        description: '`RoleBinding` or `ClusterRoleBinding`.'
+                      name:
+                        type: string
+                      namespace:
+                        type: string
+                      subjects:
+                        type: integer

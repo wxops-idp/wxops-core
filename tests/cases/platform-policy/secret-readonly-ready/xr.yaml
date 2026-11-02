@@ -1,0 +1,9 @@
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPlatformPolicy
+metadata:
+  name: secret-readonly
+spec:
+  parameters:
+    template: secret-readonly
+    scmOrgs: [wxops-idp]
+    mode: Deny

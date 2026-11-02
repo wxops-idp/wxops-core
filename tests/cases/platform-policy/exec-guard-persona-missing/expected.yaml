@@ -1,0 +1,87 @@
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPlatformPolicy
+metadata:
+  name: exec-guard-persona-missing
+spec:
+  crossplane:
+    resourceRefs:
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: d0a4da3e-policy
+status:
+  conditions:
+    - reason: WatchCircuitClosed
+      status: 'True'
+      type: Responsive
+    - reason: ReconcileSuccess
+      status: 'True'
+      type: Synced
+    - message: 'Unready resources: d0a4da3e-policy'
+      reason: Creating
+      status: 'False'
+      type: Ready
+  created: false
+  policyKind: ValidatingPolicy
+  policyName: wxops-exec-guard-persona-missing
+  ready: false
+  syncMessage: "persona 'ghost' not found \u2014 exec-guard allows nobody until it exists"
+  synced: false
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: d0a4da3e-policy
+  labels:
+    crossplane.io/composite: exec-guard-persona-missing
+  name: d0a4da3e-policy
+  ownerReferences:
+    - apiVersion: auth.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XPlatformPolicy
+      name: exec-guard-persona-missing
+      uid: d0a4da3e-ad1f-5e26-9202-856c79be37ef
+spec:
+  forProvider:
+    manifest:
+      apiVersion: policies.kyverno.io/v1
+      kind: ValidatingPolicy
+      metadata:
+        labels:
+          auth.wxops.cloud/policy: exec-guard-persona-missing
+          auth.wxops.cloud/template: exec-guard
+          wxops.cloud/managed-by: platform-policy
+        name: wxops-exec-guard-persona-missing
+      spec:
+        evaluation:
+          background:
+            enabled: false
+        failurePolicy: Ignore
+        matchConditions:
+          - expression: '!request.userInfo.username.startsWith(''system:'') && request.userInfo.groups.exists(g, [''wxops-idp:''].exists(p, g.startsWith(p)))'
+            name: scm-user
+        matchConstraints:
+          resourceRules:
+            - apiGroups:
+                - ''
+              apiVersions:
+                - '*'
+              operations:
+                - CONNECT
+              resources:
+                - pods/exec
+                - pods/attach
+                - pods/portforward
+        validationActions:
+          - Audit
+        validations:
+          - expression: (request.userInfo.groups.exists(g, g in []) || request.userInfo.username in []) && variables.nsOwner in variables.teams
+            message: 'authz.wxops.cloud: exec, attach and port-forward are for the members of persona ''ghost'', in a namespace one of their teams owns'
+        variables:
+          - expression: request.userInfo.groups.filter(g, ['wxops-idp:'].exists(p, g.startsWith(p))).map(g, g.substring(g.indexOf(':') + 1))
+            name: teams
+          - expression: 'namespaceObject != null && has(namespaceObject.metadata.labels) && ''wxops.cloud/owner'' in namespaceObject.metadata.labels ? namespaceObject.metadata.labels[''wxops.cloud/owner''] : '''''
+            name: nsOwner
+  providerConfigRef:
+    name: default

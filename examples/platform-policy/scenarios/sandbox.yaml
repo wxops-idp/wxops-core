@@ -1,0 +1,66 @@
+# Sandbox for run.sh: two team namespaces and three personas. bindings.yaml and policies/ follow once the personas are ready, so nothing renders twice.
+# Everything matches only the made-up SCM org `wxops-sbx`, so real logins are never affected; `./run.sh teardown` removes it all.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: wxops-sbx-a
+  labels:
+    wxops.cloud/owner: team-a
+    auth.wxops.cloud/tenant-namespace: "true"
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: wxops-sbx-b
+  labels:
+    wxops.cloud/owner: team-b
+    auth.wxops.cloud/tenant-namespace: "true"
+---
+# ── Personas ────────────────────────────────────────────────────────────────
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPersona
+metadata:
+  name: sbx-teams
+spec:
+  crossplane:
+    compositionRevisionSelector:
+      matchLabels:
+        channel: nightly
+    compositionUpdatePolicy: Automatic
+  parameters:
+    description: Scenario teams a and b
+    members:
+      teams: false
+      groups: [wxops-sbx:team-a, wxops-sbx:team-b]
+---
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPersona
+metadata:
+  name: sbx-devs
+spec:
+  crossplane:
+    compositionRevisionSelector:
+      matchLabels:
+        channel: nightly
+    compositionUpdatePolicy: Automatic
+  parameters:
+    description: Scenario persona allowed to exec — team a only
+    members:
+      teams: false
+      groups: [wxops-sbx:team-a]
+---
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPersona
+metadata:
+  name: sbx-platform
+spec:
+  crossplane:
+    compositionRevisionSelector:
+      matchLabels:
+        channel: nightly
+    compositionUpdatePolicy: Automatic
+  parameters:
+    description: Scenario platform team, exempt from the policies that name it
+    members:
+      teams: false
+      groups: [wxops-sbx:platform]

@@ -11,7 +11,7 @@ W'xOps Core is the control-plane "brain" of W'xOps, built on **Crossplane v2** c
 | Engine | Used by | When to use |
 |---|---|---|
 | `function-patch-and-transform` | `scm-*` (`gitea-*`, `random-password` archived), `oidc-connection` | Single composed resource: an inline-HCL `Workspace`, or one wrapped `Object`; each such package ends with the shared `status` step (`kcl/status/main.k`) that folds `Synced` into `ready`/`synced`/`syncMessage`. The `scm-*` packages keep **all** vendor logic in HCL — no KCL, no direct API calls |
-| `function-kcl` | `platform-database-clusters`, `tenant-database`, `tenant-app`, `oidc-static-password`, `oidc-client`, `oidc-connector` | Multi-resource, conditional branching, list comprehensions |
+| `function-kcl` | `platform-database-clusters`, `tenant-database`, `tenant-app`, `oidc-static-password`, `oidc-client`, `oidc-connector`, `persona`, `persona-binding`, `platform-policy` | Multi-resource, conditional branching, list comprehensions |
 
 `tenant-database` additionally uses `function-extra-resources` as a first pipeline step to discover shared clusters via label selector before the KCL step renders resources — as do all three `oidc-*` KCL packages, to read their `XOIDCConnection` (and, for `oidc-connector`, the `XScmConnection`, `XScmOAuthApp` and every labelled `XScmTeam`) by the `crossplane.io/composite` label Crossplane stamps on every root XR with its own name — no user-written discovery label needed, unlike `tenant-database`'s pool selector.
 
@@ -44,7 +44,7 @@ Documentation shows the full logical path (e.g. `tenants/{owner}/databases/{dbNa
 
 ## Packages
 
-Eleven Crossplane Configuration packages:
+Fourteen Crossplane Configuration packages:
 
 | Package | Kind | Composition |
 |---|---|---|
@@ -59,6 +59,9 @@ Eleven Crossplane Configuration packages:
 | `oidc-static-password` | `XOIDCStaticPassword` | function-extra-resources + function-kcl + ESO `Password` generator/`ExternalSecret`/`PushSecret` |
 | `oidc-client` | `XOIDCClient` | function-extra-resources + function-kcl + ESO `Password` generator/`ExternalSecret`/`PushSecret` |
 | `oidc-connector` | `XOIDCConnector` | function-extra-resources + function-kcl + ESO `ExternalSecret`/`PushSecret` |
+| `persona` | `XPersona` | function-extra-resources + function-kcl; composes nothing — resolves members into `status.subjects` |
+| `persona-binding` | `XPersonaBinding` | function-extra-resources + function-kcl + `RoleBinding`/`ClusterRoleBinding` (the only RBAC a composition may emit) |
+| `platform-policy` | `XPlatformPolicy` | function-extra-resources + function-kcl + one Kyverno `ValidatingPolicy`/`MutatingPolicy` |
 
 **Archived, not deleted** — `gitea-user`/`-org`/`-team`/`-repository` (`XGiteaUser`/`XGiteaOrg`/`XGiteaTeam`/`XGiteaRepository`, all
 patch-and-transform + inline HCL) and the `random-password` utility (`XRandomPassword`): no cluster ever ran them, every active
@@ -151,7 +154,8 @@ make render                            # offline dry-run of example XRs
 pre-commit run --all-files             # all hooks (yaml, kubeconform, xpkg build, kcl drift, versions)
 
 # Cluster install
-make providers                         # install providers/functions once per cluster
+make providers                         # functions → provider packages → RBAC → ProviderConfigs, in order, waiting where it must
+make providers-functions               # …or one category at a time: providers-functions · providers-packages · providers-rbac · providers-config
 make install                           # install from OCI registry (production)
 make install-dev                       # apply XRDs + Compositions directly (development)
 
@@ -206,7 +210,9 @@ the patch-and-transform packages end with a shared `status` step (`kcl/status/ma
 embedded by `make kcl-sync`). Compositions
 must never emit Kubernetes RBAC — see [`development-docs/_archives/ROADMAP.md`](development-docs/_archives/ROADMAP.md) *Decided and
 rejected*; the composition creates the ServiceAccount and publishes its name in
-status, and the GitOps repo binds a `Role` to it.
+status, and the GitOps repo binds a `Role` to it. **One narrow exception, pending ADR** ([RFC-009](development-docs/rfc/009-scm-personas.md)):
+the `persona-binding` composition alone may emit `RoleBinding`/`ClusterRoleBinding` — never a `Role` or `ClusterRole` — to the roles
+`provider-kubernetes` holds `bind` on (`providers/rbac/provider-kubernetes.yaml`); `tests/invariants.py` enforces both.
 
 ## Testing
 
@@ -312,6 +318,7 @@ release commit. Gitea no longer publishes.
 | provider-terraform (archived, `providers/archive/`) | v1.1.5 |
 | provider-kubernetes | v1.2.1 |
 | provider-sql | v0.15.0 |
+| provider-vault (OpenBao configuration, hub only — [RFC-008](development-docs/rfc/008-built-in-tools-identity-and-catalog.md)) | v4.1.0 |
 | function-kcl | v0.12.1 |
 | function-extra-resources | v0.3.0 |
 | function-patch-and-transform | v0.10.7 |

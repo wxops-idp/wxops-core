@@ -1,0 +1,12 @@
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPlatformPolicy
+metadata:
+  name: exec-guard
+spec:
+  parameters:
+    template: exec-guard
+    scmOrgs: [wxops-idp]
+    personaRef:
+      name: owners
+    exemptPersonaRef:
+      name: platform

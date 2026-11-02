@@ -2,8 +2,8 @@
 
 Provider and function manifests that no active package uses any more. They are **kept, not removed**,
 so the reasoning and the pinned versions stay discoverable, and they are **not installed**: `make
-providers` applies `PROVIDER_MANIFESTS` (function/provider/runtimeconfig/rbac files directly under
-`providers/`), which does not descend into this directory.
+providers` applies the four category directories (`functions/`, `packages/`, `rbac/`, `config/`) and never
+looks here.
 
 | File | Why archived | Reference |
 |---|---|---|

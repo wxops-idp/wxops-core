@@ -1,0 +1,12 @@
+# The platform team in the namespaces it supports — admin there, by RoleBinding, not cluster-wide.
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPersonaBinding
+metadata:
+  name: platform-namespaces
+spec:
+  parameters:
+    personaRef:
+      name: platform
+    role: wxops:persona-platform
+    scope: namespaces
+    namespaces: [shared-tools, observability]

@@ -1,0 +1,11 @@
+# The platform team: the whole Platform API, and admin in the namespaces it supports.
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPersonaBinding
+metadata:
+  name: platform-admin
+spec:
+  parameters:
+    personaRef:
+      name: platform
+    role: wxops:platform-admin
+    scope: platform

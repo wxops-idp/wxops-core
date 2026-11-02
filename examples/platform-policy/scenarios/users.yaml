@@ -1,0 +1,55 @@
+# Dex static users for run.sh's `IDENTITY=dex` mode — the sandbox groups have no Git team behind them. Passwords are generated; read one with
+#   bao kv get -mount=platform -field=password dex/users-def/sbx-alice
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XOIDCStaticPassword
+metadata:
+  name: sbx-alice
+spec:
+  crossplane:
+    compositionRevisionSelector:
+      matchLabels:
+        channel: nightly
+    compositionUpdatePolicy: Automatic
+  parameters:
+    connectionRef: {name: dex}
+    email: alice@sbx.wxops.local
+    username: sbx-alice
+    displayName: Scenario alice (team-a)
+    groups: ["wxops-sbx:team-a"]
+    secret: {source: generate}
+---
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XOIDCStaticPassword
+metadata:
+  name: sbx-bob
+spec:
+  crossplane:
+    compositionRevisionSelector:
+      matchLabels:
+        channel: nightly
+    compositionUpdatePolicy: Automatic
+  parameters:
+    connectionRef: {name: dex}
+    email: bob@sbx.wxops.local
+    username: sbx-bob
+    displayName: Scenario bob (team-b)
+    groups: ["wxops-sbx:team-b"]
+    secret: {source: generate}
+---
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XOIDCStaticPassword
+metadata:
+  name: sbx-paula
+spec:
+  crossplane:
+    compositionRevisionSelector:
+      matchLabels:
+        channel: nightly
+    compositionUpdatePolicy: Automatic
+  parameters:
+    connectionRef: {name: dex}
+    email: paula@sbx.wxops.local
+    username: sbx-paula
+    displayName: Scenario paula (platform)
+    groups: ["wxops-sbx:platform"]
+    secret: {source: generate}

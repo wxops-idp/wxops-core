@@ -219,7 +219,7 @@ user-written discovery label needed:
   `client_secret` from OpenBao and templates the connector record.
 
 None of this adds a Crossplane provider or any RBAC: `provider-kubernetes` already holds the grant for `externalsecrets`, `pushsecrets` and
-`generators.external-secrets.io/passwords` in `providers/rbac-provider-kubernetes.yaml`, and the compositions still emit no RBAC. No OpenTofu, no
+`generators.external-secrets.io/passwords` in `providers/rbac/provider-kubernetes.yaml`, and the compositions still emit no RBAC. No OpenTofu, no
 external Terraform provider, anywhere in this family.
 
 ### The aggregator — owned by the `dexidp` chart, not this repo

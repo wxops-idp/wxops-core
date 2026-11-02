@@ -1,0 +1,2 @@
+# run.sh login: per-user kubeconfigs and Pinniped session/credential caches (tokens)
+.logins/

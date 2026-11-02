@@ -54,7 +54,7 @@ gate — for reasons the rest of this document develops. The one-line version: *
 
 ### What exists, and why it matters more than it looks
 
-**The XR status contract is the top of the diagnostic funnel.** Every one of the eleven packages exposes `created`, `ready`, `synced` and `syncMessage` —
+**The XR status contract is the top of the diagnostic funnel.** Every one of the fourteen packages exposes `created`, `ready`, `synced` and `syncMessage` —
 `synced: false` with the provider's own error in `syncMessage` the moment an apply fails (plus `dependenciesReady` and `darlane.*` on `tenant-app`) — see [`status-contract.md`](../../docs/api-reference/status-contract.md). Before any dashboard is
 opened, the portal can already narrow an incident to *which composed thing is unhealthy*:
 

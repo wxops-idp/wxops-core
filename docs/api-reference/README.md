@@ -103,6 +103,9 @@ All of it is on one page: [status contract](status-contract.md).
 | [`XOIDCStaticPassword`](oidc-static-password.md) | `oidc-static-password` | `connectionRef`, `email`, `username`, `groups`, `secret` (`generate`\|`static`), `rotation` | ESO `Password` generator (or a human-written key) + `ExternalSecret` (bcrypt hash computed in-template) + `PushSecret`(s) | `userId`, `vaultKey` |
 | [`XOIDCClient`](oidc-client.md) | `oidc-client` | `connectionRef`, `clientId`, `redirectUris`, `public`, `secret`, `rotation` | ESO `Password` generator (confidential + `generate` only) + `ExternalSecret` + `PushSecret` | `clientId`, `vaultKey` |
 | [`XOIDCConnector`](oidc-connector.md) | `oidc-connector` | `connectionRef`, `connectorId`, `scmRef`, `oauthAppRef`, `orgs` | An `ExternalSecret` reading the oauth app's client secret + `PushSecret`; `orgs[].teams` generated from labelled `XScmTeam`s | `vaultKey`, `teams` |
+| [`XPersona`](persona.md) | `persona` | `description`, `environments`, `members` | Nothing — resolves members into status only | `subjects`, `groups`, `teams` |
+| [`XPersonaBinding`](persona-binding.md) | `persona-binding` | `personaRef`, `role`, `scope`, `namespaces` | One `RoleBinding` per owned namespace, or one `ClusterRoleBinding` (the only composition that emits RBAC) | `bindings` |
+| [`XPlatformPolicy`](platform-policy.md) | `platform-policy` | `template`, `mode`, `scmOrgs`, `personaRef`, `exemptPersonaRef` | One Kyverno `ValidatingPolicy` or `MutatingPolicy` | `policyName`, `policyKind` |
 
 Each composed resource appears only when its parameters ask for it. The *Composed resources* list at the top of each `kcl/<package>/main.k` records the exact
 condition for every one.

@@ -1,0 +1,8 @@
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPersona
+metadata:
+  name: developers
+spec:
+  parameters:
+    description: Builds and deploys outside production
+    environments: [dev, staging]

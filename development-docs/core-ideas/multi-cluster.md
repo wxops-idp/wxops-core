@@ -350,6 +350,39 @@ but becomes the single-cluster case rather than the fleet mechanism. Hub-scoped 
 - **Secrets access:** ESO's ServiceAccount, through its cluster's own Kubernetes auth mount in OpenBao, with token reviews over the mesh
   ([above](#secrets-across-clusters--eso-to-openbao-over-the-mesh)).
 
+### Managed clusters — GKE, EKS, AKS
+
+The persona model carries over unchanged: `XPersonaBinding`'s `RoleBinding`s and Kyverno's admission policies are plain Kubernetes, the same on every
+distribution. What differs is how a managed cluster comes to trust a W'xOps login, and that each cloud opens a second authorization path beside Kubernetes RBAC.
+Checked against each vendor's documentation on 2026-10-27.
+
+**Login.** Pinniped's Concierge works on EKS, GKE and AKS, through its **impersonation proxy**: the client-certificate strategy needs a pod beside the
+`kube-controller-manager`, which most managed services do not allow, and the proxy by default needs a `LoadBalancer` Service. People log in through the SCM and
+Dex only — no cloud console account. Kyverno still sees the person: impersonation sets the request's user and groups before authorization and admission run.
+EKS can also trust Dex directly (an associated OIDC identity provider), with two conditions: the issuer URL must be reachable from the public internet, and
+EKS rejects self-signed certificates.
+
+**Group names must arrive unchanged.** EKS's OIDC association takes a `groupsPrefix` (`oidc:` turns `wxops-idp:payment` into `oidc:wxops-idp:payment`), and
+AWS recommends one per provider. Every W'xOps rule matches `<org>:<team>` exactly — `scope: owned`, `owner-seal`, the Kyverno SCM-user match — so a prefix on one
+cluster silently stops all of them there. Through Pinniped there is no prefix; through EKS's own OIDC, set none, or the same one fleet-wide and teach the
+match about it.
+
+**Cloud IAM is a second door.** Each cloud can authorize Kubernetes API calls from its own IAM, and a grant there is enough on its own:
+
+| Cloud | The second path | How it combines with Kubernetes RBAC |
+|---|---|---|
+| GKE | IAM roles on the project or cluster (`container.*`) | RBAC is checked first; with no RBAC grant, GKE checks IAM — either one authorizes |
+| EKS | Access entries with access policies (`AmazonEKSClusterAdminPolicy`, …) | The principal holds every associated policy's permissions plus whatever RBAC grants its groups. `kubectl auth can-i --list` does not show access-policy permissions |
+| AKS | Microsoft Entra ID authorization (Azure RBAC for Kubernetes) — on by default in AKS Automatic | An authorization webhook asks Entra ID; both models can run on one cluster. Role assignments at a resource group or subscription reach every cluster under it |
+
+So: **cloud IAM grants in-cluster access to the platform team and break-glass only** — the managed-cloud equivalent of `system:masters`. A developer given
+*Azure Kubernetes Service RBAC Writer* or an EKS access policy bypasses the persona model, and nothing in W'xOps sees it; `kubectl auth can-i` does not either, on EKS. Review those
+grants in the cloud's own audit trail, alongside the fleet's.
+
+**Workload identity is a different question.** IRSA and EKS Pod Identity, GKE Workload Identity and AKS Workload Identity let a pod call cloud APIs. Personas
+govern people and agents calling the Kubernetes API, so the two do not overlap; workload identity matters only where a W'xOps component calls a cloud service
+itself, such as ESO against a cloud secret manager instead of OpenBao.
+
 ---
 
 ## What W'xOps does not do
@@ -399,7 +432,8 @@ but becomes the single-cluster case rather than the fleet mechanism. Hub-scoped 
    (personas) is waiting on it for its environment gate: an `XPersonaBinding` renders only on clusters whose environment its persona reaches. Today's sketch is
    the `wxops-cluster-info` ConfigMap; a Crossplane `EnvironmentConfig` is the alternative, cluster-scoped and read directly by `function-extra-resources`.
 8. **The token reviewer** — a reviewer ServiceAccount token stored in each Kubernetes auth mount (bound to `system:auth-delegator` on the spoke), or ESO's own
-   token used as the reviewer, so OpenBao holds no spoke credential at all (to verify against OpenBao).
+   token used as the reviewer, so OpenBao holds no spoke credential at all (to verify against OpenBao). `provider-vault`'s Kubernetes `AuthBackendConfig` takes either
+   (`tokenReviewerJwtSecretRef`, or `disableLocalCaJwt`) — see [`examples/openbao/03-kubernetes-auth-per-cluster.yaml`](../../examples/openbao/03-kubernetes-auth-per-cluster.yaml).
 9. **The egress path.** Most workloads speak plain HTTP and will not present a client certificate themselves, so a call to another cluster needs a local hop
    that originates the mTLS: pod → its own cluster's gateway (plain, in-cluster) → the callee's gateway (mTLS) — spoke to spoke, never through the hub. Open:
    - **which component originates it** — the same gateway in an egress role, or a separate egress proxy;
@@ -423,3 +457,8 @@ isolation tiers, edge and ARM sites (k3s/Talos per autonomous site), GPU pools a
   [agent configuration](https://argocd-agent.readthedocs.io/stable/configuration/reference/agent/)
 - [CoreDNS `multicluster` plugin](https://coredns.io/explugins/multicluster/) · [coredns/multicluster](https://github.com/coredns/multicluster)
 - [k8gb](https://www.k8gb.io/)
+- Managed clusters: [Pinniped — supported clusters](https://pinniped.dev/docs/reference/supported-clusters/) ·
+  [EKS — external OIDC provider](https://docs.aws.amazon.com/eks/latest/userguide/authenticate-oidc-identity-provider.html) ·
+  [EKS — access policies](https://docs.aws.amazon.com/eks/latest/userguide/access-policies.html) ·
+  [GKE — RBAC and IAM](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/role-based-access-control) ·
+  [AKS — cluster authorization](https://learn.microsoft.com/en-us/azure/aks/concepts-cluster-authorization)

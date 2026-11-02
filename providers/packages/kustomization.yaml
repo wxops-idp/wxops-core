@@ -1,0 +1,11 @@
+# Crossplane Provider packages, with the one runtime config a provider needs before it starts.
+# Apply: `make providers-packages` (or `kubectl apply -k providers/packages`) — it waits until every provider is Installed and Healthy,
+# which is what serves the CRDs the ProviderConfigs in ../config need.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - runtimeconfig-provider-kubernetes.yaml   # fixed ServiceAccount name for provider-kubernetes (read by ../rbac/provider-kubernetes.yaml)
+  - provider-kubernetes.yaml            # Kubernetes objects, ESO PushSecret/ExternalSecret, CNPG, Dex, RoleBindings, Kyverno policies (via Object)
+  - provider-sql.yaml                   # PostgreSQL roles and databases (tenant-database, platform-database-clusters)
+  - provider-opentofu.yaml              # inline HCL Workspaces (OpenTofu); see RFC-002
+  - provider-vault.yaml                 # OpenBao configuration as managed resources — hub only; see RFC-008

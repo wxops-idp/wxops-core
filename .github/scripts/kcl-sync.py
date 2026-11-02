@@ -33,6 +33,7 @@ import packages as P  # noqa: E402
 KCL_PACKAGES = [
     "platform-database-clusters", "tenant-database", "tenant-app",
     "oidc-static-password", "oidc-client", "oidc-connector",
+    "persona", "persona-binding", "platform-policy",
 ]
 
 # Patch-and-transform packages whose last pipeline step is the shared kcl/status/main.k. Each

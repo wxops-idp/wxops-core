@@ -1,0 +1,12 @@
+# The Platform API, cluster-wide: read every W'xOps kind. Core kinds are cluster-scoped today, so this is a ClusterRoleBinding — which is why it accepts
+# wxops:platform-* roles only; ownership of each XR is sealed by an XPlatformPolicy, not by this binding.
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPersonaBinding
+metadata:
+  name: viewers-platform-view
+spec:
+  parameters:
+    personaRef:
+      name: viewers
+    role: wxops:platform-view
+    scope: platform

@@ -1,0 +1,80 @@
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPlatformPolicy
+metadata:
+  name: secret-readonly
+spec:
+  crossplane:
+    resourceRefs:
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: 9c1d4fa7-policy
+status:
+  conditions:
+    - reason: WatchCircuitClosed
+      status: 'True'
+      type: Responsive
+    - reason: ReconcileSuccess
+      status: 'True'
+      type: Synced
+    - reason: Available
+      status: 'True'
+      type: Ready
+  created: true
+  policyKind: ValidatingPolicy
+  policyName: wxops-secret-readonly
+  ready: true
+  synced: true
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: 9c1d4fa7-policy
+  labels:
+    crossplane.io/composite: secret-readonly
+  name: 9c1d4fa7-policy
+  ownerReferences:
+    - apiVersion: auth.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XPlatformPolicy
+      name: secret-readonly
+      uid: 9c1d4fa7-450d-57bc-9a95-fc704a4f75b7
+spec:
+  forProvider:
+    manifest:
+      apiVersion: policies.kyverno.io/v1
+      kind: ValidatingPolicy
+      metadata:
+        labels:
+          auth.wxops.cloud/policy: secret-readonly
+          auth.wxops.cloud/template: secret-readonly
+          wxops.cloud/managed-by: platform-policy
+        name: wxops-secret-readonly
+      spec:
+        evaluation:
+          background:
+            enabled: false
+        failurePolicy: Fail
+        matchConditions:
+          - expression: '!request.userInfo.username.startsWith(''system:'') && request.userInfo.groups.exists(g, [''wxops-idp:''].exists(p, g.startsWith(p)))'
+            name: scm-user
+        matchConstraints:
+          resourceRules:
+            - apiGroups:
+                - ''
+              apiVersions:
+                - '*'
+              operations:
+                - CREATE
+                - UPDATE
+                - DELETE
+              resources:
+                - secrets
+        validationActions:
+          - Deny
+        validations:
+          - expression: 'false'
+            message: 'authz.wxops.cloud: Secrets are written by External Secrets Operator from OpenBao, not by hand'
+  providerConfigRef:
+    name: default

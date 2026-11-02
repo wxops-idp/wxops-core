@@ -1,0 +1,12 @@
+# Ship this in Deny BEFORE the first `admin` binding exists: a team admin may create RoleBindings in its namespace, and could otherwise bind around XPersonaBinding.
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPlatformPolicy
+metadata:
+  name: rbac-guard
+spec:
+  parameters:
+    template: rbac-guard
+    scmOrgs: [wxops-idp]
+    mode: Deny
+    exemptPersonaRef:
+      name: platform

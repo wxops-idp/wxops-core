@@ -1,0 +1,9 @@
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPersonaBinding
+metadata:
+  name: owners-admin
+spec:
+  parameters:
+    personaRef:
+      name: owners
+    role: wxops:persona-owners

@@ -1,0 +1,9 @@
+# Namespaced objects, no options, nobody exempt: the owner is the label, or the namespace's. Mode defaults to Audit.
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPlatformPolicy
+metadata:
+  name: owner-seal-namespaced
+spec:
+  parameters:
+    template: owner-seal
+    scmOrgs: [wxops-idp]

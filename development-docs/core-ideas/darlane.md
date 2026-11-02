@@ -182,8 +182,10 @@ are namespaced XRs, the shape Crossplane v2 defaults to. The namespace is the ow
 team cannot even read them — which cluster scope cannot give. Most of [RFC-005](../rfc/005-git-mapped-authorization.md)'s owner rules then reduce to plain
 RBAC. Platform kinds (`XPlatformDatabaseCluster`, `XScm*`, `XOIDC*`, `auth.wxops.cloud`) stay cluster-scoped. Two things to settle first:
 
-- **Namespaced managed resources in every provider a tenant kind uses** — a namespaced XR composes only namespaced resources in its own namespace.
-  `provider-kubernetes` has them; `provider-opentofu` and `provider-sql` are to check.
+- **Namespaced managed resources in every provider a tenant kind uses** — a namespaced XR composes only namespaced resources in its own namespace. All three
+  installed providers ship them (checked on the cluster 2026-10-26): `objects.kubernetes.m.crossplane.io`, `workspaces.opentofu.m.upbound.io`, and the
+  `postgresql.sql.m.crossplane.io` family — and `provider-vault` v4 does too. What is left is writing the compositions against the `.m` kinds and their
+  namespaced `ProviderConfig`s.
 - **Migration** — a scope change is a new kind with no conversion from the old one, so existing `XTenantApp` and `XTenantDatabase` XRs move over, not
   upgrade in place.
 
@@ -217,6 +219,26 @@ spec:
 
 Each consumer holds its own claim — `payment-api-dev-alice` (8h), `payment-api-sre-hotfix` (2h, `productionOverride`), `payment-api-agent-branch` (4h, no
 traffic) — and the app's XR never changes. Migration is additive: `darlane.*` keeps working.
+
+### Agent access — open, decided with the agent work
+
+How an agent reads the cluster and drives a twin is **not decided**. It depends on how agents are built when `XDarlane` splits out — a modern agent framework
+that brings its own control, or W'xOps's own skills and MCP servers — so the choice waits for that work. The options on the table:
+
+| Option | Shape | Trade-off |
+|---|---|---|
+| `view` + `wxops:platform-view` | Standard roles, through an agent persona's `XPersonaBinding` | Simplest. `view` grows with every CRD that aggregates into it, and reads every ConfigMap |
+| `wxops:persona-agents` | An aggregated allowlist: pods, `pods/log`, events, workloads, services, policy reports, ESO status, XR status | Nothing added silently; one more role in the binding enum and in provider-kubernetes's `bind` list |
+| A read proxy (MCP or tool server) | The agent holds no Kubernetes token; the server answers and redacts | Strongest boundary; a new component, worth it once agents act across many clusters |
+
+Whichever is chosen, these hold — they come from the rules above, not from the option:
+
+- **No `exec` or port-forward into a twin** — it carries production `env`, so exec reads its secrets. A coding agent works through `fileSync` and the twin's
+  own endpoint, and leaves only by pull request.
+- **Logs are payloads** — anything reading `pods/log` runs on in-cluster inference ([data boundary](access-model.md#data-boundary-and-audit)).
+- **Agents are ServiceAccounts** — `XPersonaBinding`'s `scope: owned` binds only groups, so an agent persona needs `scope: namespaces` today, unless `owned`
+  later learns to match a ServiceAccount's namespace owner.
+- **Kyverno matches SCM groups only** — `XPlatformPolicy` templates do not cover agents yet, so RBAC alone guards them until agents join policy matching.
 
 ### Also ahead
 
