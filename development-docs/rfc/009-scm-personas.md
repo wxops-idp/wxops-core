@@ -2,7 +2,8 @@
 
 ## Status
 <!-- Draft | In review | Accepted | Declined | Withdrawn | Implemented — and the GitHub issue that carries the discussion, e.g. "Draft · #42" -->
-Draft — rewritten 2026-10-24: the persona file and its CI compiler are replaced by three `auth.wxops.cloud` kinds
+Implemented (Phases 1–3, with 2b) — shipping in `release-2026-11-04`, after the [acceptance run](#spike-and-acceptance-results-2026-11-04) of 2026-11-04.
+Rewritten 2026-10-24: the persona file and its CI compiler are replaced by three `auth.wxops.cloud` kinds. Open: the HA spike, Phases 4–7, the ADRs
 
 ## Summary
 
@@ -304,7 +305,7 @@ spec:
     scmOrgs: [wxops-idp]                            # the orgs whose "<org>:<team>" groups make a caller an SCM user
     personaRef: {name: owners}                      # exec-guard only: the persona that may exec
     exemptPersonaRef: {name: platform}              # optional: a persona the policy does not apply to
-    mode: Audit                                     # Audit | Deny — every policy starts in Audit
+    mode: Deny                                      # Audit | Deny — Audit reports only while Kyverno's reports controller runs
 ```
 
 A policy is a **template** with parameters, not free-form CEL: the template's logic is reviewed once in this package; an `XPlatformPolicy` only chooses its
@@ -474,7 +475,7 @@ Run on one cluster with two test teams, `team-a` and `team-b`, before this RFC i
 
 | Area | Test | Expect |
 |---|---|---|
-| Identity | `kubectl auth whoami` through the impersonation proxy; an `Audit` policy echoing `userInfo` into a PolicyReport | the same `<org>:<team>` in both |
+| Identity | `kubectl auth whoami` through the impersonation proxy; the same user's requests refused or allowed by a policy matching their group | the same `<org>:<team>` in both |
 | Binding | provider-kubernetes, holding only `bind`, binds `wxops:persona-developers` · then `cluster-admin` | ✓ · ✗ |
 | Seal | team-a creates in its own namespace · updates team-b's object · relabels its own to team-b · relabels team-b's to its own · deletes team-b's | ✓ · ✗ · ✗ · ✗ · ✗ |
 | Not caught | the ReplicaSet controller creates pods · Argo CD syncs · ESO writes a `Secret` | ✓ · ✓ · ✓ |
@@ -509,8 +510,10 @@ run had one failure, the kit misreading an RBAC refusal as a policy refusal (fix
 
 - **Kyverno only, run in high availability** (decided 2026-11-04) — several replicas, so an upgrade or restart never removes the last one and its webhooks
   with it; native `ValidatingAdmissionPolicy` generation is deferred. A spike on a rolling restart with three replicas confirms the webhooks survive.
-- **A Kyverno-required guard** is the next safeguard to try: one static `ValidatingAdmissionPolicy` whose parameter is Kyverno's webhook configuration, so
-  people's writes pause — instead of passing unchecked — while that configuration is gone.
+- **High availability is the primary answer** — nothing on a person's request path is a single point of failure: Kyverno, the Pinniped Concierge, the
+  Supervisor and Dex all run with several replicas. HA covers failures (a crashed pod, a lost node, a rolling upgrade), not operations that remove Kyverno's
+  webhooks on purpose or by mistake (scaling it to zero, uninstalling it). For those, a **Kyverno-required guard** is optional: one static
+  `ValidatingAdmissionPolicy` whose parameter is Kyverno's webhook configuration, so people's writes pause — instead of passing unchecked — while it is gone.
 - **Nothing may sit on access reviews:** every template matching broad resources keeps its exclusions as a match condition, and namespace-only rules say
   `scope: Namespaced` — see [As built](#as-built-2026-10-26).
 - **Kyverno's namespace selector** (`kube-system`, `kyverno` skipped) is accepted: no team persona holds RBAC there; only `platform`, which is trusted.
@@ -553,16 +556,18 @@ run had one failure, the kit misreading an RBAC refusal as a policy refusal (fix
   Argo CD-like writes never blocked ✓, but a graceful shutdown opens a ~2-minute unchecked window for SCM users — answered by Kyverno in HA and a
   Kyverno-required guard (next). The run also found and fixed a webhook sitting on access reviews.
 - [ ] **HA spike** — three Kyverno replicas, a rolling restart; the webhook configurations must never disappear.
-- [x] **Phase 1 — `XPersona`.** Built (2026-10-26): `package/auth/persona`, offline tests green; cluster proof pending.
+- [x] **Phase 1 — `XPersona`.** Built (2026-10-26): `package/auth/persona`; proven on the cluster 2026-11-04, with `system:` members refused.
 - [x] **Phase 2 — `XPersonaBinding`,** built: `owned`, `namespaces` and `platform`, the aggregated roles under `providers/rbac/aggregate-*.yaml`, `provider-kubernetes`'s
-  `bind` grant, and the narrowed invariant. Cluster proof and the ADR pending. **`rbac-guard` ships with this phase, in `Deny`**, and `admin` is not bound to anyone before
+  `bind` grant, and the narrowed invariant. Proven on the cluster 2026-11-04 (`bind` without escalation); the ADR follows acceptance. **`rbac-guard` ships with this phase, in `Deny`**, and `admin` is not bound to anyone before
   it enforces.
 - [x] **Phase 2b — persona roles without `edit`/`admin`, `sa-guard` and `namespace-guard`.** Built 2026-11-03
   ([design](#persona-roles-built-from-wxops-pieces-not-editadmin--built-2026-11-03)); offline tests green, cluster proof through the scenario kit pending.
-- [ ] **Phase 3 — `XPlatformPolicy` in `Audit`.** Built (all six templates render and compile on the cluster's Kyverno, checked by a server-side dry run); behaviour is
-  unproven until the acceptance matrix passes. Label existing namespaces and objects from the reports.
-- [ ] **Phase 4 — `Deny`,** template by template, once its reports are clean.
-- [ ] **Phase 5 — audit pipeline.** The API server audit policy at bootstrap, shipped with PolicyReports to Loki.
+- [x] **Phase 3 — `XPlatformPolicy`.** Built: eight templates, all proven in `Deny` by the acceptance run
+  ([results](#spike-and-acceptance-results-2026-11-04)). `Audit` reports only while Kyverno's reports controller runs ([question 9](#open-questions)); label
+  existing namespaces and objects before a template moves to `Deny` on a cluster that already has workloads.
+- [ ] **Phase 4 — `Deny` on every cluster,** template by template, once existing namespaces and objects carry their owner labels.
+- [ ] **Phase 5 — audit pipeline.** The API server audit policy at bootstrap, shipped to Loki — the record of who did what. PolicyReports are optional
+  ([question 9](#open-questions)).
 - [ ] **Phase 6 — tools.** Argo CD, Grafana and OpenBao grants name persona groups, per [RFC-008](008-built-in-tools-identity-and-catalog.md).
 - [ ] **Phase 7 — agents.** Agent personas, and `XPlatformPolicy` templates matching their ServiceAccounts.
 - [ ] ⏸ **With the multi-cluster feature — environments.** The cluster's identity object, and the environment gate on `XPersonaBinding` and `exec-guard`.

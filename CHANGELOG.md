@@ -19,6 +19,34 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 > latest state.
 
 ---
+## [release-2026-11-04] — 2026-11-04
+
+### Documentation
+
+- Commit the scm-persona RFC and put the link together before implementation ([`c15437c`](https://github.com/wxops-idp/wxops-core/commit/c15437cec2774bdf7dd840c7f0b7b9a447e1b1d3))
+- Refine the documentations and archive these oudated ones ([`86b28e8`](https://github.com/wxops-idp/wxops-core/commit/86b28e8e109693ffa363f1434a97d62c77f2c149))
+- Update readme badge and scripts for correcting generation ([`45c678f`](https://github.com/wxops-idp/wxops-core/commit/45c678f29b4f37e26fcf3d42f46eff1800510a79))
+
+
+### Features
+
+- **auth**: Enhance perf and correct security gap in core of auth group for persona after cluster proof ([`1ceedb2`](https://github.com/wxops-idp/wxops-core/commit/1ceedb288be4ee3d63c94052548ff3d11db1ecd2))
+- **auth**: Defining persona (auth API Group) to align correct permission and policies in platform ([`d1baf9e`](https://github.com/wxops-idp/wxops-core/commit/d1baf9edb7f22a3d2d76a86e826b8e01765df5e3))
+
+
+### Performance
+
+- Pin the render engine and add an opt-in shared render mode (for development only), keep isolate for others ([`2ef4659`](https://github.com/wxops-idp/wxops-core/commit/2ef4659211b075d2b5876ecffee0eab75bb3c5c0))
+
+
+### Refactor
+
+- Group the api reference and example by API groups, remove make render opt, and move example of providers in place ([`9d97a69`](https://github.com/wxops-idp/wxops-core/commit/9d97a692ebf45a387cfd1f417dc409629c80afa3))
+
+
+
+📖 [API reference](https://github.com/wxops-idp/wxops-core/tree/release-2026-11-04/docs) · [`VERSIONS.yaml`](https://github.com/wxops-idp/wxops-core/blob/release-2026-11-04/VERSIONS.yaml)
+🔍 [Diff vs release-2026-10-16](https://github.com/wxops-idp/wxops-core/compare/release-2026-10-16...release-2026-11-04)
 ## [release-2026-10-16] — 2026-10-16
 
 ### CI/CD
@@ -325,6 +353,7 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 
 📖 [API reference](https://github.com/wxops-idp/wxops-core/tree/v0.1.0/docs) · [`VERSIONS.yaml`](https://github.com/wxops-idp/wxops-core/blob/v0.1.0/VERSIONS.yaml)
 ---
+[release-2026-11-04]: https://github.com/wxops-idp/wxops-core/releases/tag/release-2026-11-04
 [release-2026-10-16]: https://github.com/wxops-idp/wxops-core/releases/tag/release-2026-10-16
 [release-2026-10-09]: https://github.com/wxops-idp/wxops-core/releases/tag/release-2026-10-09
 [release-2026-09-16]: https://github.com/wxops-idp/wxops-core/releases/tag/release-2026-09-16
@@ -344,5 +373,5 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 [0.2.0]: https://github.com/wxops-idp/wxops-core/releases/tag/v0.2.0
 [0.1.1]: https://github.com/wxops-idp/wxops-core/releases/tag/v0.1.1
 [0.1.0]: https://github.com/wxops-idp/wxops-core/releases/tag/v0.1.0
-[Unreleased]: https://github.com/wxops-idp/wxops-core/compare/release-2026-10-16...HEAD
+[Unreleased]: https://github.com/wxops-idp/wxops-core/compare/release-2026-11-04...HEAD
 

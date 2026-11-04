@@ -1,9 +1,10 @@
 # Access Model — one SCM login, an SCM Persona, and everything it can reach
 
 > [!NOTE]
-> **Status: direction, not implemented.** The map that RFC-005, RFC-008 and [RFC-009](../rfc/009-scm-personas.md) each point at, so no single RFC has to
-> restate the whole model. The identity half is built ([RFC-003](../rfc/003-scm-connections-and-resources.md),
-> [RFC-004](../rfc/004-dex-identity-and-portal-authentication.md)); everything from *personas* down is design. Written 2026-10-20 from a design
+> **Status: partly implemented.** The map that RFC-005, RFC-008 and [RFC-009](../rfc/009-scm-personas.md) each point at, so no single RFC has to
+> restate the whole model. Identity is built ([RFC-003](../rfc/003-scm-connections-and-resources.md),
+> [RFC-004](../rfc/004-dex-identity-and-portal-authentication.md)), and so are personas, bindings and Kubernetes guardrails (RFC-009, proven on a cluster
+> 2026-11-04). Still design: projection into the platform tools (RFC-008), Core XR labelling (RFC-005), agents and audit. Written 2026-10-20 from a design
 > discussion; revised 2026-10-24 when RFC-009 replaced the persona file and its CI compiler with three `auth.wxops.cloud` kinds — `XPersona`, `XPersonaBinding`,
 > `XPlatformPolicy`.
 
@@ -97,7 +98,7 @@ native objects + catalog
 | Guardrails | which objects | `XPlatformPolicy` | Crossplane → Kyverno CEL |
 | Tools | the grant inside each tool | each tool's native objects | GitOps; `provider-vault` for OpenBao |
 | Enforce | every request | each tool's own model | RBAC, OpenBao policy, Argo `policy.csv`, Grafana roles, Kyverno |
-| See | what happened | logs and reports | Loki, `PolicyReport` |
+| See | what happened | logs | Loki (the API server audit log); `PolicyReport` optional |
 
 ---
 
@@ -364,7 +365,8 @@ Every layer already records the identity; ship them to one place and join on `us
 - the Kubernetes API server audit log — what they did, in which cluster; through Pinniped's impersonation proxy the person is in `impersonatedUser`;
 - the OpenBao audit device — which paths they read;
 - Argo CD and Grafana — syncs and changes;
-- Kyverno `PolicyReport`s — every rule result, every concept, one API. Also what an agent reads to explain why something was blocked.
+- Kyverno `PolicyReport`s, when the reports controller runs — every rule result in one API, also what an agent reads to explain why something was
+  blocked. Optional: the controller writes back through the API server ([RFC-009 open question 9](../rfc/009-scm-personas.md#open-questions)).
 
 ---
 

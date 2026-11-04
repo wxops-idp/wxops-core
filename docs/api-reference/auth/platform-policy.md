@@ -19,7 +19,12 @@ Design: [RFC-009](../../../development-docs/rfc/009-scm-personas.md), [RFC-005](
 Controllers, Crossplane, External Secrets Operator and Argo CD are never matched — they answer to their own RBAC, and Argo CD to its AppProjects and merge review.
 `exemptPersonaRef` additionally exempts a persona (the platform team).
 
-Background scanning is off: these policies read `request.userInfo`, which a background scan does not have. PolicyReports come from admission.
+Background scanning is off: these policies read `request.userInfo`, which a background scan does not have. Any PolicyReports come from admission — and only
+while Kyverno's reports controller runs.
+
+> [!IMPORTANT]
+> **`mode: Audit` reports only if Kyverno's reports controller runs.** Without it, an `Audit` policy neither blocks nor visibly records anything — use `Deny`,
+> as every template was proven in. Whether the reports controller runs at all is an open question ([RFC-009 question 9](../../../development-docs/rfc/009-scm-personas.md#open-questions)).
 
 ## Templates
 
@@ -34,13 +39,14 @@ Background scanning is off: these policies read `request.userInfo`, which a back
 | `sa-guard` | `ValidatingPolicy` | A `Pod`, or a workload's pod template (Deployment, StatefulSet, DaemonSet, ReplicaSet, Job, CronJob), runs only as `default` or a ServiceAccount whose `wxops.cloud/owner` is one of the caller's teams. Reads the namespace's ServiceAccounts at admission (Kyverno's `resource.List`), so it stays a Kyverno webhook policy |
 | `namespace-guard` | `ValidatingPolicy` | No create or delete of a `Namespace`, and no change to its `wxops.cloud/owner` or `auth.wxops.cloud/tenant-namespace` label — the labels every other template trusts. Team roles cannot write Namespaces at all; this holds against any wider grant |
 
-Access reviews, events and leases are never sealed (`excludeResourceRules`) — `kubectl auth can-i` must keep working.
+Access and token reviews, Pinniped's login APIs, events and leases are never sealed — `kubectl auth can-i` and every login must keep working, so they are
+excluded twice: `excludeResourceRules`, and the `not-excluded` match condition the API server evaluates before calling Kyverno.
 
 ### What each policy does in practice
 
 The same small cast in every example. **alice** is in team `payment`, persona `developers`. **carol** is in team `checkout`, persona `owners`. The namespace `payment-api` is owned by
 `payment`, `checkout-web` by `checkout`. ✓ goes through, ✗ is refused by the policy (in `Audit` it goes through too, and a PolicyReport records the same
-message), ✗ (RBAC) is refused before any policy runs — the persona roles ([`XPersonaBinding`](persona-binding.md#roles)) do not grant it at all. A policy only
+message while Kyverno's reports controller runs), ✗ (RBAC) is refused before any policy runs — the persona roles ([`XPersonaBinding`](persona-binding.md#roles)) do not grant it at all. A policy only
 narrows what RBAC allowed.
 
 **`owner-stamp`** — copies the namespace's owner onto what is created in it, so the label is there to compare later. Never refuses anything.
@@ -504,7 +510,7 @@ spec:
 | Field | Type | Default | Notes |
 |---|---|---|---|
 | `template` | enum | — (required) | One of the eight above |
-| `mode` | `Audit` \| `Deny` | `Audit` | `Audit` records a PolicyReport and lets the request through. Ignored by `owner-stamp` |
+| `mode` | `Audit` \| `Deny` | `Audit` | `Deny` refuses. `Audit` lets the request through and records a PolicyReport — only while Kyverno's reports controller runs. Ignored by `owner-stamp` |
 | `scmOrgs` | `[string]` | — (required, non-empty) | The orgs whose groups make a caller an SCM user — the same as the `XOIDCConnector`'s |
 | `personaRef.name` | `string` | `""` | `exec-guard` only, and required there: the persona that may exec |
 | `exemptPersonaRef.name` | `string` | `""` | A persona the policy does not apply to. Empty: nobody is exempt |

@@ -123,9 +123,9 @@ removes what it composed — one action, nothing fighting back. Until then, a tw
 
 The composition creates the ServiceAccount and publishes it as `status.darlane.serviceAccountName`; it never emits a `Role` or `RoleBinding` (a
 [rejected design](../_archives/ROADMAP.md#decided-and-rejected)). Who may exec into, port-forward to and scale a twin is decided in GitOps — under the
-[access model](access-model.md), by the team's persona: a developer persona includes `pods/exec`, `pods/portforward`, `pods/log` and
-`deployments/scale` in its own namespaces; an agent persona reads logs and events only. Kyverno then narrows `exec` to pods whose `wxops.cloud/owner`
-matches the caller's team.
+[access model](access-model.md), by the team's persona: a developer persona reads `pods/log` and scales Deployments in its own namespaces;
+the owners persona adds `pods/exec` and `pods/portforward`; an agent persona reads logs and events only. Kyverno then narrows `exec` to the owners persona,
+in namespaces its team owns (`exec-guard`).
 
 ## Session safety — tools, audit, data boundary
 

@@ -5,3 +5,6 @@ resources:
   - oidc-static-password.yaml
   - oidc-client.yaml
   - oidc-connector.yaml
+  - persona.yaml
+  - persona-binding.yaml
+  - platform-policy.yaml

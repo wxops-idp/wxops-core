@@ -75,8 +75,8 @@ API group (`platform`, `scm`, ...) is per package — see [ADR-002](../developme
 | [oidc-client](api-reference/auth/oidc-client.md) | `XOIDCClient` | A downstream OAuth client that logs in through the broker |
 | [oidc-connector](api-reference/auth/oidc-connector.md) | `XOIDCConnector` | An upstream Git vendor connector, team allow-list generated from `XScmTeam` |
 | [persona](api-reference/auth/persona.md) | `XPersona` | A title that collects SCM teams, users and agents into RBAC subjects |
-| [persona-binding](api-reference/auth/persona-binding.md) | `XPersonaBinding` | Binds a persona to a standard, persona or Platform API role, per owned namespace |
-| [platform-policy](api-reference/auth/platform-policy.md) | `XPlatformPolicy` | One reviewed Kyverno CEL policy per resource — owner seal, read-only Secrets, exec, protected, RBAC guard |
+| [persona-binding](api-reference/auth/persona-binding.md) | `XPersonaBinding` | Binds a persona to `view`, a persona role or a Platform API role, per owned namespace |
+| [platform-policy](api-reference/auth/platform-policy.md) | `XPlatformPolicy` | One reviewed Kyverno CEL policy per resource — owner stamp and seal, read-only Secrets, exec, protected, RBAC, ServiceAccount and Namespace guards |
 | [status-contract](api-reference/status-contract.md) | all | Every package's `status` fields on one page: the absent-vs-`false` split, `ready` vs `dependenciesReady` |
 
 ### User guide

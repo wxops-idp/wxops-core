@@ -2,7 +2,8 @@
 
 ## Status
 <!-- Draft | In review | Accepted | Declined | Withdrawn | Implemented — and the GitHub issue that carries the discussion, e.g. "Draft · #42" -->
-Draft — aligned 2026-10-24 with [RFC-009](009-scm-personas.md): personas, bindings and the policy package are RFC-009's; this RFC is what is specific to
+Implemented (Phase 1) — the Platform API roles, shipping in `release-2026-11-04`; the spike run and `owner-seal`'s Core options built, labelling Core XRs
+is next. Aligned 2026-10-24 with [RFC-009](009-scm-personas.md): personas, bindings and the policy package are RFC-009's; this RFC is what is specific to
 Core's own kinds
 
 ## Summary
@@ -25,7 +26,7 @@ that reaches `prod`. The link between a Git team and an owner is the team's slug
 [RFC-004](004-dex-identity-and-portal-authentication.md) makes a person's identity and Git memberships available, and RFC-009 decides what each persona may
 reach. Core's kinds still need three things of their own:
 
-1. **Every Core kind is cluster-scoped** (`scope: Cluster` on all eleven XRDs), so there is no namespace to scope a binding to. `wxops:platform-edit` can grant
+1. **Every Core kind is cluster-scoped** (`scope: Cluster` on all fourteen XRDs), so there is no namespace to scope a binding to. `wxops:platform-edit` can grant
    "create `XTenantApp`", but not "only for `team-alpha`'s apps" — `resourceNames` does not help when the name is chosen at creation.
 2. **Ownership is not a uniform field.** Only `XTenantDatabase` has an `owner` parameter (it drives the Vault path); the other kinds express ownership as
    `orgName`, a namespace, or not at all. A rule about "whose resource is this" needs one place to look.
@@ -133,10 +134,11 @@ read it.
 
 ### Rollout safety
 
-- **Audit first.** Every rule starts in `Audit`; existing XRs — none of which carry the label — show up in PolicyReports before anything is refused. Labelling
-  them is a one-time change, and only then does a rule move to `Deny`.
+- **Label first.** Existing XRs carry no owner label; label them — a one-time change — before a rule moves to `Deny`. `Audit` shows what would be refused only
+  while Kyverno's reports controller runs ([RFC-009 open question 9](009-scm-personas.md#open-questions)).
 - **`failurePolicy: Fail`** for rules 1–4: if Kyverno is down, people's writes to Core kinds are refused — the correct failure for an authorization control.
-  Whether system writes stay unaffected is RFC-009's failure spike.
+  System writes stay unaffected, proven by RFC-009's failure spike; a graceful Kyverno shutdown deletes its webhooks instead, so Kyverno runs in high
+  availability ([results](009-scm-personas.md#spike-and-acceptance-results-2026-11-04)).
 - **Break-glass** is the `platform` persona, visible in the audit log; it is not a bypass of the policy engine.
 
 ### Compatibility and change tier
@@ -175,7 +177,7 @@ What the offline tier cannot show is what the API server presents as `userInfo` 
 
 ## Alternatives
 
-- **Namespaced XRs.** With a namespace per tenant, plain RBAC binds a group to a namespace and most of rules 1–3 disappear. It is not additive: all eleven XRDs
+- **Namespaced XRs.** With a namespace per tenant, plain RBAC binds a group to a namespace and most of rules 1–3 disappear. It is not additive: all fourteen XRDs
   are `scope: Cluster`, and a scope change is a new kind. **Decided 2026-10-24:** Core kinds stay cluster-scoped, bound through `wxops:platform-*` and sealed
   by owner; the `XTenantApp` and `XTenantDatabase` redesign is the moment to make the tenant kinds namespaced
   ([Darlane — what comes next](../core-ideas/darlane.md#xdarlane--a-workspace-claim-of-its-own)).
@@ -194,11 +196,17 @@ What the offline tier cannot show is what the API server presents as `userInfo` 
 
 Each phase rides on an [RFC-009 phase](009-scm-personas.md#rollout-plan):
 
-- [ ] **Spike, before acceptance** — shared with RFC-009: `request.userInfo` in a `ValidatingPolicy` for cluster-scoped custom resources, through Pinniped and
-  through impersonation; what an unavailable Kyverno blocks.
+- [x] **Spike, before acceptance — run 2026-11-04**, shared with RFC-009 ([results](009-scm-personas.md#spike-and-acceptance-results-2026-11-04)):
+  `request.userInfo` reaches a `ValidatingPolicy` unchanged through Pinniped's impersonation proxy, by real logins; an unavailable Kyverno never blocks
+  system writes, and a graceful Kyverno shutdown leaves people's writes unchecked for a short window — answered by Kyverno in high availability. Not yet
+  exercised: `owner-seal` on a cluster-scoped Core XR itself — the run sealed namespaced objects.
 - [x] **Decision on namespaced XRs** — cluster scope kept, 2026-10-24.
-- [ ] **Phase 1 — the Platform API roles.** The `wxops:platform-*` pieces for every Core package, bound by `XPersonaBinding` (RFC-009 Phase 2).
-- [ ] **Phase 2 — the label.** Label existing Core XRs; `owner-seal` with the Core options in `Audit` (RFC-009 Phase 3); then `Deny`.
+- [x] **Phase 1 — the Platform API roles.** Built 2026-10-26: `wxops:platform-view`, `-edit` and `-admin`, aggregated from one piece per level over the
+  three W'xOps groups (`providers/rbac/aggregate-platform.yaml`) — read every kind, write the tenant kinds, write the platform-only kinds — and bound by
+  `XPersonaBinding` with `scope: platform` (RFC-009 Phase 2). Live on the hub as the `platform` persona's `wxops:platform-admin` binding.
+- [ ] **Phase 2 — the label.** `owner-seal`'s Core options are built — `ownerPattern` and `immutableOwner`, with a golden case (`owner-seal-core`) and an
+  example on the [API page](../../docs/api-reference/auth/platform-policy.md#owner-seal) (RFC-009 Phase 3). Still to do: label the existing Core XRs, then
+  apply it in `Deny` — `Audit` reports only while Kyverno's reports controller runs (RFC-009 open question 9).
 - [ ] **Phase 3 — the Portal.** Impersonation, so the Portal's writes are the person's.
 - [ ] **Phase 4 — environments and OIDC redirects.** `environment-gate` and `oidc-redirect-domains`, audit first.
 - [ ] **The Argo path, outside Kyverno** — team `AppProject`s and CODEOWNERS, per [RFC-008](008-built-in-tools-identity-and-catalog.md#argo-cd).
@@ -215,7 +223,8 @@ Settled:
 4. **Who may label? — settled.** Rule 3 makes the first write safe: a person can only label with one of their own teams. Onboarding — creating a team's
    `XScmTeam` and its first XRs — is the `platform` persona's.
 5. **`gitea-*` kinds — settled.** Archived, never run; they take no label.
-6. **Audit — settled** by [RFC-009](009-scm-personas.md#audit): PolicyReports and the API server audit log, shipped to Loki.
+6. **Audit — settled** by [RFC-009](009-scm-personas.md#audit): the API server audit log, shipped to Loki, is the record; PolicyReports are optional
+   ([RFC-009 open question 9](009-scm-personas.md#open-questions)).
 7. **Tenant = org or team? — settled.** A tenant is a **team inside** the platform's org, so the owner label is a team slug
    ([RFC-003](003-scm-connections-and-resources.md)); `XScmTeam` is created by platform onboarding, not by the tenant it names.
 
