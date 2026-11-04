@@ -90,6 +90,6 @@ spec:
           - Deny
         validations:
           - expression: 'false'
-            message: 'authz.wxops.cloud: bindings are written by XPersonaBinding and personas and policies by the platform team, not by hand'
+            message: 'auth.wxops.cloud: bindings are written by XPersonaBinding and personas and policies by the platform team, not by hand'
   providerConfigRef:
     name: default

@@ -141,6 +141,31 @@ def persona_binding_roles_match(docs, ctx):
     return bad
 
 
+PERSONA_RBAC = R.ROOT / "providers" / "rbac" / "aggregate-persona.yaml"
+ESCALATING_SELECTORS = {"rbac.authorization.k8s.io/aggregate-to-edit", "rbac.authorization.k8s.io/aggregate-to-admin"}
+ESCALATION_ALLOWED = {"wxops:persona-platform"}
+
+
+@rule("persona-roles-without-edit-admin",
+      "No team persona role aggregates the built-in `edit` or `admin` (RFC-009, Phase 2b): both grant `impersonate` on ServiceAccounts and "
+      "`serviceaccounts/token`, through which a person acts as any ServiceAccount in the namespace and no XPlatformPolicy matches them. Team personas read "
+      "through `view` and write through W'xOps pieces; only wxops:persona-platform keeps `admin`.")
+def persona_roles_without_edit_admin(docs, ctx):
+    if ctx.get("package") != BINDING_PACKAGE:
+        return []
+    import yaml
+    bad = []
+    for doc in yaml.safe_load_all(PERSONA_RBAC.read_text()):
+        name = ((doc or {}).get("metadata") or {}).get("name", "")
+        if not name.startswith("wxops:persona-") or name in ESCALATION_ALLOWED:
+            continue
+        for sel in ((doc.get("aggregationRule") or {}).get("clusterRoleSelectors") or []):
+            hit = ESCALATING_SELECTORS & set((sel.get("matchLabels") or {}).keys())
+            if hit:
+                bad.append(f"{name} aggregates {sorted(hit)}")
+    return bad
+
+
 # Packages still on provider-terraform. RFC-003 retires them (Phase 4); delete this set, and
 # providers/archive/provider-terraform.yaml, together with them. Nothing else may be added to it.
 LEGACY_TERRAFORM_PACKAGES = {"gitea-user", "gitea-org", "gitea-team", "gitea-repository"}

@@ -1,7 +1,7 @@
 apiVersion: auth.wxops.cloud/v1alpha1
 kind: XPersonaBinding
 metadata:
-  name: bad-cluster-wide-edit
+  name: bad-cluster-wide-persona
 spec:
   crossplane:
     resourceRefs: []

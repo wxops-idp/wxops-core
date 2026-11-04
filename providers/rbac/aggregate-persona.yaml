@@ -1,11 +1,9 @@
-# Persona roles: Kubernetes' own view/edit/admin pieces (selected by the standard aggregate-to-* labels) plus W'xOps extras, so adding a permission to a persona is one labelled
-# ClusterRole. Bound by XPersonaBinding (RFC-009) with a RoleBinding per owned namespace — binding a ClusterRole by RoleBinding grants only that namespace.
-# Do not bind these (or view/edit/admin) with a ClusterRoleBinding; cluster-wide power comes only from wxops:platform-* and only for W'xOps kinds.
+# Persona roles (RFC-009). Reads come from Kubernetes' own `view` (selected by its aggregate-to-view label: no Secrets, no impersonation); writes come only
+# from the W'xOps pieces below. `edit` and `admin` are not aggregated into a team persona: they grant `impersonate` on ServiceAccounts and
+# `serviceaccounts/token`, through which an SCM user could act as any ServiceAccount and escape every XPlatformPolicy. Only `wxops:persona-platform` keeps
+# `admin`. Bound by XPersonaBinding with a RoleBinding per namespace — never a ClusterRoleBinding; cluster-wide power is wxops:platform-* only.
 #
-# Extend a persona with one piece:
-#   kind: ClusterRole
-#   metadata: {name: wxops:piece:developers-pods-log, labels: {auth.wxops.cloud/aggregate-to-persona-developers: "true"}}
-#   rules: [{apiGroups: [""], resources: ["pods/log"], verbs: ["get", "list"]}]
+# A kind tenants should write is a new piece with the persona labels it belongs to — a reviewed change, like any permission.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -21,7 +19,7 @@ metadata:
   name: wxops:persona-developers
 aggregationRule:
   clusterRoleSelectors:
-    - matchLabels: {rbac.authorization.k8s.io/aggregate-to-edit: "true"}
+    - matchLabels: {rbac.authorization.k8s.io/aggregate-to-view: "true"}
     - matchLabels: {auth.wxops.cloud/aggregate-to-persona-developers: "true"}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -30,7 +28,7 @@ metadata:
   name: wxops:persona-owners
 aggregationRule:
   clusterRoleSelectors:
-    - matchLabels: {rbac.authorization.k8s.io/aggregate-to-admin: "true"}
+    - matchLabels: {rbac.authorization.k8s.io/aggregate-to-view: "true"}
     - matchLabels: {auth.wxops.cloud/aggregate-to-persona-owners: "true"}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -41,3 +39,69 @@ aggregationRule:
   clusterRoleSelectors:
     - matchLabels: {rbac.authorization.k8s.io/aggregate-to-admin: "true"}
     - matchLabels: {auth.wxops.cloud/aggregate-to-persona-platform: "true"}
+---
+# Workloads and what they need around them — developers and owners. No Pods directly (a debug pod is Darlane's), only `delete` to restart one; no
+# ServiceAccounts, Secrets, Roles or RoleBindings: those come from compositions, External Secrets Operator and XPersonaBinding.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: wxops:piece:persona-write-workloads
+  labels:
+    auth.wxops.cloud/aggregate-to-persona-developers: "true"
+    auth.wxops.cloud/aggregate-to-persona-owners: "true"
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments", "deployments/scale", "statefulsets", "statefulsets/scale"]
+    verbs: ["create", "update", "patch", "delete"]
+  - apiGroups: ["batch"]
+    resources: ["jobs", "cronjobs"]
+    verbs: ["create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["services", "configmaps", "persistentvolumeclaims"]
+    verbs: ["create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["delete"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["create", "update", "patch", "delete"]
+  - apiGroups: ["autoscaling"]
+    resources: ["horizontalpodautoscalers"]
+    verbs: ["create", "update", "patch", "delete"]
+  - apiGroups: ["policy"]
+    resources: ["poddisruptionbudgets"]
+    verbs: ["create", "update", "patch", "delete"]
+---
+# The operator kinds tenants write beside their workloads. A rule for a kind whose CRD is not installed grants nothing until it is.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: wxops:piece:persona-write-operators
+  labels:
+    auth.wxops.cloud/aggregate-to-persona-developers: "true"
+    auth.wxops.cloud/aggregate-to-persona-owners: "true"
+rules:
+  - apiGroups: ["external-secrets.io"]
+    resources: ["externalsecrets"]
+    verbs: ["create", "update", "patch", "delete"]
+  - apiGroups: ["cert-manager.io"]
+    resources: ["certificates"]
+    verbs: ["create", "update", "patch", "delete"]
+  - apiGroups: ["traefik.io"]
+    resources: ["ingressroutes", "middlewares"]
+    verbs: ["create", "update", "patch", "delete"]
+  - apiGroups: ["monitoring.coreos.com"]
+    resources: ["servicemonitors", "podmonitors"]
+    verbs: ["create", "update", "patch", "delete"]
+---
+# Into a running workload — owners only, and narrowed further by the exec-guard XPlatformPolicy.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: wxops:piece:persona-connect
+  labels:
+    auth.wxops.cloud/aggregate-to-persona-owners: "true"
+rules:
+  - apiGroups: [""]
+    resources: ["pods/exec", "pods/attach", "pods/portforward"]
+    verbs: ["create"]

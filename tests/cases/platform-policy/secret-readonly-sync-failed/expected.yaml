@@ -77,6 +77,6 @@ spec:
           - Deny
         validations:
           - expression: 'false'
-            message: 'authz.wxops.cloud: Secrets are written by External Secrets Operator from OpenBao, not by hand'
+            message: 'auth.wxops.cloud: Secrets are written by External Secrets Operator from OpenBao, not by hand'
   providerConfigRef:
     name: default

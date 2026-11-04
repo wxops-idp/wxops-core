@@ -7,18 +7,18 @@ spec:
     resourceRefs:
       - apiVersion: kubernetes.crossplane.io/v1alpha2
         kind: Object
-        name: 656a5d17-checkout-web-edit
+        name: 656a5d17-checkout-web-persona-developers
       - apiVersion: kubernetes.crossplane.io/v1alpha2
         kind: Object
-        name: 656a5d17-payment-api-edit
+        name: 656a5d17-payment-api-persona-developers
 status:
   bindings:
     - kind: RoleBinding
-      name: wxops-developers-edit-edit
+      name: wxops-developers-edit-persona-developers
       namespace: checkout-web
       subjects: 1
     - kind: RoleBinding
-      name: wxops-developers-edit-edit
+      name: wxops-developers-edit-persona-developers
       namespace: payment-api
       subjects: 1
   conditions:
@@ -39,10 +39,10 @@ apiVersion: kubernetes.crossplane.io/v1alpha2
 kind: Object
 metadata:
   annotations:
-    crossplane.io/composition-resource-name: 656a5d17-checkout-web-edit
+    crossplane.io/composition-resource-name: 656a5d17-checkout-web-persona-developers
   labels:
     crossplane.io/composite: developers-edit
-  name: 656a5d17-checkout-web-edit
+  name: 656a5d17-checkout-web-persona-developers
   ownerReferences:
     - apiVersion: auth.wxops.cloud/v1alpha1
       blockOwnerDeletion: true
@@ -60,12 +60,12 @@ spec:
           auth.wxops.cloud/binding: developers-edit
           auth.wxops.cloud/persona: developers
           wxops.cloud/managed-by: persona-binding
-        name: wxops-developers-edit-edit
+        name: wxops-developers-edit-persona-developers
         namespace: checkout-web
       roleRef:
         apiGroup: rbac.authorization.k8s.io
         kind: ClusterRole
-        name: edit
+        name: wxops:persona-developers
       subjects:
         - apiGroup: rbac.authorization.k8s.io
           kind: Group
@@ -77,10 +77,10 @@ apiVersion: kubernetes.crossplane.io/v1alpha2
 kind: Object
 metadata:
   annotations:
-    crossplane.io/composition-resource-name: 656a5d17-payment-api-edit
+    crossplane.io/composition-resource-name: 656a5d17-payment-api-persona-developers
   labels:
     crossplane.io/composite: developers-edit
-  name: 656a5d17-payment-api-edit
+  name: 656a5d17-payment-api-persona-developers
   ownerReferences:
     - apiVersion: auth.wxops.cloud/v1alpha1
       blockOwnerDeletion: true
@@ -98,12 +98,12 @@ spec:
           auth.wxops.cloud/binding: developers-edit
           auth.wxops.cloud/persona: developers
           wxops.cloud/managed-by: persona-binding
-        name: wxops-developers-edit-edit
+        name: wxops-developers-edit-persona-developers
         namespace: payment-api
       roleRef:
         apiGroup: rbac.authorization.k8s.io
         kind: ClusterRole
-        name: edit
+        name: wxops:persona-developers
       subjects:
         - apiGroup: rbac.authorization.k8s.io
           kind: Group

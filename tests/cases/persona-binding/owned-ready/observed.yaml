@@ -8,10 +8,10 @@ apiVersion: kubernetes.crossplane.io/v1alpha2
 kind: Object
 metadata:
   annotations:
-    crossplane.io/composition-resource-name: 656a5d17-checkout-web-edit
+    crossplane.io/composition-resource-name: 656a5d17-checkout-web-persona-developers
   labels:
     crossplane.io/composite: developers-edit
-  name: 656a5d17-checkout-web-edit
+  name: 656a5d17-checkout-web-persona-developers
 status:
   conditions:
     - reason: Available
@@ -22,10 +22,10 @@ apiVersion: kubernetes.crossplane.io/v1alpha2
 kind: Object
 metadata:
   annotations:
-    crossplane.io/composition-resource-name: 656a5d17-payment-api-edit
+    crossplane.io/composition-resource-name: 656a5d17-payment-api-persona-developers
   labels:
     crossplane.io/composite: developers-edit
-  name: 656a5d17-payment-api-edit
+  name: 656a5d17-payment-api-persona-developers
 status:
   conditions:
     - reason: Available

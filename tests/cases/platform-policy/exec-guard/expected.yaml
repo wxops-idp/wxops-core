@@ -77,7 +77,7 @@ spec:
           - Audit
         validations:
           - expression: (request.userInfo.groups.exists(g, g in ['wxops-idp:owners']) || request.userInfo.username in ['alice']) && variables.nsOwner in variables.teams
-            message: 'authz.wxops.cloud: exec, attach and port-forward are for the members of persona ''owners'', in a namespace one of their teams owns'
+            message: 'auth.wxops.cloud: exec, attach and port-forward are for the members of persona ''owners'', in a namespace one of their teams owns'
         variables:
           - expression: request.userInfo.groups.filter(g, ['wxops-idp:'].exists(p, g.startsWith(p))).map(g, g.substring(g.indexOf(':') + 1))
             name: teams

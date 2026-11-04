@@ -52,6 +52,12 @@ spec:
 
                         `rbac-guard` — an SCM user cannot write a `Role`, `RoleBinding`, `ClusterRole`, `ClusterRoleBinding` or any `auth.wxops.cloud` kind. Bindings are
                         `XPersonaBinding`'s; without this a team `admin`, who may create RoleBindings in its namespace, could bind around it.
+
+                        `sa-guard` — a Pod, or a workload's pod template, created or updated by an SCM user runs only as `default` or a ServiceAccount whose
+                        `wxops.cloud/owner` is one of their teams — no one runs a workload as another team's, or the platform's, ServiceAccount.
+
+                        `namespace-guard` — an SCM user cannot create or delete a Namespace, nor change its `wxops.cloud/owner` or
+                        `auth.wxops.cloud/tenant-namespace` label: the labels every other rule trusts.
                       enum:
                         - owner-stamp
                         - owner-seal
@@ -59,6 +65,8 @@ spec:
                         - exec-guard
                         - protected
                         - rbac-guard
+                        - sa-guard
+                        - namespace-guard
                     mode:
                       type: string
                       description: |
@@ -92,7 +100,7 @@ spec:
                     exemptPersonaRef:
                       type: object
                       description: |
-                        A persona the policy does not apply to — the platform team, for `owner-seal` on Core XRs, `rbac-guard` and `protected`. Empty, nobody is exempt.
+                        A persona the policy does not apply to — the platform team, for `owner-seal` on Core XRs, `rbac-guard`, `protected`, `sa-guard` and `namespace-guard`. Empty, nobody is exempt.
                         If the persona cannot be found the policy is rendered with no exemption, and `syncMessage` says so: a missing persona makes a policy stricter, never looser.
                       default: {name: ""}
                       required:

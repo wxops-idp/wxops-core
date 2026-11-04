@@ -7,4 +7,4 @@ spec:
   parameters:
     personaRef:
       name: ghost
-    role: edit
+    role: wxops:persona-developers

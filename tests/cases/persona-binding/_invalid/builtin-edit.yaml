@@ -1,0 +1,14 @@
+# expect: role
+# expect: 'edit' is not one of
+#
+# The built-in edit (and admin) are not bindable: they grant impersonation of every ServiceAccount in the namespace. Teams bind wxops:persona-* instead.
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPersonaBinding
+metadata:
+  name: nope
+spec:
+  parameters:
+    personaRef:
+      name: platform
+    role: edit
+    scope: owned

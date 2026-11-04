@@ -44,8 +44,6 @@ rules:
     verbs: ["bind"]
     resourceNames:
       - view
-      - edit
-      - admin
       - wxops:persona-viewers
       - wxops:persona-developers
       - wxops:persona-owners

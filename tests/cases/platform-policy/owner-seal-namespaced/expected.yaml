@@ -57,6 +57,8 @@ spec:
             enabled: false
         failurePolicy: Ignore
         matchConditions:
+          - expression: '!(request.resource.group in [''authentication.k8s.io'', ''authorization.k8s.io'', ''login.concierge.pinniped.dev'', ''identity.concierge.pinniped.dev'']) && !(request.resource.resource in [''events'', ''leases''])'
+            name: not-excluded
           - expression: '!request.userInfo.username.startsWith(''system:'') && request.userInfo.groups.exists(g, [''wxops-idp:''].exists(p, g.startsWith(p)))'
             name: scm-user
         matchConstraints:
@@ -64,6 +66,8 @@ spec:
             - apiGroups:
                 - authentication.k8s.io
                 - authorization.k8s.io
+                - login.concierge.pinniped.dev
+                - identity.concierge.pinniped.dev
               apiVersions:
                 - '*'
               operations:
@@ -102,7 +106,7 @@ spec:
           - Audit
         validations:
           - expression: (request.operation == 'DELETE' || variables.newOwner in variables.teams) && (request.operation == 'CREATE' || variables.oldOwner in variables.teams)
-            messageExpression: '''authz.wxops.cloud: owner '' + (request.operation == ''DELETE'' ? variables.oldOwner : variables.newOwner) + '' is not one of your teams ['' + variables.teams.join('', '') + '']'''
+            messageExpression: '''auth.wxops.cloud: owner '' + (request.operation == ''DELETE'' ? variables.oldOwner : variables.newOwner) + '' is not one of your teams ['' + variables.teams.join('', '') + '']'''
         variables:
           - expression: request.userInfo.groups.filter(g, ['wxops-idp:'].exists(p, g.startsWith(p))).map(g, g.substring(g.indexOf(':') + 1))
             name: teams

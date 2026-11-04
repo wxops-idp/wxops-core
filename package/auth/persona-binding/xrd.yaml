@@ -47,13 +47,12 @@ spec:
                     role:
                       type: string
                       description: |
-                        The ClusterRole to bind. The built-in `view`, `edit` and `admin`; the persona roles `wxops:persona-*`, which add W'xOps extras to them by
-                        aggregation; or a Platform API role `wxops:platform-*`. `cluster-admin` is never bindable, and so is any role outside this list — the provider
-                        holds `bind` on exactly these names.
+                        The ClusterRole to bind. The built-in `view`; the persona roles `wxops:persona-*` — `view` plus W'xOps write pieces, and `admin` for
+                        `platform` only; or a Platform API role `wxops:platform-*`. The built-in `edit` and `admin` are not bindable: they let a person act as any
+                        ServiceAccount in the namespace. `cluster-admin` is never bindable, and so is any role outside this list — the provider holds `bind` on
+                        exactly these names.
                       enum:
                         - view
-                        - edit
-                        - admin
                         - wxops:persona-viewers
                         - wxops:persona-developers
                         - wxops:persona-owners

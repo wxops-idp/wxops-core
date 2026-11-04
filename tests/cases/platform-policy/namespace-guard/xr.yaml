@@ -1,0 +1,11 @@
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPlatformPolicy
+metadata:
+  name: namespace-guard
+spec:
+  parameters:
+    template: namespace-guard
+    scmOrgs: [wxops-idp]
+    mode: Audit
+    exemptPersonaRef:
+      name: platform

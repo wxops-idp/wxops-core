@@ -6,4 +6,4 @@ spec:
   parameters:
     personaRef:
       name: developers
-    role: edit
+    role: wxops:persona-developers

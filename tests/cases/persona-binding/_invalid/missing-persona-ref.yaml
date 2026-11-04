@@ -5,4 +5,4 @@ metadata:
   name: nope
 spec:
   parameters:
-    role: edit
+    role: wxops:persona-developers

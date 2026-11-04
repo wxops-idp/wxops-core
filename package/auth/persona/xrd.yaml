@@ -55,21 +55,33 @@ spec:
                             `status.oidcGroup`.
                         groups:
                           type: array
-                          description: Groups by hand, as `<org>:<team>` — for a team the SCM family does not model.
+                          description: |
+                            Groups by hand, as `<org>:<team>` — for a team the SCM family does not model. SCM groups only: a `system:` group
+                            (`system:authenticated`, `system:serviceaccounts`, `system:masters`, …) is Kubernetes' own and is refused.
                           items:
                             type: string
                             minLength: 1
+                            x-kubernetes-validations:
+                              - rule: "!self.startsWith('system:')"
+                                message: "a persona holds SCM groups only — system: groups are Kubernetes' own and are never a persona member"
                           default: []
                         users:
                           type: array
-                          description: Dex usernames by hand — for the rare individual. Prefer a team.
+                          description: |
+                            Dex usernames by hand — for the rare individual. Prefer a team. A `system:` username is Kubernetes' own and is refused; an
+                            in-cluster identity goes in `serviceAccounts`.
                           items:
                             type: string
                             minLength: 1
+                            x-kubernetes-validations:
+                              - rule: "!self.startsWith('system:')"
+                                message: "a persona holds SCM users only — a system: username is Kubernetes' own; use serviceAccounts for an in-cluster identity"
                           default: []
                         serviceAccounts:
                           type: array
-                          description: In-cluster identities, agents first.
+                          description: |
+                            In-cluster identities, agents first — a named ServiceAccount, bound as a `ServiceAccount` subject. The one way a
+                            Kubernetes identity joins a persona; never a `system:` group or username typed by hand.
                           items:
                             type: object
                             required:
