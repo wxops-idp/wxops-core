@@ -141,20 +141,16 @@ providers/                    ← shared Provider + Function installs + Provider
   archive/                    ← provider-terraform, function-go-templating — kept, not installed
 docs/                         ← generic documentation hub (docs/README.md): using, operating, building on Core
   learn/                      ← Crossplane, OpenTofu and KCL as this repo uses them
-  api-reference/              ← the reconcile loop, one page per Kind, the status contract
+  api-reference/              ← the reconcile loop, the status contract, one page per Kind in <group>/ (platform, scm, auth)
     _archives/                ← retired Kinds' reference docs
   user-guide/                 ← setup, app onboarding, portal integration
 development-docs/             ← development hub (development-docs/README.md): matrix, decisions, process
   core-ideas/                 ← Darlane, multi-cluster, observability, self-service, access model, security
   adr/ · rfc/ · development/ (guide, releasing) · _archives/ (ROADMAP.md, superseded by the RFC index)
-examples/                     ← minimal XR YAML to exercise each package
-  platform-database-clusters/xr.yaml
-  tenant-database/xr.yaml
-  tenant-database/xr-dedicated.yaml
-  tenant-app/xr.yaml
-  scm-connection/xr.yaml
-  scm-repository/xr.yaml
-  scm-oauth-app/xr.yaml
+examples/                     ← one minimal xr.yaml per package, in <group>/<name>/ (platform, scm, auth) — more variants on each API page
+  platform/tenant-database/xr.yaml
+  scm/oauth-app/xr.yaml
+  auth/platform-policy/xr.yaml · auth/platform-policy/scenarios/ (cluster acceptance kit)
   _archives/                  ← examples for retired packages
 kcl/                          ← KCL composition functions (source of truth, embedded via kcl-sync)
   platform-database-clusters/
@@ -178,12 +174,14 @@ release-notes/                ← hand-written notes; required for careful/break
 ## Quick start
 
 > [!NOTE]
-> To run these packages, you require to had the Kubernetes Cluster (>= v1.34.x), that quite be compatible with any distribution deployed, e.g: EKS, K3s, or Kind. If you want find the solution to self-hosted cluster (Kind, K3s, or RKE2), you can use project [Kubewekend](https://github.com/Xeus-Territory/kubewekend) and follow the instruction.
+> To run these packages, you require to had the Kubernetes Cluster (>= v1.34.x), that quite be compatible with any distribution deployed, e.g: EKS, K3s, or Kind.
+> **Kubernetes v1.36 is recommended** for the full stack: the login path (Pinniped v0.46.0) is built on the Kubernetes 1.36 libraries, and on an older cluster
+> its impersonation proxy runs with failing watches — see [Kubernetes version](docs/user-guide/setup.md). If you want find the solution to self-hosted cluster (Kind, K3s, or RKE2), you can use project [Kubewekend](https://github.com/Xeus-Territory/kubewekend) and follow the instruction.
 
 For easier to test, you can use [Kind](https://kind.sigs.k8s.io/) as the local Kubernetes Cluster to run with only [Docker](https://docs.docker.com/engine/install/), that will cost you few step to completely. Explore more at [Kind - QuickStart](https://kind.sigs.k8s.io/docs/user/quick-start/)
 
 ```bash
-kind create cluster --name local --image kindest/node:v1.34.11
+kind create cluster --name local --image kindest/node:v1.36.4
 ```
 
 After your cluster worked, you can install [Kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl-linux/), [Helm](https://helm.sh/docs/intro/install/) and [Bao CLI](https://openbao.org/docs/install/) to continue work with cluster and easier install prerequisite tools for these package worked.
@@ -287,8 +285,8 @@ make providers                                            # functions, provider 
 bao kv put platform/scm/github-wxops-idp/credentials token="your-admin-or-pat-token"
 make install                                              # packages from the OCI registry
 kubectl api-resources | grep -i "wxops.cloud"             # check the packages worked in your cluster as CRDs
-kubectl apply -f examples/scm-connection/xr.yaml
-kubectl apply -f examples/scm-repository/xr.yaml
+kubectl apply -f examples/scm/connection/xr.yaml
+kubectl apply -f examples/scm/repository/xr.yaml
 kubectl get xscmrepositories
 ```
 

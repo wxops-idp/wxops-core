@@ -2,7 +2,7 @@
 
 > [!NOTE]
 > **Status: shipped inside `XTenantApp`** (`spec.parameters.darlane`); the standalone `XDarlane` is the future. Every field is in the
-> [API reference](../../docs/api-reference/tenant-app.md#darlane-debug-twin-deployment). This page is the why, what ships, and what comes next — the
+> [API reference](../../docs/api-reference/platform/tenant-app.md#darlane-debug-twin-deployment). This page is the why, what ships, and what comes next — the
 > [detailed edition](../_archives/darlane-detailed.md) keeps every workflow pattern, scenario playbook and trade-off for anyone diving deeper.
 
 ---
@@ -134,7 +134,7 @@ come from the [archived Guardian design](../_archives/guardian.md); the sidecar 
 composition, not by a separate layer.
 
 1. **The composition owns the pod spec.** Anything beside the developer's container — a tools mount, an audit container — is composed by the Darlane
-   composition, deterministic and testable with `make render`. No controller or mutating webhook injects containers after the fact; Kyverno may *require* a
+   composition, deterministic and testable with the golden tests. No controller or mutating webhook injects containers after the fact; Kyverno may *require* a
    setting by validation, never add it.
 2. **Debug tooling is platform-owned.** One versioned, scanned tools image per ecosystem (general: `curl`, `jq`, `strace`, `tcpdump`, `grpcurl`; Python:
    `debugpy`, `py-spy`; Node: inspector, `clinic`; Go: `dlv`, `pprof`; databases: `psql`, `redis-cli`), copied by an init container into an `emptyDir` and

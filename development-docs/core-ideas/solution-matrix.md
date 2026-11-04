@@ -33,7 +33,7 @@ The current focus, in order. Everything else on this page waits behind it.
 | # | Problem | Answer | State | Where |
 |---|---|---|---|---|
 | I1 | One login for every tool | SCM → Dex; `groups: <org>:<team>`; one `XOIDCClient` per tool | ✅ | [RFC-004](../rfc/004-dex-identity-and-portal-authentication.md) |
-| I2 | Which teams reach the `groups` claim | Generated from `XScmTeam`s labelled `scm.wxops.cloud/oidc-login` | ✅ | [oidc-connector](../../docs/api-reference/oidc-connector.md#choosing-which-teams-can-sign-in) |
+| I2 | Which teams reach the `groups` claim | Generated from `XScmTeam`s labelled `scm.wxops.cloud/oidc-login` | ✅ | [oidc-connector](../../docs/api-reference/auth/oidc-connector.md#choosing-which-teams-can-sign-in) |
 | I3 | What a team may reach, in every tool | **Personas** — `XPersona` collects teams; `XPersonaBinding` binds `view`/`edit`/`admin` (extended by aggregation) per owned namespace; `XPlatformPolicy` renders Kyverno guardrails | 📋 | [RFC-009](../rfc/009-scm-personas.md) · [access model](access-model.md#the-scm-persona) |
 | I4 | Tool configuration nobody converges on | Built-in tools on their own native objects — OpenBao (`provider-vault`), Argo CD (`AppProject`), Grafana (grafana-operator) — one login, persona groups, a catalog; no W'xOps kind per tool | 📋 Phase 1 next | [RFC-008](../rfc/008-built-in-tools-identity-and-catalog.md) |
 | I5 | Who may write which XR | Core kinds stay cluster-scoped: `wxops:platform-*` bound by `XPersonaBinding`, sealed by the `wxops.cloud/owner` label (`owner-seal`) | 📋 label gaps first | [RFC-005](../rfc/005-git-mapped-authorization.md) · [access model](access-model.md#the-label-foundation) |

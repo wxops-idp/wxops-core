@@ -67,7 +67,7 @@ readme-sync: ## Regenerate the README.md packages table from VERSIONS.yaml
 readme-check: ## Fail if README.md packages table is out of sync with VERSIONS.yaml
 	@python3 .github/scripts/gen-readme-packages.py --check
 
-# ── Lint & render ────────────────────────────────────────────────────────────
+# ── Lint ────────────────────────────────────────────────────────────────────
 
 .PHONY: lint
 lint: ## YAML lint + kubeconform schema validation
@@ -79,37 +79,6 @@ lint: ## YAML lint + kubeconform schema validation
 		-schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/$(CRDS_CATALOG_REF)/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
 		-ignore-missing-schemas \
 		-summary
-
-# Every function any composition references must be listed, or render fails with
-# "unknown function ... is it listed in the render input?".
-FUNCTIONS := providers/functions/function-kcl.yaml \
-             providers/functions/function-patch-and-transform.yaml \
-             providers/functions/function-extra-resources.yaml
-
-.PHONY: render
-render: ## Render example XRs against compositions (offline dry-run)
-	@fns="$$(mktemp)"; err="$$(mktemp)"; \
-	for f in $(FUNCTIONS); do echo "---"; cat "$$f"; done > "$$fns"; \
-	failed=""; \
-	for pair in $(PACKAGE_PAIRS); do \
-		pkg=$${pair%%=*}; dir=$${pair#*=}; \
-		echo "→ rendering examples/$$pkg/xr.yaml"; \
-		req=""; \
-		if [ -f "examples/$$pkg/required-resources.yaml" ]; then \
-			req="--required-resources=examples/$$pkg/required-resources.yaml"; \
-		fi; \
-		if ! crossplane composition render \
-				examples/$$pkg/xr.yaml \
-				$$dir/composition.yaml \
-				"$$fns" $$req 2>"$$err"; then \
-			sed 's/^/    /' "$$err" >&2; \
-			failed="$$failed $$pkg"; \
-		fi; \
-	done; \
-	rm -f "$$fns" "$$err"; \
-	if [ -n "$$failed" ]; then \
-		echo "" >&2; echo "render FAILED:$$failed" >&2; exit 1; \
-	fi
 
 # ── Tests ────────────────────────────────────────────────────────────────────
 # Offline. No cluster required — `crossplane composition render` runs the real

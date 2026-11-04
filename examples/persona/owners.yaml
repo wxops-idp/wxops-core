@@ -1,8 +1,0 @@
-apiVersion: auth.wxops.cloud/v1alpha1
-kind: XPersona
-metadata:
-  name: owners
-spec:
-  parameters:
-    description: As developers, and production — a team's maintainers
-    environments: [dev, staging, prod]

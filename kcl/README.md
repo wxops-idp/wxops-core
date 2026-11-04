@@ -61,7 +61,7 @@ make kcl-check    # fail if composition.yaml has drifted from kcl/{pkg}/main.k
    ```
    If the KCL code reads extra resources (e.g. `tenant-database` discovers shared clusters), add a `function-extra-resources` step **before** the `function-kcl` step — the fetched resources appear in `option("params").extraResources` inside KCL. See `package/platform/tenant-database/composition.yaml` for an example.
 4. **Run `make kcl-sync`** to embed the source, then `make kcl-check` (or `pre-commit run --all-files`) to confirm it's in sync.
-5. **Validate** with `make render` against an example XR in `examples/{pkg}/xr.yaml`, and `make build` to confirm the package still packages cleanly.
+5. **Validate** with `make test` (the goldens under `tests/cases/{pkg}/`), and `make build` to confirm the package still packages cleanly.
 
 ## Future: KCL OCI modules (deferred)
 

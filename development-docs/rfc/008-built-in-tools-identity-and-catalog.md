@@ -105,7 +105,7 @@ team — not composed by a W'xOps package.
   a prerequisite: Crossplane v2 can keep unused managed resources inactive (managed resource definitions with an activation policy) where a provider supports
   it.
 - **Configuration, never values.** No KV-writing managed resource is used; values stay ESO's.
-- **Examples** that validate against the installed v4.1.0 CRDs: [`examples/openbao/`](../../examples/openbao) — mounts and a policy, OIDC login with an external group and its
+- **Examples** that validate against the installed v4.1.0 CRDs: [`providers/config/examples/openbao/`](../../providers/config/examples/openbao) — mounts and a policy, OIDC login with an external group and its
   alias, and Kubernetes auth per cluster. The provider installs all 129 of its CRDs without trouble; keeping unused ones inactive stays an optimisation.
 - **Adopting what exists.** The mounts, auth backends, groups and aliases made by hand are imported by external name, observed first, then managed.
 - **Out of band, documented as such:** `operator init`, unsealing, and the configuration credential the provider uses. The first credential of a secret store

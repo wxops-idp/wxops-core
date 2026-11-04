@@ -79,7 +79,7 @@ no table: team `team-alpha` is owner `team-alpha`, and leaving the team in Git r
 
 ### What the connector guarantees today
 
-[`XOIDCConnector`](../../docs/api-reference/oidc-connector.md#choosing-which-teams-can-sign-in) already decides which Git teams reach the `groups` claim at all:
+[`XOIDCConnector`](../../docs/api-reference/auth/oidc-connector.md#choosing-which-teams-can-sign-in) already decides which Git teams reach the `groups` claim at all:
 a team is in the claim only if an `XScmTeam` labelled `scm.wxops.cloud/oidc-login` generates it, or an operator lists it by hand, for an org the connector
 admits. Each entry is the team's `status.dexTeam` — the lowercase **slug on GitHub**, the team name as created on Gitea — and the resulting group is
 `<org>:<team>`. Groups reach RBAC exactly as the claim carries them — nothing transforms them — so a Gitea team named `Owners` is `wxops:Owners` while the

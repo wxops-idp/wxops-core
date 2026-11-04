@@ -9,7 +9,7 @@ Manages a single Gitea user lifecycle (create / update / delete).
 | **Plural** | `xgiteausers` |
 | **Scope** | `Cluster` |
 | **API versions** | `v1alpha1` (served, storage) |
-| **Package** | [`package/platform/archives/gitea-user/`](../../../package/platform/archives/gitea-user/) — see [`VERSIONS.yaml`](../../../VERSIONS.yaml) for the current package version |
+| **Package** | [`package/platform/archives/gitea-user/`](../../../package/platform/archives/gitea-user) — see [`VERSIONS.yaml`](../../../VERSIONS.yaml) for the current package version |
 
 ## `spec.parameters`
 

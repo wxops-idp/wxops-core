@@ -240,8 +240,14 @@ def replay(package: str, baseline: str, old_doc: dict, new_doc: dict) -> list[Fi
     out: list[Finding] = []
     paths = [p for p in REL.ls(baseline, f"tests/cases/{package}")
              if p.endswith("/xr.yaml") and "/_" not in p]
-    paths += [p for p in REL.ls(baseline, f"examples/{package}")
-              if p.endswith(".yaml") and not Path(p).name.startswith("required")]
+    # Examples moved from examples/<package>/ to examples/<group>/<name>/ (mirroring package/<group>/<name>/); a baseline tag has one or the other.
+    try:
+        example_dirs = [f"examples/{P.group(package)}/{Path(P.rel_path(package)).name}", f"examples/{package}"]
+    except KeyError:  # a package no longer registered (archived) — only its old flat path can exist at the baseline
+        example_dirs = [f"examples/{package}"]
+    for d in example_dirs:
+        paths += [p for p in REL.ls(baseline, d)
+                  if p.endswith(".yaml") and not Path(p).name.startswith("required") and Path(p).parent.as_posix() == d]
 
     for p in paths:
         try:

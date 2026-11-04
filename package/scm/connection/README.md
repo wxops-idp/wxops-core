@@ -46,7 +46,7 @@ bao kv put platform/scm/github-wxops/credentials token="$GITHUB_TOKEN"
 The composition then renders `crossplane-system/scm-connection-<name>`, key `credentials`, in tfvars
 form (`vendor`, `base_url`, `default_org`, `access`, `token`) — which is exactly what a consumer's
 `Workspace` reads as `varFiles`. Full detail, including the token scopes each host needs, is in
-[`examples/scm-connection/token-secret.md`](../../../examples/scm-connection/token-secret.md).
+[`examples/scm/connection/token-secret.md`](../../../examples/scm/connection/token-secret.md).
 
 ## What it reports
 
@@ -54,7 +54,7 @@ For a connection with an `org`, a read-only `inspect` Workspace writes the org's
 and `teams` (`count` and `names`, names capped at 50). Names only; the detail is on each `XScmRepository` / `XScmTeam`. It never gates `ready`: a missing
 org, a token without access, or (Gitea) a token whose user is not an org member leaves these fields absent and the reason on the Workspace. The user layer
 (no `org`) reports nothing. See
-[`docs/api-reference/scm-connection.md`](../../../docs/api-reference/scm-connection.md#what-the-connection-reports-about-the-org).
+[`docs/api-reference/scm/connection.md`](../../../docs/api-reference/scm/connection.md#what-the-connection-reports-about-the-org).
 
 ## Usage
 
@@ -72,7 +72,7 @@ spec:
     access: write
 ```
 
-See [`examples/scm-connection/xr.yaml`](../../../examples/scm-connection/xr.yaml).
+See [`examples/scm/connection/xr.yaml`](../../../examples/scm/connection/xr.yaml).
 
 ## Parameters
 
@@ -85,7 +85,7 @@ See [`examples/scm-connection/xr.yaml`](../../../examples/scm-connection/xr.yaml
 | `secretStoreRef.name` | string | no | `vault-platform` | ESO `ClusterSecretStore` holding the token |
 | `tokenKey` | string | no | `token` | Property to read at the remote path |
 
-Full reference: [`docs/api-reference/scm-connection.md`](../../../docs/api-reference/scm-connection.md).
+Full reference: [`docs/api-reference/scm/connection.md`](../../../docs/api-reference/scm/connection.md).
 
 ## Status
 
@@ -99,7 +99,7 @@ Full reference: [`docs/api-reference/scm-connection.md`](../../../docs/api-refer
 | `teams` | The org's teams as this token sees them. |
 | `synced` / `syncMessage` | `synced` is false while a composed resource's last apply failed (its `Ready` can stay True from the earlier success); `syncMessage` is the provider's message, truncated. Absent until the first reconcile |
 
-Full reference: [`docs/api-reference/scm-connection.md`](../../../docs/api-reference/scm-connection.md#status).
+Full reference: [`docs/api-reference/scm/connection.md`](../../../docs/api-reference/scm/connection.md#status).
 
 ## Build and publish
 

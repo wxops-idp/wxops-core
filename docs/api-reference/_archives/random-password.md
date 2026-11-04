@@ -9,7 +9,7 @@ Generates a random password via the Terraform `random` provider.
 | **Plural** | `xrandompasswords` |
 | **Scope** | `Cluster` |
 | **API versions** | `v1alpha1` (served, storage) |
-| **Package** | [`package/platform/archives/random-password/`](../../../package/platform/archives/random-password/) — utility composition, not yet published as a standalone OCI package (see [`VERSIONS.yaml`](../../../VERSIONS.yaml)) |
+| **Package** | [`package/platform/archives/random-password/`](../../../package/platform/archives/random-password) — utility composition, not yet published as a standalone OCI package (see [`VERSIONS.yaml`](../../../VERSIONS.yaml)) |
 
 ## `spec.parameters`
 

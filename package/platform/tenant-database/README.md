@@ -75,13 +75,12 @@ spec:
 > `XPlatformDatabaseCluster` must include
 > `wxops.cloud/managed-by: platform-database-clusters` for shared pool
 > discovery. See
-> [`docs/api-reference/tenant-database.md`](../../../docs/api-reference/tenant-database.md#required-discovery-labels)
+> [`docs/api-reference/platform/tenant-database.md`](../../../docs/api-reference/platform/tenant-database.md#required-discovery-labels)
 > for details.
 
-See [`examples/tenant-database/xr.yaml`](../../../examples/tenant-database/xr.yaml)
-and [`examples/tenant-database/xr-dedicated.yaml`](../../../examples/tenant-database/xr-dedicated.yaml)
-for full examples, and
-[`docs/api-reference/tenant-database.md`](../../../docs/api-reference/tenant-database.md) for the complete
+See [`examples/platform/tenant-database/xr.yaml`](../../../examples/platform/tenant-database/xr.yaml) (shared tier)
+and the [dedicated tier example](../../../docs/api-reference/platform/tenant-database.md#examples) for full examples, and
+[`docs/api-reference/platform/tenant-database.md`](../../../docs/api-reference/platform/tenant-database.md) for the complete
 `spec.parameters` reference (including `dedicatedCluster` sizing and
 `databaseReclaimPolicy` semantics).
 
@@ -97,7 +96,7 @@ for full examples, and
 | `ready` | True when the database is usable: it exists, its owning role exists, and the connection Secret has materialised (plus, on tier: dedicated, the child cluster is up). |
 | `synced` / `syncMessage` | `synced` is false while a composed resource's last apply failed (its `Ready` can stay True from the earlier success); `syncMessage` is the provider's message, truncated. Absent until the first reconcile |
 
-Full reference: [`docs/api-reference/tenant-database.md`](../../../docs/api-reference/tenant-database.md#status).
+Full reference: [`docs/api-reference/platform/tenant-database.md`](../../../docs/api-reference/platform/tenant-database.md#status).
 
 ## Relation to other packages
 

@@ -49,7 +49,7 @@ W'xOps Core composes resources that other operators reconcile. Install what the 
 |---|---|
 | `scm-connection`, `scm-repository`, `scm-oauth-app` | A reachable Gitea or GitHub host and an admin/API token, written to the secret store (step 2) |
 | `platform-database-clusters` | CloudNativePG operator; External Secrets Operator with a Vault `ClusterSecretStore`; provider-sql (installed by step 1) |
-| `tenant-database` | Everything `platform-database-clusters` needs, plus a cluster labelled for discovery; see [Required discovery labels](../api-reference/tenant-database.md#required-discovery-labels) |
+| `tenant-database` | Everything `platform-database-clusters` needs, plus a cluster labelled for discovery; see [Required discovery labels](../api-reference/platform/tenant-database.md#required-discovery-labels) |
 | `tenant-app` | Only what the XR enables: cert-manager for `ingress.tls`, Traefik CRDs for `ingress`, Prometheus Operator CRDs for `monitoring`, Stakater Reloader for `reloader` |
 | Darlane TTL enforcement **(Not Enforced)** | ~~Kyverno, plus `providers/policies/darlane-ttl.yaml`~~ |
 
@@ -97,7 +97,7 @@ bao login                                       # however your operators authent
 bao kv put platform/scm/github-wxops-idp/credentials token="your-admin-or-pat-token"
 ```
 
-See [Seeding a connection's token](../../examples/scm-connection/token-secret.md) for the full walkthrough, including what scope the token needs per vendor.
+See [Seeding a connection's token](../../examples/scm/connection/token-secret.md) for the full walkthrough, including what scope the token needs per vendor.
 
 ## 3 — Install packages
 
@@ -120,8 +120,8 @@ Compositions and skips every release gate. Everything it applies carries `channe
 ## 4 — Apply a first resource
 
 ```bash
-kubectl apply -f examples/scm-connection/xr.yaml
-kubectl apply -f examples/scm-repository/xr.yaml
+kubectl apply -f examples/scm/connection/xr.yaml
+kubectl apply -f examples/scm/repository/xr.yaml
 kubectl get xscmrepositories
 kubectl describe xscmrepository <name>
 crossplane resource trace xscmrepository <name>   # the XR and everything it composed

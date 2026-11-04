@@ -47,11 +47,11 @@ labels:
   auth.wxops.cloud/persona-developers: "true"
 ```
 
-`status.subjects` then lists the team's `oidcGroup`. Examples: [`examples/persona/`](../../../examples/persona).
+`status.subjects` then lists the team's `oidcGroup`. Examples: [`examples/auth/persona/`](../../../examples/auth/persona).
 
 ## Parameters
 
-See [`docs/api-reference/persona.md`](../../../docs/api-reference/persona.md).
+See [`docs/api-reference/auth/persona.md`](../../../docs/api-reference/auth/persona.md).
 
 ## Build and publish
 

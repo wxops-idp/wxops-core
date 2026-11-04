@@ -9,7 +9,7 @@ Manages a Gitea repository owned by an organisation.
 | **Plural** | `xgitearepos` |
 | **Scope** | `Cluster` |
 | **API versions** | `v1alpha1` (served, storage) |
-| **Package** | [`package/platform/archives/gitea-repository/`](../../../package/platform/archives/gitea-repository/) — see [`VERSIONS.yaml`](../../../VERSIONS.yaml) for the current package version |
+| **Package** | [`package/platform/archives/gitea-repository/`](../../../package/platform/archives/gitea-repository) — see [`VERSIONS.yaml`](../../../VERSIONS.yaml) for the current package version |
 
 ## `spec.parameters`
 

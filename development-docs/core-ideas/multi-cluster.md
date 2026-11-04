@@ -142,8 +142,15 @@ Three planes, each with its own rule:
 >   never a self-signed certificate per service.
 > - **The issuer URL never changes.** It is inside every token and every kubeconfig; changing it breaks every cluster's authenticator and every user's
 >   kubeconfig at once.
-> - **Prefer the Concierge's client-certificate mode**; the impersonation proxy only where a cluster needs it (managed control planes). Check with
->   `kubectl get credentialissuer -o yaml`.
+> - **The Concierge's impersonation proxy is the access path on every cluster, self-managed included** (decided 2026-11-04): people never reach the API
+>   server directly — every request enters through the proxy, which authenticates it and asks the API server to authorize it. The client-certificate
+>   strategy is not used; on RKE2 it also reports `cluster-info not found`, which is expected. Check with `kubectl get credentialissuer -o yaml`:
+>   `ImpersonationProxy` `Success`.
+> - **The proxy is on every person's request path, so run it like one:** two or more Concierge replicas, a PodDisruptionBudget, anti-affinity where there
+>   are nodes to spread over, and a Pinniped release built for the cluster's Kubernetes version (**Kubernetes v1.36 with Pinniped v0.46.0**, kept within one
+>   minor version of each other; restart the Concierge after a cluster upgrade). Each request the proxy forwards makes a SubjectAccessReview, so **nothing
+>   may sit on access reviews**: on the hub 2026-11-04 logins timed out because a Kyverno webhook was registered for every cluster-scoped CREATE, access
+>   reviews included, and waited on a slow Kyverno — fixed in `platform-policy` (see [RFC-009](../rfc/009-scm-personas.md#as-built-2026-10-26)).
 > - **The Supervisor is a hub dependency for new logins** — existing sessions run to expiry during a hub outage. Run it with more than one replica.
 > - **Keep the bootstrap admin kubeconfig offline** as break-glass; Pinniped is the everyday path, not the only one.
 >
@@ -237,7 +244,7 @@ for the hub to return.
   addresses, replication that dials pod IPs. Those stay inside one cluster, or get a protocol-specific route.
 - **People reach a cluster's API through Pinniped, never through a raw `:6443`.** Where the Concierge runs its impersonation proxy, that proxy is the
   authenticated entry: exposed by a LoadBalancer, or through the gateway with **TLS passthrough** routed by SNI — it issues and checks its own client
-  certificates, so nothing in front of it may terminate TLS. Where the Concierge uses client certificates, people reach the API server over a private network.
+  certificates, so nothing in front of it may terminate TLS. No person is given a route to the API server itself.
 
 ---
 
@@ -359,8 +366,9 @@ Checked against each vendor's documentation on 2026-10-27.
 **Login.** Pinniped's Concierge works on EKS, GKE and AKS, through its **impersonation proxy**: the client-certificate strategy needs a pod beside the
 `kube-controller-manager`, which most managed services do not allow, and the proxy by default needs a `LoadBalancer` Service. People log in through the SCM and
 Dex only — no cloud console account. Kyverno still sees the person: impersonation sets the request's user and groups before authorization and admission run.
-EKS can also trust Dex directly (an associated OIDC identity provider), with two conditions: the issuer URL must be reachable from the public internet, and
-EKS rejects self-signed certificates.
+The same proxy W'xOps uses on its own clusters, so managed and self-managed clusters share one access path. EKS could also trust Dex directly (an associated
+OIDC identity provider — the issuer reachable from the public internet, no self-signed certificates); W'xOps does not use that, since it puts people on the API
+server itself.
 
 **Group names must arrive unchanged.** EKS's OIDC association takes a `groupsPrefix` (`oidc:` turns `wxops-idp:payment` into `oidc:wxops-idp:payment`), and
 AWS recommends one per provider. Every W'xOps rule matches `<org>:<team>` exactly — `scope: owned`, `owner-seal`, the Kyverno SCM-user match — so a prefix on one
@@ -433,7 +441,7 @@ itself, such as ESO against a cloud secret manager instead of OpenBao.
    the `wxops-cluster-info` ConfigMap; a Crossplane `EnvironmentConfig` is the alternative, cluster-scoped and read directly by `function-extra-resources`.
 8. **The token reviewer** — a reviewer ServiceAccount token stored in each Kubernetes auth mount (bound to `system:auth-delegator` on the spoke), or ESO's own
    token used as the reviewer, so OpenBao holds no spoke credential at all (to verify against OpenBao). `provider-vault`'s Kubernetes `AuthBackendConfig` takes either
-   (`tokenReviewerJwtSecretRef`, or `disableLocalCaJwt`) — see [`examples/openbao/03-kubernetes-auth-per-cluster.yaml`](../../examples/openbao/03-kubernetes-auth-per-cluster.yaml).
+   (`tokenReviewerJwtSecretRef`, or `disableLocalCaJwt`) — see [`providers/config/examples/openbao/03-kubernetes-auth-per-cluster.yaml`](../../providers/config/examples/openbao/03-kubernetes-auth-per-cluster.yaml).
 9. **The egress path.** Most workloads speak plain HTTP and will not present a client certificate themselves, so a call to another cluster needs a local hop
    that originates the mTLS: pod → its own cluster's gateway (plain, in-cluster) → the callee's gateway (mTLS) — spoke to spoke, never through the hub. Open:
    - **which component originates it** — the same gateway in an egress role, or a separate egress proxy;

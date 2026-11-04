@@ -1,6 +1,6 @@
 # platform-policy
 
-Renders **one reviewed Kyverno CEL policy per resource** — `owner-stamp`, `owner-seal`, `secret-readonly`, `exec-guard`, `protected` or `rbac-guard` — that narrows what
+Renders **one reviewed Kyverno CEL policy per resource** — `owner-stamp`, `owner-seal`, `secret-readonly`, `exec-guard`, `protected`, `rbac-guard`, `sa-guard` or `namespace-guard` — that narrows what
 RBAC already grants. A policy matches **SCM users only** (a caller with a `<org>:<team>` group, never a `system:` username), so controllers, Crossplane, External Secrets
 Operator and Argo CD are never matched. Kyverno refuses; it never grants. Every policy starts in `Audit`. See [RFC-009](../../../development-docs/rfc/009-scm-personas.md)
 and [RFC-005](../../../development-docs/rfc/005-git-mapped-authorization.md).
@@ -49,11 +49,11 @@ Read what it would refuse before moving to `Deny`:
 kubectl get policyreports,clusterpolicyreports -A | grep wxops-owner-seal
 ```
 
-Examples, one per template: [`examples/platform-policy/`](../../../examples/platform-policy).
+Examples, one per template: [`examples/auth/platform-policy/`](../../../examples/auth/platform-policy).
 
 ## Parameters
 
-See [`docs/api-reference/platform-policy.md`](../../../docs/api-reference/platform-policy.md).
+See [`docs/api-reference/auth/platform-policy.md`](../../../docs/api-reference/auth/platform-policy.md).
 
 ## Build and publish
 

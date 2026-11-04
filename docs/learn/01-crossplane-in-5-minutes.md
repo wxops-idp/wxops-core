@@ -18,7 +18,7 @@ Crossplane lets you define your own Kubernetes API, then wire it to real infrast
 | Piece | What it is | In this repo |
 |---|---|---|
 | **XRD** (`CompositeResourceDefinition`) | The schema — what fields your API accepts | `package/<group>/<name>/xrd.yaml` |
-| **XR** (composite resource) | An instance of that API — the thing a user creates | `examples/<name>/xr.yaml` |
+| **XR** (composite resource) | An instance of that API — the thing a user creates | `examples/<group>/<name>/xr.yaml` |
 | **Composition** | The template that says what to build for a given XR | `package/<group>/<name>/composition.yaml` |
 | **Composed resource** | What the Composition actually creates — a real object in the cluster | Not a file; it exists only at runtime |
 
@@ -30,8 +30,8 @@ You write the first three. Crossplane's reconcile loop produces the fourth, cont
 `vendor`, `baseUrl`, `org`, `access`, and so on. This is a real Kubernetes CRD once installed; `kubectl explain xscmconnections.spec.parameters` reads straight
 from it.
 
-**2. An XR is one instance of that shape.** `examples/scm-connection/xr.yaml` is about a dozen lines: a `kind: XScmConnection` with values for the fields the
-XRD declared. Applying it is exactly like applying any other Kubernetes object — `kubectl apply -f examples/scm-connection/xr.yaml`.
+**2. An XR is one instance of that shape.** `examples/scm/connection/xr.yaml` is about a dozen lines: a `kind: XScmConnection` with values for the fields the
+XRD declared. Applying it is exactly like applying any other Kubernetes object — `kubectl apply -f examples/scm/connection/xr.yaml`.
 
 **3. The Composition says what to build.** Open `package/scm/connection/composition.yaml`. Strip away the YAML wrapper and it says, in effect: *"for an
 `XScmConnection`, create one `Object` wrapping an ESO `ExternalSecret`, with these fields patched in from the XR."* That's it — one composed resource, one patch

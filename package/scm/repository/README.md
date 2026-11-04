@@ -51,7 +51,7 @@ spec:
       - wxops-managed
 ```
 
-See [`examples/scm-repository/xr.yaml`](../../../examples/scm-repository/xr.yaml).
+See [`examples/scm/repository/xr.yaml`](../../../examples/scm/repository/xr.yaml).
 
 ## Modes
 
@@ -89,7 +89,7 @@ Deleting the XR **keeps** the repository by default (`retain: true` orphans the 
 | `topics` | []string | no | `[]` | GitHub only |
 | `retain` | bool | no | `true` | Keep the repository when the XR is deleted |
 
-Full reference: [`docs/api-reference/scm-repository.md`](../../../docs/api-reference/scm-repository.md).
+Full reference: [`docs/api-reference/scm/repository.md`](../../../docs/api-reference/scm/repository.md).
 
 ## Status
 
@@ -105,7 +105,7 @@ Full reference: [`docs/api-reference/scm-repository.md`](../../../docs/api-refer
 | `fullName` | `<org>/<repo>` as the host reports it. |
 | `synced` / `syncMessage` | `synced` is false while a composed resource's last apply failed (its `Ready` can stay True from the earlier success); `syncMessage` is the provider's message, truncated. Absent until the first reconcile |
 
-Full reference: [`docs/api-reference/scm-repository.md`](../../../docs/api-reference/scm-repository.md#status).
+Full reference: [`docs/api-reference/scm/repository.md`](../../../docs/api-reference/scm/repository.md#status).
 
 ## Build and publish
 

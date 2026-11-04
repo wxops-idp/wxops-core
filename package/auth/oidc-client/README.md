@@ -45,7 +45,7 @@ spec:
       source: generate
 ```
 
-See [`examples/oidc-client/xr.yaml`](../../../examples/oidc-client/xr.yaml).
+See [`examples/auth/oidc-client/xr.yaml`](../../../examples/auth/oidc-client/xr.yaml).
 
 ## `public` vs confidential
 
@@ -95,7 +95,7 @@ consumer needs to pick up the new value (its own `ExternalSecret` refresh) befor
 | `clientId` | Echoed from spec |
 | `vaultKey` | Where the record (not the secret) was pushed |
 
-Full reference: [`docs/api-reference/oidc-client.md`](../../../docs/api-reference/oidc-client.md).
+Full reference: [`docs/api-reference/auth/oidc-client.md`](../../../docs/api-reference/auth/oidc-client.md).
 
 ## Build and publish
 

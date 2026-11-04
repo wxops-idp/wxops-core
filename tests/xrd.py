@@ -60,7 +60,7 @@ def _xrs_for(package: str) -> list[tuple[str, Path]]:
             xr = case / "xr.yaml"
             if xr.exists():
                 found.append((f"cases/{case.name}", xr))
-    ex = R.ROOT / "examples" / package
+    ex = R.ROOT / "examples" / P.group(package) / Path(P.rel_path(package)).name  # mirrors package/<group>/<name>/
     if ex.exists():
         for f in sorted(ex.glob("*.yaml")):
             # required-resources fixtures are not XRs of this kind

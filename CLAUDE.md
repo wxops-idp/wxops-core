@@ -94,13 +94,15 @@ version, not the release name — see [`release-notes/README.md`](release-notes/
 - `package/dev/` — development install (applies XRDs + Compositions directly)
 - `providers/` — shared provider/function installs and `ProviderConfig` (apply once per cluster)
 - `kcl/<name>/` — KCL composition source (`kcl.mod`, `main.k`)
-- `examples/<name>/` — minimal XR YAML to exercise each package
+- `examples/<group>/<name>/xr.yaml` — one minimal XR per package, mirroring `package/<group>/<name>/`; further variants are snippets on the
+  package's API page. `make test` validates each against its XRD. The platform-policy scenario kit lives beside its `xr.yaml`
 - `tests/cases/<name>/` — test cases; `tests/lib/` shared harness (see [Testing](#testing))
 - `docs/` — **generic documentation** for anyone who uses, operates or builds on the platform — usage, delivery, and
   guideline material, not where the platform is headed. Hub: `docs/README.md`. The sections:
   - `docs/learn/` — contributor onboarding for Crossplane/OpenTofu/KCL newcomers, each page against
     a real file in this repo; prerequisite reading for `development-docs/development/`, not part of it
-  - `docs/api-reference/` — the reconcile loop from a user's side (`README.md`), one page per Kind,
+  - `docs/api-reference/` — the reconcile loop from a user's side (`README.md`), one page per Kind under `<group>/`
+    (`platform/`, `scm/`, `auth/`, mirroring `package/<group>/<name>/`),
     `status-contract.md`
   - `docs/user-guide/` — `setup.md`, `app-onboarding.md`, `portal-integration.md`
 - `development-docs/` — **everything about building, deciding, releasing and where Core is headed**. Hub:
@@ -150,7 +152,6 @@ make validate                          # crossplane xpkg build (no push)
 
 # Lint & render
 make lint                              # yamllint + kubeconform
-make render                            # offline dry-run of example XRs
 pre-commit run --all-files             # all hooks (yaml, kubeconform, xpkg build, kcl drift, versions)
 
 # Cluster install
@@ -193,7 +194,7 @@ When adding new capabilities:
 2. Write a `Composition` under `package/<name>/composition.yaml` — inline HCL for single-resource, KCL function for multi-resource.
 3. If using KCL, write `kcl/<name>/main.k` and run `make kcl-sync`.
 4. Add `crossplane.yaml` (package metadata) to the same package directory.
-5. Add a minimal `examples/<name>/xr.yaml` that exercises the XRD.
+5. Add one minimal `examples/<group>/<name>/xr.yaml` that exercises the XRD; put further variants on the API page, not in more files.
 6. **Add test cases under `tests/cases/<name>/`** — see [Testing](#testing) below. A new package is not done until it has them.
 7. Add a `VERSIONS.yaml` entry with `current: unreleased` and run `make readme-sync`. Never
    hand-edit `current` on an existing package — `make release` pins it. A change to a released
@@ -314,7 +315,9 @@ release commit. Gitea no longer publishes.
 
 | Component | Version |
 |---|---|
-| Crossplane | v2.3 |
+| Kubernetes | v1.36 recommended (≥ v1.34 for the packages alone) — Pinniped v0.46.0 is built on the 1.36 libraries |
+| Pinniped (bootstrap, impersonation proxy — not installed by this repo) | v0.46.0 |
+| Crossplane | v2.3 (render engine pinned to v2.3.1 in `tests/crossplane-version.txt`) |
 | provider-opentofu | v1.1.9 |
 | provider-terraform (archived, `providers/archive/`) | v1.1.5 |
 | provider-kubernetes | v1.2.1 |

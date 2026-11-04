@@ -1,8 +1,0 @@
-apiVersion: auth.wxops.cloud/v1alpha1
-kind: XPersona
-metadata:
-  name: viewers
-spec:
-  parameters:
-    description: Reads its own team's resources
-    environments: [dev, staging, prod]

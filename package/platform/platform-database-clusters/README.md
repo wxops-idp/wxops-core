@@ -63,13 +63,13 @@ spec:
 > include `wxops.cloud/managed-by: platform-database-clusters` in
 > `metadata.labels`. `XTenantDatabase` uses this label to discover clusters
 > for `tier: shared` pool assignment. See
-> [`docs/api-reference/platform-database-clusters.md`](../../../docs/api-reference/platform-database-clusters.md#required-discovery-label)
+> [`docs/api-reference/platform/platform-database-clusters.md`](../../../docs/api-reference/platform/platform-database-clusters.md#required-discovery-label)
 > for details.
 
-See [`examples/platform-database-clusters/xr.yaml`](../../../examples/platform-database-clusters/xr.yaml)
+See [`examples/platform/platform-database-clusters/xr.yaml`](../../../examples/platform/platform-database-clusters/xr.yaml)
 for the full set of optional fields (pooler, tuning, backup, monitoring,
 `managedRoles[]`, `bootstrapFrom`), and
-[`docs/api-reference/platform-database-clusters.md`](../../../docs/api-reference/platform-database-clusters.md)
+[`docs/api-reference/platform/platform-database-clusters.md`](../../../docs/api-reference/platform/platform-database-clusters.md)
 for the complete `spec.parameters` reference.
 
 ## Status
@@ -84,7 +84,7 @@ for the complete `spec.parameters` reference.
 | `ready` | True when the cluster can serve connections: the CNPG Cluster is up, and any enabled pooler is up too (tenants are handed the pooler endpoint, not the cluster's). |
 | `synced` / `syncMessage` | `synced` is false while a composed resource's last apply failed (its `Ready` can stay True from the earlier success); `syncMessage` is the provider's message, truncated. Absent until the first reconcile |
 
-Full reference: [`docs/api-reference/platform-database-clusters.md`](../../../docs/api-reference/platform-database-clusters.md#status).
+Full reference: [`docs/api-reference/platform/platform-database-clusters.md`](../../../docs/api-reference/platform/platform-database-clusters.md#status).
 
 ## Relation to other packages
 

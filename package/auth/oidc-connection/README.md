@@ -50,7 +50,7 @@ spec:
       namespace: dex
 ```
 
-See [`examples/oidc-connection/xr.yaml`](../../../examples/oidc-connection/xr.yaml).
+See [`examples/auth/oidc-connection/xr.yaml`](../../../examples/auth/oidc-connection/xr.yaml).
 
 ## Parameters
 
@@ -71,7 +71,7 @@ See [`examples/oidc-connection/xr.yaml`](../../../examples/oidc-connection/xr.ya
 | `message` | The `ExternalSecret`'s own condition message when not ready — a malformed record, a duplicate id, or a missing store, straight from the chart's fail-closed template |
 | `callbackUrl` | `<issuer>/callback` — what every `XOIDCConnector`'s upstream OAuth application redirect URI must contain |
 
-Full reference: [`docs/api-reference/oidc-connection.md`](../../../docs/api-reference/oidc-connection.md).
+Full reference: [`docs/api-reference/auth/oidc-connection.md`](../../../docs/api-reference/auth/oidc-connection.md).
 
 ## Build and publish
 

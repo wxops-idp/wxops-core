@@ -1,0 +1,11 @@
+# Binds the developers persona to wxops:persona-developers in every namespace its teams own (`scope: owned`): namespaces labelled
+# auth.wxops.cloud/tenant-namespace: "true" and wxops.cloud/owner: <team>. More bindings, scopes and roles: docs/api-reference/auth/persona-binding.md.
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPersonaBinding
+metadata:
+  name: developers-write
+spec:
+  parameters:
+    personaRef:
+      name: developers
+    role: wxops:persona-developers     # view plus W'xOps write pieces — never the built-in edit/admin

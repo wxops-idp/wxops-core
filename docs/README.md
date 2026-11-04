@@ -62,21 +62,21 @@ API group (`platform`, `scm`, ...) is per package — see [ADR-002](../developme
 | [gitea-org](api-reference/_archives/gitea-org.md) (archived) | `XGiteaOrg` | A Gitea organisation with visibility and metadata — superseded by `scm-repository` |
 | [gitea-team](api-reference/_archives/gitea-team.md) (archived) | `XGiteaTeam` | A team inside an organisation, including membership — superseded by `scm-repository` |
 | [gitea-repository](api-reference/_archives/gitea-repository.md) (archived) | `XGiteaRepository` | A repository owned by an organisation — superseded by `scm-repository` |
-| [platform-database-clusters](api-reference/platform-database-clusters.md) | `XPlatformDatabaseCluster` | A CloudNativePG cluster with poolers, backups and Vault-seeded credentials |
-| [tenant-database](api-reference/tenant-database.md) | `XTenantDatabase` | A tenant database on a shared or dedicated cluster, credentials pushed to Vault |
-| [tenant-app](api-reference/tenant-app.md) | `XTenantApp` | Deployment, Service, ingress with TLS and SSO, monitoring, and the Darlane twin |
+| [platform-database-clusters](api-reference/platform/platform-database-clusters.md) | `XPlatformDatabaseCluster` | A CloudNativePG cluster with poolers, backups and Vault-seeded credentials |
+| [tenant-database](api-reference/platform/tenant-database.md) | `XTenantDatabase` | A tenant database on a shared or dedicated cluster, credentials pushed to Vault |
+| [tenant-app](api-reference/platform/tenant-app.md) | `XTenantApp` | Deployment, Service, ingress with TLS and SSO, monitoring, and the Darlane twin |
 | [random-password](api-reference/_archives/random-password.md) (archived) | `XRandomPassword` | Utility composition, not published as a package |
-| [scm-connection](api-reference/scm-connection.md) | `XScmConnection` | One Git hosting service and its credential, rendered for every other `scm` resource |
-| [scm-repository](api-reference/scm-repository.md) | `XScmRepository` | A repository on Gitea or GitHub, created (`managed`) or read (`observed`) |
-| [scm-oauth-app](api-reference/scm-oauth-app.md) | `XScmOAuthApp` | A host-side OAuth application, with its credentials in the secret store |
-| [scm-team](api-reference/scm-team.md) | `XScmTeam` | A team and its membership on Gitea or GitHub, created (`managed`) or read (`observed`) |
-| [oidc-connection](api-reference/oidc-connection.md) | `XOIDCConnection` | Points at one broker install; observes its config render, publishes the remote-key prefix |
-| [oidc-static-password](api-reference/oidc-static-password.md) | `XOIDCStaticPassword` | A local broker user — bootstrap admin, break-glass — ESO-generated or operator-defined |
-| [oidc-client](api-reference/oidc-client.md) | `XOIDCClient` | A downstream OAuth client that logs in through the broker |
-| [oidc-connector](api-reference/oidc-connector.md) | `XOIDCConnector` | An upstream Git vendor connector, team allow-list generated from `XScmTeam` |
-| [persona](api-reference/persona.md) | `XPersona` | A title that collects SCM teams, users and agents into RBAC subjects |
-| [persona-binding](api-reference/persona-binding.md) | `XPersonaBinding` | Binds a persona to a standard, persona or Platform API role, per owned namespace |
-| [platform-policy](api-reference/platform-policy.md) | `XPlatformPolicy` | One reviewed Kyverno CEL policy per resource — owner seal, read-only Secrets, exec, protected, RBAC guard |
+| [scm-connection](api-reference/scm/connection.md) | `XScmConnection` | One Git hosting service and its credential, rendered for every other `scm` resource |
+| [scm-repository](api-reference/scm/repository.md) | `XScmRepository` | A repository on Gitea or GitHub, created (`managed`) or read (`observed`) |
+| [scm-oauth-app](api-reference/scm/oauth-app.md) | `XScmOAuthApp` | A host-side OAuth application, with its credentials in the secret store |
+| [scm-team](api-reference/scm/team.md) | `XScmTeam` | A team and its membership on Gitea or GitHub, created (`managed`) or read (`observed`) |
+| [oidc-connection](api-reference/auth/oidc-connection.md) | `XOIDCConnection` | Points at one broker install; observes its config render, publishes the remote-key prefix |
+| [oidc-static-password](api-reference/auth/oidc-static-password.md) | `XOIDCStaticPassword` | A local broker user — bootstrap admin, break-glass — ESO-generated or operator-defined |
+| [oidc-client](api-reference/auth/oidc-client.md) | `XOIDCClient` | A downstream OAuth client that logs in through the broker |
+| [oidc-connector](api-reference/auth/oidc-connector.md) | `XOIDCConnector` | An upstream Git vendor connector, team allow-list generated from `XScmTeam` |
+| [persona](api-reference/auth/persona.md) | `XPersona` | A title that collects SCM teams, users and agents into RBAC subjects |
+| [persona-binding](api-reference/auth/persona-binding.md) | `XPersonaBinding` | Binds a persona to a standard, persona or Platform API role, per owned namespace |
+| [platform-policy](api-reference/auth/platform-policy.md) | `XPlatformPolicy` | One reviewed Kyverno CEL policy per resource — owner seal, read-only Secrets, exec, protected, RBAC guard |
 | [status-contract](api-reference/status-contract.md) | all | Every package's `status` fields on one page: the absent-vs-`false` split, `ready` vs `dependenciesReady` |
 
 ### User guide

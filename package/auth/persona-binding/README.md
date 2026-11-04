@@ -32,7 +32,7 @@ kubectl apply -k package/auth/persona-binding
 apiVersion: auth.wxops.cloud/v1alpha1
 kind: XPersonaBinding
 metadata:
-  name: developers-edit
+  name: developers-write
 spec:
   parameters:
     personaRef:
@@ -40,11 +40,11 @@ spec:
     role: wxops:persona-developers
 ```
 
-`wxops-idp:payment` is then bound in `payment`'s namespaces, and only there. Examples: [`examples/persona-binding/`](../../../examples/persona-binding).
+`wxops-idp:payment` is then bound in `payment`'s namespaces, and only there. Examples: [`examples/auth/persona-binding/`](../../../examples/auth/persona-binding).
 
 ## Parameters
 
-See [`docs/api-reference/persona-binding.md`](../../../docs/api-reference/persona-binding.md).
+See [`docs/api-reference/auth/persona-binding.md`](../../../docs/api-reference/auth/persona-binding.md).
 
 ## Build and publish
 

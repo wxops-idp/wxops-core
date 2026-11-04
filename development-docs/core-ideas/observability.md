@@ -19,7 +19,7 @@ This document has two halves, at different maturities.
 ## Why CRDs and not annotations
 
 `XTenantApp` today expresses monitoring as pod annotations — `prometheus.io/scrape`, `prometheus.io/port`, `prometheus.io/path` (see the commented block in
-[`examples/tenant-app/xr.yaml`](../../examples/tenant-app/xr.yaml)).
+[`examples/platform/tenant-app/xr.yaml`](../../examples/platform/tenant-app/xr.yaml)).
 
 **Those annotations do nothing.** They are a Prometheus *convention*, honoured only by a `kubernetes_sd_config` job with relabel rules that read them. The
 platform runs kube-prometheus-stack, whose `additionalScrapeConfigs` is empty — so nothing reads them and the toggle silently no-ops.
@@ -601,7 +601,7 @@ deploys it, not after.
 
 ## See also
 
-- [`tenant-app.md`](../../docs/api-reference/tenant-app.md) — the full `XTenantApp` schema
+- [`tenant-app.md`](../../docs/api-reference/platform/tenant-app.md) — the full `XTenantApp` schema
 - [`development-docs/_archives/ROADMAP.md`](../_archives/ROADMAP.md) — archived; the work item this describes
 - [`release-notes/README.md`](../../release-notes/README.md) — the `safe`/`careful`/`breaking` change-tier taxonomy
 - [`multi-cluster.md`](multi-cluster.md) — Alloy pushing over mTLS to the LGTM stack on the hub (or a dedicated observability cluster) reached by name; the archived
