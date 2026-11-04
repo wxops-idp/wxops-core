@@ -1,0 +1,94 @@
+# provider-kubernetes runs with `credentials.source: InjectedIdentity` — it
+# acts as its own ServiceAccount. Crossplane's RBAC manager only grants that
+# ServiceAccount permissions on kubernetes.crossplane.io's own CRDs (Object,
+# ProviderConfig, ...) — it does NOT grant permissions on the third-party
+# resources the rendered `manifest:` payloads target. Without this
+# ClusterRole/ClusterRoleBinding, every Object wrapping a CNPG/ESO/provider-sql
+# resource fails with "... is forbidden: User
+# \"system:serviceaccount:crossplane-system:provider-kubernetes-runtime\"
+# cannot get resource ... in API group ...".
+#
+# Bound to the fixed `provider-kubernetes-runtime` ServiceAccount (see
+# ../packages/runtimeconfig-provider-kubernetes.yaml + ../packages/provider-kubernetes.yaml's
+# runtimeConfigRef) instead of the package-hash-derived default name — no
+# hash to track, and no group-wide grant that would also reach
+# provider-sql/provider-terraform/provider-opentofu's ServiceAccounts in crossplane-system.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: wxops-provider-kubernetes-managed
+rules:
+  # CloudNativePG (platform-database-clusters)
+  - apiGroups: ["postgresql.cnpg.io"]
+    resources: ["clusters", "poolers", "scheduledbackups", "databases"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # External Secrets Operator (platform-database-clusters, tenant-database, tenant-app)
+  - apiGroups: ["external-secrets.io"]
+    resources: ["externalsecrets", "pushsecrets", "clustersecretstores"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["generators.external-secrets.io"]
+    resources: ["passwords"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # provider-sql (platform-database-clusters wraps ProviderConfig, tenant-database wraps Role)
+  - apiGroups: ["postgresql.sql.crossplane.io"]
+    resources: ["providerconfigs", "roles"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # RBAC — bindings only, written by the auth.wxops.cloud/persona-binding composition and nothing else (RFC-009; tests/invariants.py enforces who may emit them).
+  # `bind` lets the provider create a binding to a role without holding that role's permissions, so it never becomes admin to grant admin. It may bind only the roles
+  # named below: no escalate, no write to Role or ClusterRole, never cluster-admin. Adding a role here is a reviewed change.
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["rolebindings", "clusterrolebindings"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["clusterroles"]
+    verbs: ["bind"]
+    resourceNames:
+      - view
+      - wxops:persona-viewers
+      - wxops:persona-developers
+      - wxops:persona-owners
+      - wxops:persona-platform
+      - wxops:platform-view
+      - wxops:platform-edit
+      - wxops:platform-admin
+  # Kyverno CEL policies (auth.wxops.cloud/platform-policy) — the Kyverno controller itself is a cluster bootstrap prerequisite, not installed by W'xOps.
+  - apiGroups: ["policies.kyverno.io"]
+    resources: ["validatingpolicies", "mutatingpolicies"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # tenant-app workload resources
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["services", "persistentvolumeclaims", "serviceaccounts"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # networking.k8s.io/ingresses kept for migration — tenant-app now emits IngressRoute,
+  # but existing clusters may still have Ingress objects from the old composition.
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["traefik.io"]
+    resources: ["traefikservices", "ingressroutes"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # cert-manager (tenant-app Certificate CR when ingress.tls.clusterIssuer is set)
+  - apiGroups: ["cert-manager.io"]
+    resources: ["certificates"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Prometheus Operator (tenant-app spec.parameters.monitoring) — without this every
+  # emitted ServiceMonitor/PodMonitor fails `forbidden` at reconcile with no other signal.
+  - apiGroups: ["monitoring.coreos.com"]
+    resources: ["servicemonitors", "podmonitors"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: wxops-provider-kubernetes-managed
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: wxops-provider-kubernetes-managed
+subjects:
+  - kind: ServiceAccount
+    name: provider-kubernetes-runtime
+    namespace: crossplane-system

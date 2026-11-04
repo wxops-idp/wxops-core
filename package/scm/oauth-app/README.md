@@ -78,7 +78,7 @@ existing_client_secret = "the-secret-github-issued"' \
       namespace: crossplane-system
 ```
 
-See [`examples/scm-oauth-app/`](../../../examples/scm-oauth-app).
+See [`examples/scm/oauth-app/`](../../../examples/scm/oauth-app).
 
 ## Where the credentials go
 
@@ -120,7 +120,7 @@ start-up need a restart. Rotate deliberately, in a quiet window.
 | `secretStoreRef.name` | string | no | `vault-platform` | Store the pair is pushed to |
 | `vaultKey` | string | no | `oauth/<name>/credentials` | Key inside that store |
 
-Full reference: [`docs/api-reference/scm-oauth-app.md`](../../../docs/api-reference/scm-oauth-app.md).
+Full reference: [`docs/api-reference/scm/oauth-app.md`](../../../docs/api-reference/scm/oauth-app.md).
 
 ## Status
 
@@ -133,7 +133,7 @@ Full reference: [`docs/api-reference/scm-oauth-app.md`](../../../docs/api-refere
 | `generation` | The rotation generation the published credentials belong to. |
 | `synced` / `syncMessage` | `synced` is false while a composed resource's last apply failed (its `Ready` can stay True from the earlier success); `syncMessage` is the provider's message, truncated. Absent until the first reconcile |
 
-Full reference: [`docs/api-reference/scm-oauth-app.md`](../../../docs/api-reference/scm-oauth-app.md#status).
+Full reference: [`docs/api-reference/scm/oauth-app.md`](../../../docs/api-reference/scm/oauth-app.md#status).
 
 ## Build and publish
 

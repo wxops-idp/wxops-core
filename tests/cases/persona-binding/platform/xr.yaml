@@ -1,0 +1,10 @@
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPersonaBinding
+metadata:
+  name: platform-admin
+spec:
+  parameters:
+    personaRef:
+      name: platform
+    role: wxops:platform-admin
+    scope: platform

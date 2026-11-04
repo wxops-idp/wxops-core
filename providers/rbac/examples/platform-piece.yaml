@@ -1,0 +1,13 @@
+# A new W'xOps tenant kind (here RFC-006's XObjectBucket — not built yet) joins the Platform API: edit for tenants, admin above. One piece per kind or per package;
+# read access needs no piece, wxops:piece:platform-read already covers every kind in the three W'xOps groups.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: wxops:piece:platform-objectbucket-write
+  labels:
+    auth.wxops.cloud/aggregate-to-platform-edit: "true"
+    auth.wxops.cloud/aggregate-to-platform-admin: "true"
+rules:
+  - apiGroups: ["platform.wxops.cloud"]
+    resources: ["xobjectbuckets"]
+    verbs: ["create", "update", "patch", "delete"]

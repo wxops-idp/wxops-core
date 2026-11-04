@@ -1,0 +1,9 @@
+# Upbound provider-vault: OpenBao (and Vault) configuration as managed resources — auth backends, mounts, policies, identity groups. Configuration only, never secret values (ESO's job).
+# Installed on the hub only; spokes read secrets through ESO and never configure OpenBao. See RFC-008.
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: provider-vault
+spec:
+  package: xpkg.upbound.io/upbound/provider-vault:v4.1.0
+  packagePullPolicy: IfNotPresent

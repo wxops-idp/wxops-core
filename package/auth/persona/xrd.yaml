@@ -1,0 +1,146 @@
+apiVersion: apiextensions.crossplane.io/v2
+kind: CompositeResourceDefinition
+metadata:
+  name: xpersonas.auth.wxops.cloud
+spec:
+  group: auth.wxops.cloud
+  scope: Cluster
+  names:
+    kind: XPersona
+    plural: xpersonas
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - parameters
+              properties:
+                parameters:
+                  type: object
+                  required:
+                    - description
+                  properties:
+                    description:
+                      type: string
+                      description: What this persona may do, in one line — shown in the catalog and in review.
+                      minLength: 1
+                    environments:
+                      type: array
+                      description: |
+                        The environments (a cluster's `wxops.cloud/environment`) this persona's bindings and rules apply on.
+                        Echoed to `status.environments`; the environment gate itself arrives with the multi-cluster feature.
+                      items:
+                        type: string
+                        pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+                      default: []
+                    members:
+                      type: object
+                      default: {}
+                      description: |
+                        Who the persona collects. A persona grants nothing by itself — XPersonaBinding and XPlatformPolicy read the
+                        subjects resolved into `status.subjects`.
+                      properties:
+                        teams:
+                          type: boolean
+                          default: true
+                          description: |
+                            Generate members from the `XScmTeam`s that carry the label `auth.wxops.cloud/persona-<this persona's name>: "true"`
+                            and `scm.wxops.cloud/oidc-login: "true"` (a team that cannot sign in has no use for a persona). Each contributes its
+                            `status.oidcGroup`.
+                        groups:
+                          type: array
+                          description: |
+                            Groups by hand, as `<org>:<team>` — for a team the SCM family does not model. SCM groups only: a `system:` group
+                            (`system:authenticated`, `system:serviceaccounts`, `system:masters`, …) is Kubernetes' own and is refused.
+                          items:
+                            type: string
+                            minLength: 1
+                            x-kubernetes-validations:
+                              - rule: "!self.startsWith('system:')"
+                                message: "a persona holds SCM groups only — system: groups are Kubernetes' own and are never a persona member"
+                          default: []
+                        users:
+                          type: array
+                          description: |
+                            Dex usernames by hand — for the rare individual. Prefer a team. A `system:` username is Kubernetes' own and is refused; an
+                            in-cluster identity goes in `serviceAccounts`.
+                          items:
+                            type: string
+                            minLength: 1
+                            x-kubernetes-validations:
+                              - rule: "!self.startsWith('system:')"
+                                message: "a persona holds SCM users only — a system: username is Kubernetes' own; use serviceAccounts for an in-cluster identity"
+                          default: []
+                        serviceAccounts:
+                          type: array
+                          description: |
+                            In-cluster identities, agents first — a named ServiceAccount, bound as a `ServiceAccount` subject. The one way a
+                            Kubernetes identity joins a persona; never a `system:` group or username typed by hand.
+                          items:
+                            type: object
+                            required:
+                              - namespace
+                              - name
+                            properties:
+                              namespace:
+                                type: string
+                                minLength: 1
+                              name:
+                                type: string
+                                minLength: 1
+                          default: []
+            status:
+              type: object
+              properties:
+                created:
+                  type: boolean
+                  description: True once the persona's members have been resolved. A persona composes nothing, so this equals `ready`.
+                ready:
+                  type: boolean
+                  description: True when the members were resolved.
+                synced:
+                  type: boolean
+                  description: Always true — a persona composes no resource that could fail to apply.
+                syncMessage:
+                  type: string
+                  description: Absent — a persona composes no resource that could fail to apply.
+                environments:
+                  type: array
+                  description: The environments this persona applies on, as declared.
+                  items:
+                    type: string
+                groups:
+                  type: array
+                  description: Every `Group` subject, sorted and without duplicates — what a policy matches on.
+                  items:
+                    type: string
+                teams:
+                  type: array
+                  description: The `XScmTeam`s that contributed a group, by name.
+                  items:
+                    type: string
+                subjects:
+                  type: array
+                  description: |
+                    Every member as an RBAC subject — `Group`, `User` or `ServiceAccount` — in the exact shape a `RoleBinding` takes.
+                    XPersonaBinding copies these; nothing else needs to parse the persona.
+                  items:
+                    type: object
+                    required:
+                      - kind
+                      - name
+                    properties:
+                      kind:
+                        type: string
+                      name:
+                        type: string
+                      apiGroup:
+                        type: string
+                      namespace:
+                        type: string

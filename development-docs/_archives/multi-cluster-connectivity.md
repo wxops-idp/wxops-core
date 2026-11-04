@@ -56,7 +56,7 @@ hand. For W'xOps that matters more than usual, because [`guardian.md`](guardian.
 [`self-service-operations.md`](../core-ideas/self-service-operations.md)'s diagnosis story both assume the platform can say *who did what, where*.
 
 **P2 is where W'xOps is unusually well positioned, and it is free.** The spoke-side ClusterRole is not a design exercise —
-[`providers/rbac-provider-kubernetes.yaml`](../../providers/rbac-provider-kubernetes.yaml) already enumerates exactly the API groups compositions emit, because
+[`providers/rbac-provider-kubernetes.yaml`](../../providers/rbac/provider-kubernetes.yaml) already enumerates exactly the API groups compositions emit, because
 the single-cluster deployment needed the same list. Copying that file to a spoke produces a correctly scoped grant on the first try, including its deliberate
 omission of `rbac.authorization.k8s.io`. That omission is mechanically protected by the `no-rbac-emitted` invariant in `tests/invariants.py`, so the property
 "the hub cannot mint privilege on any spoke" is enforced by the merge gate rather than by reviewer memory — see
@@ -812,7 +812,7 @@ These block nothing today but should be answered before the first *production* s
 - [`multi-cluster-scale.md`](multi-cluster-scale.md) — regions, tenancy tiers, and heterogeneous hardware
 - [`security-threat-model.md`](../core-ideas/security-threat-model.md) — boundary B3 and the fleet-compromise threat row
 - [`solution-matrix.md`](../core-ideas/solution-matrix.md) — rows M3, M4, M5 index into this material
-- [`providers/rbac-provider-kubernetes.yaml`](../../providers/rbac-provider-kubernetes.yaml) — the scoped
+- [`providers/rbac-provider-kubernetes.yaml`](../../providers/rbac/provider-kubernetes.yaml) — the scoped
   ClusterRole every spoke needs, already written
 
 **External** — [Kubernetes structured authentication](https://kubernetes.io/docs/reference/access-authn-authz/authentication/) · [EKS external OIDC

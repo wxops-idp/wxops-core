@@ -6,16 +6,13 @@ REGISTRY ?= ghcr.io/wxops-idp/wxops-core
 # reference stack in CLAUDE.md. Keep in sync with CATALOG_REF in tests/structural.py.
 CRDS_CATALOG_REF ?= 52b0261318acc7dd0b66e032759b1f218216b980
 
-# How long `make providers` / `make provider-configs` wait for packages to install and their APIs to
+# How long `make providers-packages` / `make providers-config` wait for packages to install and their APIs to
 # appear. Pulling several provider images on a cold cluster is the slow part.
 WAIT_TIMEOUT ?= 300s
 
-# The two install phases, split by file name. `provider-*` does not match `providerconfig-*` —
-# the hyphen is what separates them. providers/archive/ and providers/policies/ are excluded on
-# purpose: archived manifests are not applied, and the Kyverno policies need Kyverno first.
-PROVIDER_MANIFESTS := $(wildcard providers/function-*.yaml providers/provider-*.yaml \
-                                 providers/runtimeconfig-*.yaml providers/rbac-*.yaml)
-PROVIDERCONFIG_MANIFESTS := $(wildcard providers/providerconfig-*.yaml)
+# providers/ is four categories, each its own kustomization (providers/<category>/kustomization.yaml). The order is the
+# install order. providers/archive/ is excluded on purpose: archived manifests are not applied.
+PROVIDER_CATEGORIES := functions packages rbac config
 
 # Package names and directories both come from VERSIONS.yaml via tests/lib/packages.py —
 # the one resolver (ADR-002 groups, RFC-007 layout). Adding a package is a VERSIONS.yaml edit.
@@ -70,7 +67,7 @@ readme-sync: ## Regenerate the README.md packages table from VERSIONS.yaml
 readme-check: ## Fail if README.md packages table is out of sync with VERSIONS.yaml
 	@python3 .github/scripts/gen-readme-packages.py --check
 
-# ── Lint & render ────────────────────────────────────────────────────────────
+# ── Lint ────────────────────────────────────────────────────────────────────
 
 .PHONY: lint
 lint: ## YAML lint + kubeconform schema validation
@@ -82,37 +79,6 @@ lint: ## YAML lint + kubeconform schema validation
 		-schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/$(CRDS_CATALOG_REF)/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
 		-ignore-missing-schemas \
 		-summary
-
-# Every function any composition references must be listed, or render fails with
-# "unknown function ... is it listed in the render input?".
-FUNCTIONS := providers/function-kcl.yaml \
-             providers/function-patch-and-transform.yaml \
-             providers/function-extra-resources.yaml
-
-.PHONY: render
-render: ## Render example XRs against compositions (offline dry-run)
-	@fns="$$(mktemp)"; err="$$(mktemp)"; \
-	for f in $(FUNCTIONS); do echo "---"; cat "$$f"; done > "$$fns"; \
-	failed=""; \
-	for pair in $(PACKAGE_PAIRS); do \
-		pkg=$${pair%%=*}; dir=$${pair#*=}; \
-		echo "→ rendering examples/$$pkg/xr.yaml"; \
-		req=""; \
-		if [ -f "examples/$$pkg/required-resources.yaml" ]; then \
-			req="--required-resources=examples/$$pkg/required-resources.yaml"; \
-		fi; \
-		if ! crossplane composition render \
-				examples/$$pkg/xr.yaml \
-				$$dir/composition.yaml \
-				"$$fns" $$req 2>"$$err"; then \
-			sed 's/^/    /' "$$err" >&2; \
-			failed="$$failed $$pkg"; \
-		fi; \
-	done; \
-	rm -f "$$fns" "$$err"; \
-	if [ -n "$$failed" ]; then \
-		echo "" >&2; echo "render FAILED:$$failed" >&2; exit 1; \
-	fi
 
 # ── Tests ────────────────────────────────────────────────────────────────────
 # Offline. No cluster required — `crossplane composition render` runs the real
@@ -157,39 +123,58 @@ test-deps: ## Install the test suite's Python dependencies
 
 # ── Cluster install ───────────────────────────────────────────────────────────
 
+# providers/ is installed in four steps, in this order, each a target of its own so one category can be applied, re-applied or debugged alone:
+#   functions → packages (waits Installed + Healthy) → rbac → config (waits for each ProviderConfig API to be served).
+# A GitOps engine needs none of this: `kubectl apply -k providers/` is the all-at-once view and Argo CD / Flux retry until it settles.
+
 .PHONY: providers
-providers: ## Install shared providers and functions, then wait for them to be healthy
-	@# Phase 1 of two. A ProviderConfig cannot be created before its provider's CRDs are served, so
-	@# the two are separate targets rather than one apply that half-fails. Sets are split by file
-	@# name: provider-*/function-*/runtimeconfig-*/rbac-* here, providerconfig-* in the next target.
-	@for f in $$(grep -oE '^[[:space:]]+- [a-z0-9.-]+\.yaml' providers/kustomization.yaml | awk '{print $$2}'); do \
-		case "$$f" in \
-			function-*|provider-*|runtimeconfig-*|rbac-*|providerconfig-*) ;; \
-			*) echo "error: providers/$$f matches no phase — make providers applies" >&2; \
-			   echo "       function-*/provider-*/runtimeconfig-*/rbac-*, make provider-configs applies providerconfig-*" >&2; \
-			   exit 1;; \
-		esac; \
+providers: providers-check ## Install functions, provider packages, RBAC and ProviderConfigs, in order, waiting where it must
+	@$(MAKE) --no-print-directory providers-functions providers-packages providers-rbac providers-config
+
+.PHONY: providers-check
+providers-check: ## Check every manifest in providers/<category>/ is listed in that category's kustomization
+	@# `kubectl apply -k` applies only what is listed, so an unlisted file would be silently skipped.
+	@for d in $(PROVIDER_CATEGORIES); do \
+		grep -qE "^[[:space:]]+- $$d$$" providers/kustomization.yaml || \
+			{ echo "error: providers/$$d is not listed in providers/kustomization.yaml" >&2; exit 1; }; \
+		for f in providers/$$d/*.yaml; do \
+			b=$$(basename "$$f"); [ "$$b" = kustomization.yaml ] && continue; \
+			grep -qE "^[[:space:]]+- $$b([[:space:]]|$$)" "providers/$$d/kustomization.yaml" || \
+				{ echo "error: providers/$$d/$$b is not listed in providers/$$d/kustomization.yaml — kubectl apply -k would skip it" >&2; exit 1; }; \
+		done; \
 	done
-	@echo "→ installing providers and functions"
-	kubectl apply $(addprefix -f ,$(PROVIDER_MANIFESTS))
-	@echo "→ waiting for packages to install and become healthy (WAIT_TIMEOUT=$(WAIT_TIMEOUT))"
+
+.PHONY: providers-functions
+providers-functions: providers-check ## Install the Crossplane Functions, wait until healthy
+	@echo "→ installing functions"
+	kubectl apply -k providers/functions
+	@kubectl wait --for=condition=Healthy function.pkg.crossplane.io --all --timeout=$(WAIT_TIMEOUT)
+
+.PHONY: providers-packages
+providers-packages: providers-check ## Install the Provider packages and their runtime config, wait until installed and healthy
+	@echo "→ installing provider packages (WAIT_TIMEOUT=$(WAIT_TIMEOUT))"
+	kubectl apply -k providers/packages
 	@kubectl wait --for=condition=Installed provider.pkg.crossplane.io --all --timeout=$(WAIT_TIMEOUT)
 	@kubectl wait --for=condition=Healthy provider.pkg.crossplane.io --all --timeout=$(WAIT_TIMEOUT)
-	@kubectl wait --for=condition=Healthy function.pkg.crossplane.io --all --timeout=$(WAIT_TIMEOUT)
-	@echo ""
-	@echo "✓ providers healthy — now run: make provider-configs"
 
-.PHONY: provider-configs
-provider-configs: ## Apply the ProviderConfigs (run after make providers)
-	@# Phase 2. Waits for each provider's ProviderConfig API to be served, then applies. The CRD
-	@# names are derived from the manifests themselves, so a new provider needs no edit here.
+.PHONY: providers-rbac
+providers-rbac: providers-check ## Apply the static RBAC: the provider's grants and the persona / Platform API roles
+	@echo "→ applying RBAC"
+	kubectl apply -k providers/rbac
+
+.PHONY: providers-config
+providers-config: providers-check ## Apply the ProviderConfigs, once each provider's API is served (after providers-packages)
+	@# The CRD names come from the manifests themselves, so a new provider needs no edit here.
 	@echo "→ waiting for the ProviderConfig APIs to be served"
-	@for group in $$(grep -h '^apiVersion:' $(PROVIDERCONFIG_MANIFESTS) | cut -d' ' -f2 | cut -d/ -f1 | sort -u); do \
+	@for group in $$(grep -h '^apiVersion:' providers/config/providerconfig-*.yaml | cut -d' ' -f2 | cut -d/ -f1 | sort -u); do \
 		echo "    providerconfigs.$$group"; \
 		kubectl wait --for=condition=Established "crd/providerconfigs.$$group" --timeout=$(WAIT_TIMEOUT) >/dev/null; \
 	done
 	@echo "→ applying ProviderConfigs"
-	kubectl apply $(addprefix -f ,$(PROVIDERCONFIG_MANIFESTS))
+	kubectl apply -k providers/config
+
+.PHONY: provider-configs
+provider-configs: providers-config ## Alias of providers-config
 
 .PHONY: install
 install: ## Install all packages from registry (production)

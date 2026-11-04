@@ -9,7 +9,7 @@ Manages a Gitea organisation with visibility and metadata.
 | **Plural** | `xgiteaorgs` |
 | **Scope** | `Cluster` |
 | **API versions** | `v1alpha1` (served, storage) |
-| **Package** | [`package/platform/archives/gitea-org/`](../../../package/platform/archives/gitea-org/) — see [`VERSIONS.yaml`](../../../VERSIONS.yaml) for the current package version |
+| **Package** | [`package/platform/archives/gitea-org/`](../../../package/platform/archives/gitea-org) — see [`VERSIONS.yaml`](../../../VERSIONS.yaml) for the current package version |
 
 ## `spec.parameters`
 

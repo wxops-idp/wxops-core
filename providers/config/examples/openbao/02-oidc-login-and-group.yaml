@@ -1,0 +1,70 @@
+# People log in to OpenBao through Dex (verified by hand, RFC-008): the OIDC role reads `groups` from the token, OpenBao matches each group string against the alias of
+# an EXTERNAL identity group, and the person receives that group's policies. Leaving the Git team removes the access at the next login — nothing to revoke by hand.
+#
+# The client secret is Dex's `openbao` client (an XOIDCClient). It reaches this Secret through External Secrets Operator, never by hand:
+#   an ExternalSecret in crossplane-system reading clients-def/openbao  →  Secret openbao-oidc-client, key `secret`.
+apiVersion: jwt.vault.upbound.io/v1alpha1
+kind: AuthBackend
+metadata:
+  name: oidc
+spec:
+  providerConfigRef:
+    name: vault-provider-config
+  forProvider:
+    type: oidc
+    path: oidc
+    description: Human login through Dex
+    oidcDiscoveryUrl: https://idp.example.com
+    oidcClientId: openbao
+    oidcClientSecretSecretRef:
+      name: openbao-oidc-client
+      namespace: crossplane-system
+      key: secret
+    defaultRole: default
+---
+apiVersion: jwt.vault.upbound.io/v1alpha1
+kind: AuthBackendRole
+metadata:
+  name: oidc-default
+spec:
+  providerConfigRef:
+    name: vault-provider-config
+  forProvider:
+    roleName: default
+    roleType: oidc
+    backend: oidc
+    userClaim: preferred_username
+    groupsClaim: groups
+    oidcScopes: [openid, profile, email, groups]
+    allowedRedirectUris:
+      - https://openbao.example.com/ui/vault/auth/oidc/oidc/callback
+      - http://localhost:8250/oidc/callback
+    tokenPolicies: []              # nothing by default — a person gets only what their groups carry
+---
+# One external group per Git team, named for the team; its policies are what the team may read. `externalPolicies: false` = this resource owns the list.
+apiVersion: identity.vault.upbound.io/v1alpha1
+kind: Group
+metadata:
+  name: payment
+spec:
+  providerConfigRef:
+    name: vault-provider-config
+  forProvider:
+    name: payment
+    type: external
+    policies: [wxops-payment-read]
+---
+# The alias is the Dex group string, exactly: `<org>:<team>` — the same string XScmTeam publishes as status.oidcGroup and RBAC matches (no case folding).
+# mountAccessor is the OIDC backend's: kubectl get authbackend.jwt.vault.upbound.io oidc -o jsonpath='{.status.atProvider.accessor}'
+apiVersion: identity.vault.upbound.io/v1alpha1
+kind: GroupAlias
+metadata:
+  name: payment
+spec:
+  providerConfigRef:
+    name: vault-provider-config
+  forProvider:
+    name: wxops-idp:payment
+    mountAccessor: auth_oidc_00000000
+    canonicalIdRef:
+      name: payment

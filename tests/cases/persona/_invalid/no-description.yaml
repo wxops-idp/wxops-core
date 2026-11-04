@@ -1,0 +1,10 @@
+# expect: 'description' is a required property
+#
+# A persona is reviewed by what it says it may do; an empty one is rejected at the schema.
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPersona
+metadata:
+  name: nameless
+spec:
+  parameters:
+    environments: [dev]

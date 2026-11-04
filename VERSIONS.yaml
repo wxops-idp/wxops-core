@@ -170,5 +170,36 @@ packages:
       storage: v1alpha1
     description: An upstream Git vendor connector, with its team allow-list generated from labelled XScmTeams, credentials read from an XScmOAuthApp, pushed to OpenBao.
 
+  # ── auth.wxops.cloud — SCM personas: who (XPersona), which kinds (XPersonaBinding), which objects (XPlatformPolicy) — RFC-009 ──
+  persona:
+    group: auth
+    path: package/auth/persona
+    package:
+      current: unreleased
+    api:
+      served: [v1alpha1]
+      storage: v1alpha1
+    description: A persona — a title that collects SCM teams, users and agents into RBAC subjects, with the environments it applies on. Grants nothing by itself.
+
+  persona-binding:
+    group: auth
+    path: package/auth/persona-binding
+    package:
+      current: unreleased
+    api:
+      served: [v1alpha1]
+      storage: v1alpha1
+    description: Binds a persona's subjects to a standard, persona or Platform API ClusterRole — RoleBindings in the namespaces a team owns, or one ClusterRoleBinding. The only composition that emits RBAC, and only bindings.
+
+  platform-policy:
+    group: auth
+    path: package/auth/platform-policy
+    package:
+      current: unreleased
+    api:
+      served: [v1alpha1]
+      storage: v1alpha1
+    description: One reviewed Kyverno CEL policy per resource — owner-stamp, owner-seal, secret-readonly, exec-guard, protected or rbac-guard — matching SCM users only, Audit first. Kyverno refuses; it never grants.
+
 # Utility compositions — not yet published as standalone OCI packages.
 utilities:

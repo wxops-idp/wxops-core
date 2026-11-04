@@ -1,0 +1,11 @@
+# Static RBAC, reviewed as a diff. Apply: `make providers-rbac` (or `kubectl apply -k providers/rbac`).
+#   provider-kubernetes.yaml   what the provider's ServiceAccount may touch — the privilege ceiling of every composed Object, and its `bind` grant (RFC-009)
+#   aggregate-persona.yaml     wxops:persona-* — view/edit/admin plus W'xOps extras, by aggregation
+#   aggregate-platform.yaml    wxops:platform-* — the W'xOps Platform API roles and their pieces
+# The two aggregate-* files matter only once the auth packages (persona, persona-binding, platform-policy) are installed.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - provider-kubernetes.yaml
+  - aggregate-persona.yaml
+  - aggregate-platform.yaml

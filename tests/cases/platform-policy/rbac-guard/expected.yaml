@@ -1,0 +1,95 @@
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPlatformPolicy
+metadata:
+  name: rbac-guard
+spec:
+  crossplane:
+    resourceRefs:
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: e5b49e35-policy
+status:
+  conditions:
+    - reason: WatchCircuitClosed
+      status: 'True'
+      type: Responsive
+    - reason: ReconcileSuccess
+      status: 'True'
+      type: Synced
+    - message: 'Unready resources: e5b49e35-policy'
+      reason: Creating
+      status: 'False'
+      type: Ready
+  created: false
+  policyKind: ValidatingPolicy
+  policyName: wxops-rbac-guard
+  ready: false
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: e5b49e35-policy
+  labels:
+    crossplane.io/composite: rbac-guard
+  name: e5b49e35-policy
+  ownerReferences:
+    - apiVersion: auth.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XPlatformPolicy
+      name: rbac-guard
+      uid: e5b49e35-1add-5cae-ae10-fe8758c2fdda
+spec:
+  forProvider:
+    manifest:
+      apiVersion: policies.kyverno.io/v1
+      kind: ValidatingPolicy
+      metadata:
+        labels:
+          auth.wxops.cloud/policy: rbac-guard
+          auth.wxops.cloud/template: rbac-guard
+          wxops.cloud/managed-by: platform-policy
+        name: wxops-rbac-guard
+      spec:
+        evaluation:
+          background:
+            enabled: false
+        failurePolicy: Fail
+        matchConditions:
+          - expression: '!request.userInfo.username.startsWith(''system:'') && request.userInfo.groups.exists(g, [''wxops-idp:''].exists(p, g.startsWith(p)))'
+            name: scm-user
+          - expression: '!(request.userInfo.groups.exists(g, g in [''wxops-idp:platform'']) || request.userInfo.username in [''root''])'
+            name: not-exempt
+        matchConstraints:
+          resourceRules:
+            - apiGroups:
+                - rbac.authorization.k8s.io
+              apiVersions:
+                - '*'
+              operations:
+                - CREATE
+                - UPDATE
+                - DELETE
+              resources:
+                - roles
+                - rolebindings
+                - clusterroles
+                - clusterrolebindings
+            - apiGroups:
+                - auth.wxops.cloud
+              apiVersions:
+                - '*'
+              operations:
+                - CREATE
+                - UPDATE
+                - DELETE
+              resources:
+                - '*'
+        validationActions:
+          - Deny
+        validations:
+          - expression: 'false'
+            message: 'auth.wxops.cloud: bindings are written by XPersonaBinding and personas and policies by the platform team, not by hand'
+  providerConfigRef:
+    name: default

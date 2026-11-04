@@ -16,11 +16,11 @@ in KCL — see [`kcl/tenant-app/main.k`](../../../kcl/tenant-app/main.k).
 Install once per cluster (`make providers`):
 
 ```bash
-kubectl apply -f providers/provider-kubernetes.yaml
-kubectl apply -f providers/rbac-provider-kubernetes.yaml
-kubectl apply -f providers/runtimeconfig-provider-kubernetes.yaml
-kubectl apply -f providers/providerconfig-kubernetes.yaml
-kubectl apply -f providers/function-kcl.yaml
+kubectl apply -f providers/packages/provider-kubernetes.yaml
+kubectl apply -f providers/rbac/provider-kubernetes.yaml
+kubectl apply -f providers/packages/runtimeconfig-provider-kubernetes.yaml
+kubectl apply -f providers/config/providerconfig-kubernetes.yaml
+kubectl apply -f providers/functions/function-kcl.yaml
 ```
 
 Optional, depending on which fields are enabled:
@@ -77,12 +77,12 @@ spec:
       host: payment-api.rocket-team.example.com
 ```
 
-See [`examples/tenant-app/xr.yaml`](../../../examples/tenant-app/xr.yaml) for the
+See [`examples/platform/tenant-app/xr.yaml`](../../../examples/platform/tenant-app/xr.yaml) for the
 full set of optional fields (`serviceAccount`, `securityContext`,
 `terminationGracePeriodSeconds`, `imagePullSecrets`, `secretsFrom`,
 `rolloutStrategy`, `darlane`, `probes`, `ingress.tls`/`ingress.auth`,
 `labels`/`deploymentAnnotations`, `templateId`/`repository.url`), and
-[`docs/api-reference/tenant-app.md`](../../../docs/api-reference/tenant-app.md) for the complete
+[`docs/api-reference/platform/tenant-app.md`](../../../docs/api-reference/platform/tenant-app.md) for the complete
 `spec.parameters` reference and the Golden Path Contract.
 
 ## Status
@@ -98,7 +98,7 @@ full set of optional fields (`serviceAccount`, `securityContext`,
 | `image` | Container image currently configured for the deployment. |
 | `synced` / `syncMessage` | `synced` is false while a composed resource's last apply failed (its `Ready` can stay True from the earlier success); `syncMessage` is the provider's message, truncated. Absent until the first reconcile |
 
-Full reference: [`docs/api-reference/tenant-app.md`](../../../docs/api-reference/tenant-app.md#status).
+Full reference: [`docs/api-reference/platform/tenant-app.md`](../../../docs/api-reference/platform/tenant-app.md#status).
 
 ## Relation to other packages
 

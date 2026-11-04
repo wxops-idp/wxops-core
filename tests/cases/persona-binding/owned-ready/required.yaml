@@ -1,0 +1,54 @@
+# Fixture for `crossplane composition render --required-resources`.
+#
+# persona-binding discovers two things: the XPersona (a single named lookup via the "crossplane.io/composite" label) and every Namespace labelled
+# auth.wxops.cloud/tenant-namespace: "true". See kcl/persona-binding/main.k.
+#
+# payment-api / checkout-web — owned by teams in the persona: each gets a RoleBinding for ITS OWN team's group only
+# orphan                     — owned by a team that is not in the persona: nothing rendered
+# unowned                    — a tenant namespace with no wxops.cloud/owner yet: nothing rendered
+# The persona's User is never bound by scope "owned": a user has no team.
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPersona
+metadata:
+  name: developers
+  labels:
+    crossplane.io/composite: developers
+spec:
+  parameters:
+    description: Builds and deploys outside production
+status:
+  subjects:
+    - {kind: Group, name: "wxops-idp:payment", apiGroup: rbac.authorization.k8s.io}
+    - {kind: Group, name: "wxops-idp:checkout", apiGroup: rbac.authorization.k8s.io}
+    - {kind: User, name: alice, apiGroup: rbac.authorization.k8s.io}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: payment-api
+  labels:
+    auth.wxops.cloud/tenant-namespace: "true"
+    wxops.cloud/owner: payment
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: checkout-web
+  labels:
+    auth.wxops.cloud/tenant-namespace: "true"
+    wxops.cloud/owner: checkout
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: orphan
+  labels:
+    auth.wxops.cloud/tenant-namespace: "true"
+    wxops.cloud/owner: nobody
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: unowned
+  labels:
+    auth.wxops.cloud/tenant-namespace: "true"

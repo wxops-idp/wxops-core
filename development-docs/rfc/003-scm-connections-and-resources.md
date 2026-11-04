@@ -292,7 +292,7 @@ The Portal reads connections to offer the vendor choices, so it needs read acces
   there.
 - On Gitea, per *Tenancy*, the org **is the platform** — one long-lived object, created once, not per-tenant churn. That shape (created
   once, by a human, before anything else can reference it) is the same category as OpenBao's own bootstrap step
-  ([RFC-008](008-platform-tools-as-apis.md)): out of band by design, not something GitOps gains by owning.
+  ([RFC-008](008-built-in-tools-identity-and-catalog.md)): out of band by design, not something GitOps gains by owning.
 - Whether `go-gitea/gitea` even ships a writable `gitea_org` *resource* (as opposed to the `data.gitea_org` this RFC already verified) was
   never checked against the real provider schema — the kind matrix's claim predates the spike and should not be trusted until confirmed.
 

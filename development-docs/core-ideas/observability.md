@@ -19,7 +19,7 @@ This document has two halves, at different maturities.
 ## Why CRDs and not annotations
 
 `XTenantApp` today expresses monitoring as pod annotations — `prometheus.io/scrape`, `prometheus.io/port`, `prometheus.io/path` (see the commented block in
-[`examples/tenant-app/xr.yaml`](../../examples/tenant-app/xr.yaml)).
+[`examples/platform/tenant-app/xr.yaml`](../../examples/platform/tenant-app/xr.yaml)).
 
 **Those annotations do nothing.** They are a Prometheus *convention*, honoured only by a `kubernetes_sd_config` job with relabel rules that read them. The
 platform runs kube-prometheus-stack, whose `additionalScrapeConfigs` is empty — so nothing reads them and the toggle silently no-ops.
@@ -113,7 +113,7 @@ discovered monitors on the Helm release name. The release name comes from the di
 [`kcl/tenant-app/main.k:663`](../../kcl/tenant-app/main.k) has an unnamed port. Two ways out, and the choice is a genuine trade-off — see [What
 changes](#what-changes) below.
 
-**4. Provider RBAC.** `providers/rbac-provider-kubernetes.yaml` enumerates every API group composed `Object` manifests may touch, and `monitoring.coreos.com` is
+**4. Provider RBAC.** `providers/rbac/provider-kubernetes.yaml` enumerates every API group composed `Object` manifests may touch, and `monitoring.coreos.com` is
 absent. Without it every emitted monitor fails `forbidden` at reconcile time.
 
 ## Cardinality
@@ -136,7 +136,7 @@ Classified against the tiers [`tests/README.md`](../../tests/README.md#test-api-
 | Add `monitoring` optional object with defaults | `package/platform/tenant-app/xrd.yaml` | `safe` |
 | Add ServiceMonitor, conditional emit | `kcl/tenant-app/main.k` | `safe` |
 | Add PodMonitor, conditional emit | `kcl/tenant-app/main.k` | `safe` |
-| Grant `monitoring.coreos.com` to the provider | `providers/rbac-provider-kubernetes.yaml` | prerequisite — not a composition change |
+| Grant `monitoring.coreos.com` to the provider | `providers/rbac/provider-kubernetes.yaml` | prerequisite — not a composition change |
 | Add `tenant-app` to the validation array | `.github/scripts/validate-packages.sh` | CI only |
 | **Name the existing Service port `http`** | `kcl/tenant-app/main.k:663` | **`careful`** |
 
@@ -601,10 +601,10 @@ deploys it, not after.
 
 ## See also
 
-- [`tenant-app.md`](../../docs/api-reference/tenant-app.md) — the full `XTenantApp` schema
+- [`tenant-app.md`](../../docs/api-reference/platform/tenant-app.md) — the full `XTenantApp` schema
 - [`development-docs/_archives/ROADMAP.md`](../_archives/ROADMAP.md) — archived; the work item this describes
 - [`release-notes/README.md`](../../release-notes/README.md) — the `safe`/`careful`/`breaking` change-tier taxonomy
-- [`multi-cluster.md`](multi-cluster.md) — Alloy pushing over mTLS to an observability cluster reached by name; the archived
+- [`multi-cluster.md`](multi-cluster.md) — Alloy pushing over mTLS to the LGTM stack on the hub (or a dedicated observability cluster) reached by name; the archived
   [`multi-cluster.md`](../_archives/multi-cluster.md) — per-cluster observability endpoints, later
 - [`multi-cluster-connectivity.md`](../_archives/multi-cluster-connectivity.md#observability-plane) — the
   observability plane in the four-plane architecture, and why the push topology follows from the

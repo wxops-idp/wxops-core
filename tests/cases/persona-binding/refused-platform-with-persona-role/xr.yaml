@@ -1,0 +1,12 @@
+# The XRD's CEL rule rejects this at the API server ("scope 'platform' binds only a wxops:platform-* role"); this offline harness does not evaluate CEL, so the case
+# proves the COMPOSITION refuses it too — nothing rendered, synced false, the reason in syncMessage — and a bypassed rule never reaches provider-kubernetes.
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPersonaBinding
+metadata:
+  name: bad-cluster-wide-persona
+spec:
+  parameters:
+    personaRef:
+      name: platform
+    role: wxops:persona-developers
+    scope: platform

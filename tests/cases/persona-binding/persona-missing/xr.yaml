@@ -1,0 +1,10 @@
+# The persona does not exist (yet): nothing is rendered and the reason is visible, instead of a binding with no subjects.
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPersonaBinding
+metadata:
+  name: ghost-edit
+spec:
+  parameters:
+    personaRef:
+      name: ghost
+    role: wxops:persona-developers

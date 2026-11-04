@@ -1,0 +1,14 @@
+# Pins provider-kubernetes's pod ServiceAccount to a fixed, known name
+# (`provider-kubernetes-runtime`) instead of the package-hash-derived default
+# (`provider-kubernetes-<hash>`). This lets `../rbac/provider-kubernetes.yaml`
+# bind its ClusterRole directly to this ServiceAccount — no hash to track,
+# and no group-wide grant that would also reach provider-sql/provider-terraform/provider-opentofu's
+# ServiceAccounts in crossplane-system.
+apiVersion: pkg.crossplane.io/v1beta1
+kind: DeploymentRuntimeConfig
+metadata:
+  name: provider-kubernetes-runtime
+spec:
+  serviceAccountTemplate:
+    metadata:
+      name: provider-kubernetes-runtime

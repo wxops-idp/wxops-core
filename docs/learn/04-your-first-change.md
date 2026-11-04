@@ -87,7 +87,7 @@ step](03-kcl-here.md#the-sync-step--never-forget-this).
 Optional fields with defaults don't strictly need new cases, but exercise the one you added:
 
 ```bash
-# examples/scm-oauth-app/xr.yaml — add one line under spec.parameters:
+# examples/scm/oauth-app/xr.yaml — add one line under spec.parameters:
 notes: "onboarding cohort 3"
 ```
 
@@ -118,14 +118,14 @@ make test    # the full merge gate, green
 ## 6 — Commit and open a PR
 
 ```bash
-git add package/scm/oauth-app/ examples/scm-oauth-app/ tests/cases/scm-oauth-app/
+git add package/scm/oauth-app/ examples/scm/oauth-app/ tests/cases/scm-oauth-app/
 git commit -m "feat(scm-oauth-app): add optional notes field to XRD v1alpha1"
 ```
 
 Commit message format and the full PR checklist: [`CONTRIBUTING.md`](../../CONTRIBUTING.md#commit-messages). `pre-commit` runs the same checks locally that CI
 runs on the PR — see [pre-commit hooks](../../development-docs/development/README.md#pre-commit-hooks).
 
-**Now revert this teaching change** (`git checkout -- package/scm/oauth-app/ examples/scm-oauth-app/ tests/cases/scm-oauth-app/`) and apply the same six steps
+**Now revert this teaching change** (`git checkout -- package/scm/oauth-app/ examples/scm/oauth-app/ tests/cases/scm-oauth-app/`) and apply the same six steps
 to something real.
 
 ## What you just practiced

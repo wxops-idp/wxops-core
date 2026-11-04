@@ -55,7 +55,7 @@ bao kv put -mount=platform dex/users-def/admin password='admin@wxops'
 ```
 
 Change it (write a new value to the same key, bump `rotation.generation`) once the real identity
-providers are in place. See [`examples/oidc-static-password/xr.yaml`](../../../examples/oidc-static-password/xr.yaml).
+providers are in place. See [`examples/auth/oidc-static-password/xr.yaml`](../../../examples/auth/oidc-static-password/xr.yaml).
 
 ## `secret.source`
 
@@ -120,7 +120,7 @@ refresh:
 | `userId` | The resolved userId |
 | `vaultKey` | Where the record (not the password) was pushed |
 
-Full reference: [`docs/api-reference/oidc-static-password.md`](../../../docs/api-reference/oidc-static-password.md).
+Full reference: [`docs/api-reference/auth/oidc-static-password.md`](../../../docs/api-reference/auth/oidc-static-password.md).
 
 ## Build and publish
 

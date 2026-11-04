@@ -1,0 +1,12 @@
+# expect: scmOrgs
+# expect: should be non-empty
+#
+# With no org there is no SCM user to match: the policy would apply to nobody, silently.
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPlatformPolicy
+metadata:
+  name: nope
+spec:
+  parameters:
+    template: secret-readonly
+    scmOrgs: []

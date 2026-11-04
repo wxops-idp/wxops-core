@@ -57,7 +57,7 @@ spec:
       - username: bob
 ```
 
-See [`examples/scm-team/xr.yaml`](../../../examples/scm-team/xr.yaml).
+See [`examples/scm/team/xr.yaml`](../../../examples/scm/team/xr.yaml).
 
 ## Modes
 
@@ -218,7 +218,7 @@ in with `mode: observed` instead).
 | `dexTeam` | The team name a connector would see — the Gitea name, or the GitHub slug |
 | `oidcGroup` | `<org>:<dexTeam>` — what a connector emits in the `groups` claim once this team is in scope |
 
-Full reference: [`docs/api-reference/scm-team.md`](../../../docs/api-reference/scm-team.md).
+Full reference: [`docs/api-reference/scm/team.md`](../../../docs/api-reference/scm/team.md).
 
 ## Open items
 

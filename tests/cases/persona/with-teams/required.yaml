@@ -1,0 +1,53 @@
+# Fixture for `crossplane composition render --required-resources`.
+#
+# persona's only pipeline lookup is every XScmTeam labelled scm.wxops.cloud/oidc-login: "true". Which of them are members is decided
+# in KCL, by the label auth.wxops.cloud/persona-<XR name>: "true" and a published status.oidcGroup. See kcl/persona/main.k.
+#
+# payment   — member (carries the label, publishes a group)
+# checkout  — not a member: labelled for another persona only
+# pending   — labelled for this persona but has no group yet (its XScmTeam has not been applied) — skipped, not an error
+# search    — member of this persona AND another: a team may belong to several
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmTeam
+metadata:
+  name: payment
+  labels:
+    scm.wxops.cloud/oidc-login: "true"
+    auth.wxops.cloud/persona-developers: "true"
+status:
+  org: wxops-idp
+  dexTeam: payment
+  oidcGroup: wxops-idp:payment
+---
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmTeam
+metadata:
+  name: checkout
+  labels:
+    scm.wxops.cloud/oidc-login: "true"
+    auth.wxops.cloud/persona-viewers: "true"
+status:
+  org: wxops-idp
+  dexTeam: checkout
+  oidcGroup: wxops-idp:checkout
+---
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmTeam
+metadata:
+  name: pending
+  labels:
+    scm.wxops.cloud/oidc-login: "true"
+    auth.wxops.cloud/persona-developers: "true"
+---
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmTeam
+metadata:
+  name: search
+  labels:
+    scm.wxops.cloud/oidc-login: "true"
+    auth.wxops.cloud/persona-developers: "true"
+    auth.wxops.cloud/persona-viewers: "true"
+status:
+  org: wxops-idp
+  dexTeam: search
+  oidcGroup: wxops-idp:search

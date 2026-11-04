@@ -1,0 +1,95 @@
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPlatformPolicy
+metadata:
+  name: exempt-persona-missing
+spec:
+  crossplane:
+    resourceRefs:
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: 933c65cc-policy
+status:
+  conditions:
+    - reason: WatchCircuitClosed
+      status: 'True'
+      type: Responsive
+    - reason: ReconcileSuccess
+      status: 'True'
+      type: Synced
+    - message: 'Unready resources: 933c65cc-policy'
+      reason: Creating
+      status: 'False'
+      type: Ready
+  created: false
+  policyKind: ValidatingPolicy
+  policyName: wxops-exempt-persona-missing
+  ready: false
+  syncMessage: "exempt persona 'ghost' not found \u2014 the policy applies to everyone until it exists"
+  synced: false
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: 933c65cc-policy
+  labels:
+    crossplane.io/composite: exempt-persona-missing
+  name: 933c65cc-policy
+  ownerReferences:
+    - apiVersion: auth.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XPlatformPolicy
+      name: exempt-persona-missing
+      uid: 933c65cc-bd7a-528a-a05a-8165e503869f
+spec:
+  forProvider:
+    manifest:
+      apiVersion: policies.kyverno.io/v1
+      kind: ValidatingPolicy
+      metadata:
+        labels:
+          auth.wxops.cloud/policy: exempt-persona-missing
+          auth.wxops.cloud/template: rbac-guard
+          wxops.cloud/managed-by: platform-policy
+        name: wxops-exempt-persona-missing
+      spec:
+        evaluation:
+          background:
+            enabled: false
+        failurePolicy: Ignore
+        matchConditions:
+          - expression: '!request.userInfo.username.startsWith(''system:'') && request.userInfo.groups.exists(g, [''wxops-idp:''].exists(p, g.startsWith(p)))'
+            name: scm-user
+        matchConstraints:
+          resourceRules:
+            - apiGroups:
+                - rbac.authorization.k8s.io
+              apiVersions:
+                - '*'
+              operations:
+                - CREATE
+                - UPDATE
+                - DELETE
+              resources:
+                - roles
+                - rolebindings
+                - clusterroles
+                - clusterrolebindings
+            - apiGroups:
+                - auth.wxops.cloud
+              apiVersions:
+                - '*'
+              operations:
+                - CREATE
+                - UPDATE
+                - DELETE
+              resources:
+                - '*'
+        validationActions:
+          - Audit
+        validations:
+          - expression: 'false'
+            message: 'auth.wxops.cloud: bindings are written by XPersonaBinding and personas and policies by the platform team, not by hand'
+  providerConfigRef:
+    name: default

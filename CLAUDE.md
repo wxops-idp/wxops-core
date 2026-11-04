@@ -11,7 +11,7 @@ W'xOps Core is the control-plane "brain" of W'xOps, built on **Crossplane v2** c
 | Engine | Used by | When to use |
 |---|---|---|
 | `function-patch-and-transform` | `scm-*` (`gitea-*`, `random-password` archived), `oidc-connection` | Single composed resource: an inline-HCL `Workspace`, or one wrapped `Object`; each such package ends with the shared `status` step (`kcl/status/main.k`) that folds `Synced` into `ready`/`synced`/`syncMessage`. The `scm-*` packages keep **all** vendor logic in HCL — no KCL, no direct API calls |
-| `function-kcl` | `platform-database-clusters`, `tenant-database`, `tenant-app`, `oidc-static-password`, `oidc-client`, `oidc-connector` | Multi-resource, conditional branching, list comprehensions |
+| `function-kcl` | `platform-database-clusters`, `tenant-database`, `tenant-app`, `oidc-static-password`, `oidc-client`, `oidc-connector`, `persona`, `persona-binding`, `platform-policy` | Multi-resource, conditional branching, list comprehensions |
 
 `tenant-database` additionally uses `function-extra-resources` as a first pipeline step to discover shared clusters via label selector before the KCL step renders resources — as do all three `oidc-*` KCL packages, to read their `XOIDCConnection` (and, for `oidc-connector`, the `XScmConnection`, `XScmOAuthApp` and every labelled `XScmTeam`) by the `crossplane.io/composite` label Crossplane stamps on every root XR with its own name — no user-written discovery label needed, unlike `tenant-database`'s pool selector.
 
@@ -44,7 +44,7 @@ Documentation shows the full logical path (e.g. `tenants/{owner}/databases/{dbNa
 
 ## Packages
 
-Eleven Crossplane Configuration packages:
+Fourteen Crossplane Configuration packages:
 
 | Package | Kind | Composition |
 |---|---|---|
@@ -59,6 +59,9 @@ Eleven Crossplane Configuration packages:
 | `oidc-static-password` | `XOIDCStaticPassword` | function-extra-resources + function-kcl + ESO `Password` generator/`ExternalSecret`/`PushSecret` |
 | `oidc-client` | `XOIDCClient` | function-extra-resources + function-kcl + ESO `Password` generator/`ExternalSecret`/`PushSecret` |
 | `oidc-connector` | `XOIDCConnector` | function-extra-resources + function-kcl + ESO `ExternalSecret`/`PushSecret` |
+| `persona` | `XPersona` | function-extra-resources + function-kcl; composes nothing — resolves members into `status.subjects` |
+| `persona-binding` | `XPersonaBinding` | function-extra-resources + function-kcl + `RoleBinding`/`ClusterRoleBinding` (the only RBAC a composition may emit) |
+| `platform-policy` | `XPlatformPolicy` | function-extra-resources + function-kcl + one Kyverno `ValidatingPolicy`/`MutatingPolicy` |
 
 **Archived, not deleted** — `gitea-user`/`-org`/`-team`/`-repository` (`XGiteaUser`/`XGiteaOrg`/`XGiteaTeam`/`XGiteaRepository`, all
 patch-and-transform + inline HCL) and the `random-password` utility (`XRandomPassword`): no cluster ever ran them, every active
@@ -91,13 +94,15 @@ version, not the release name — see [`release-notes/README.md`](release-notes/
 - `package/dev/` — development install (applies XRDs + Compositions directly)
 - `providers/` — shared provider/function installs and `ProviderConfig` (apply once per cluster)
 - `kcl/<name>/` — KCL composition source (`kcl.mod`, `main.k`)
-- `examples/<name>/` — minimal XR YAML to exercise each package
+- `examples/<group>/<name>/xr.yaml` — one minimal XR per package, mirroring `package/<group>/<name>/`; further variants are snippets on the
+  package's API page. `make test` validates each against its XRD. The platform-policy scenario kit lives beside its `xr.yaml`
 - `tests/cases/<name>/` — test cases; `tests/lib/` shared harness (see [Testing](#testing))
 - `docs/` — **generic documentation** for anyone who uses, operates or builds on the platform — usage, delivery, and
   guideline material, not where the platform is headed. Hub: `docs/README.md`. The sections:
   - `docs/learn/` — contributor onboarding for Crossplane/OpenTofu/KCL newcomers, each page against
     a real file in this repo; prerequisite reading for `development-docs/development/`, not part of it
-  - `docs/api-reference/` — the reconcile loop from a user's side (`README.md`), one page per Kind,
+  - `docs/api-reference/` — the reconcile loop from a user's side (`README.md`), one page per Kind under `<group>/`
+    (`platform/`, `scm/`, `auth/`, mirroring `package/<group>/<name>/`),
     `status-contract.md`
   - `docs/user-guide/` — `setup.md`, `app-onboarding.md`, `portal-integration.md`
 - `development-docs/` — **everything about building, deciding, releasing and where Core is headed**. Hub:
@@ -147,11 +152,11 @@ make validate                          # crossplane xpkg build (no push)
 
 # Lint & render
 make lint                              # yamllint + kubeconform
-make render                            # offline dry-run of example XRs
 pre-commit run --all-files             # all hooks (yaml, kubeconform, xpkg build, kcl drift, versions)
 
 # Cluster install
-make providers                         # install providers/functions once per cluster
+make providers                         # functions → provider packages → RBAC → ProviderConfigs, in order, waiting where it must
+make providers-functions               # …or one category at a time: providers-functions · providers-packages · providers-rbac · providers-config
 make install                           # install from OCI registry (production)
 make install-dev                       # apply XRDs + Compositions directly (development)
 
@@ -175,7 +180,7 @@ Commits are validated by:
 5. **Package pins** — `VERSIONS.yaml` `current` agrees with `package/install/` (both written by `make release`)
 6. **README packages table** in sync with VERSIONS.yaml
 7. **XRD conformance** + **API compatibility** + **composition invariants** (fast, every commit)
-8. **Golden render tests** — `pre-push` stage only, ~90s
+8. **Golden render tests** — `pre-push` stage only, ~8 minutes (`WXOPS_RENDER=shared`: seconds, Linux)
 
 CI enforces the same gates on every pull request via
 `.github/workflows/pr-validate.yaml`. Pre-commit runs locally and is bypassable
@@ -189,7 +194,7 @@ When adding new capabilities:
 2. Write a `Composition` under `package/<name>/composition.yaml` — inline HCL for single-resource, KCL function for multi-resource.
 3. If using KCL, write `kcl/<name>/main.k` and run `make kcl-sync`.
 4. Add `crossplane.yaml` (package metadata) to the same package directory.
-5. Add a minimal `examples/<name>/xr.yaml` that exercises the XRD.
+5. Add one minimal `examples/<group>/<name>/xr.yaml` that exercises the XRD; put further variants on the API page, not in more files.
 6. **Add test cases under `tests/cases/<name>/`** — see [Testing](#testing) below. A new package is not done until it has them.
 7. Add a `VERSIONS.yaml` entry with `current: unreleased` and run `make readme-sync`. Never
    hand-edit `current` on an existing package — `make release` pins it. A change to a released
@@ -206,7 +211,9 @@ the patch-and-transform packages end with a shared `status` step (`kcl/status/ma
 embedded by `make kcl-sync`). Compositions
 must never emit Kubernetes RBAC — see [`development-docs/_archives/ROADMAP.md`](development-docs/_archives/ROADMAP.md) *Decided and
 rejected*; the composition creates the ServiceAccount and publishes its name in
-status, and the GitOps repo binds a `Role` to it.
+status, and the GitOps repo binds a `Role` to it. **One narrow exception, pending ADR** ([RFC-009](development-docs/rfc/009-scm-personas.md)):
+the `persona-binding` composition alone may emit `RoleBinding`/`ClusterRoleBinding` — never a `Role` or `ClusterRole` — to the roles
+`provider-kubernetes` holds `bind` on (`providers/rbac/provider-kubernetes.yaml`); `tests/invariants.py` enforces both.
 
 ## Testing
 
@@ -220,12 +227,13 @@ make test-deps        # once — pip install -r tests/requirements.txt
 make test             # the merge gate: XRD conformance + API compat + golden + invariants
 make test-update      # regenerate goldens after an INTENTIONAL change, then read the diff
 make test-structural  # advisory only, never gates
+WXOPS_RENDER=shared make test   # opt-in, Linux: functions started once, engine local — seconds, not ~8 minutes
 ```
 
 | Check | Cost | Gates | What it catches |
 |---|---|---|---|
 | `test-xrd` | 0.3s | yes | XRs violating our XRD; negative cases that are *not* rejected |
-| `test-golden` | ~90s | yes | any change to rendered output |
+| `test-golden` | ~8 min (shared: seconds) | yes | any change to rendered output |
 | `test-invariants` | 0.2s | yes | cross-cutting rules + third-party field contracts |
 | `test-api-compat` | <1s | yes | breaking changes vs the last release tag: removed/retyped/newly-required fields, narrowed enums, renamed composed resources, changed selectors |
 | `test-structural` | ~5s | **no** | third-party structural smoke, best-effort |
@@ -307,11 +315,14 @@ release commit. Gitea no longer publishes.
 
 | Component | Version |
 |---|---|
-| Crossplane | v2.3 |
+| Kubernetes | v1.36 recommended (≥ v1.34 for the packages alone) — Pinniped v0.46.0 is built on the 1.36 libraries |
+| Pinniped (bootstrap, impersonation proxy — not installed by this repo) | v0.46.0 |
+| Crossplane | v2.3 (render engine pinned to v2.3.1 in `tests/crossplane-version.txt`) |
 | provider-opentofu | v1.1.9 |
 | provider-terraform (archived, `providers/archive/`) | v1.1.5 |
 | provider-kubernetes | v1.2.1 |
 | provider-sql | v0.15.0 |
+| provider-vault (OpenBao configuration, hub only — [RFC-008](development-docs/rfc/008-built-in-tools-identity-and-catalog.md)) | v4.1.0 |
 | function-kcl | v0.12.1 |
 | function-extra-resources | v0.3.0 |
 | function-patch-and-transform | v0.10.7 |

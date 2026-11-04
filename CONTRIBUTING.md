@@ -39,7 +39,8 @@ pre-commit install --hook-type pre-push --hook-type commit-msg
 ```
 
 The first `make test` pulls ~800MB of function images. After that they are
-cached.
+cached. On Linux, `WXOPS_RENDER=shared make test` renders the goldens in seconds instead of minutes — see
+[render modes](tests/README.md#render-modes--isolated-default-and-shared-opt-in).
 
 ---
 
@@ -129,11 +130,11 @@ A package lives at `package/<group>/<name>/`, where the group is the API group i
       readiness checks
 - [ ] `package/<group>/<name>/crossplane.yaml`, `kustomization.yaml` (just `xrd.yaml` + `composition.yaml`), `README.md`
 - [ ] `package/dev/kustomization.yaml` — add `../<group>/<name>`; nothing generates this file
-- [ ] `examples/<name>/xr.yaml`
-- [ ] `docs/api-reference/<name>.md` + a row in [`docs/api-reference/README.md`](docs/api-reference/README.md)
+- [ ] `examples/<group>/<name>/xr.yaml` — one minimal XR, mirroring `package/<group>/<name>/`; further variants as snippets on the API page
+- [ ] `docs/api-reference/<group>/<name>.md` (mirroring `package/<group>/<name>/`) + a row in [`docs/api-reference/README.md`](docs/api-reference/README.md)
 - [ ] **`tests/cases/<name>/` — see below**
 - [ ] A commit scope in [`cliff.toml`](cliff.toml)
-- [ ] Any new API group the composition targets → `providers/rbac-provider-kubernetes.yaml`
+- [ ] Any new API group the composition targets → `providers/rbac/provider-kubernetes.yaml`
 
 That last one has no offline test. provider-kubernetes runs with
 `InjectedIdentity` and Crossplane's RBAC manager grants it nothing on
@@ -158,7 +159,7 @@ tests/cases/<package>/<case>/
 
 ```bash
 mkdir -p tests/cases/<pkg>/baseline
-cp examples/<pkg>/xr.yaml tests/cases/<pkg>/baseline/xr.yaml
+cp examples/<group>/<name>/xr.yaml tests/cases/<pkg>/baseline/xr.yaml
 ```
 
 1. **`baseline`** — the published example, no `observed.yaml`. Pins the

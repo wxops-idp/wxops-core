@@ -1,0 +1,12 @@
+# expect: scope
+# expect: is not one of
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPersonaBinding
+metadata:
+  name: nope
+spec:
+  parameters:
+    personaRef:
+      name: developers
+    role: wxops:persona-developers
+    scope: cluster

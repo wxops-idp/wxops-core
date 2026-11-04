@@ -93,7 +93,7 @@ CI runs the same gates on every pull request. Pre-commit can be bypassed with `-
 | `make test-structural` | Advisory third-party schema check, never gates |
 | `make kcl-sync` · `kcl-check` | Embed KCL into `composition.yaml` · fail if it drifted |
 | `make readme-sync` · `readme-check` | Regenerate · verify the root README packages table |
-| `make lint` · `make render` · `make validate` | yamllint + kubeconform · render every example offline · `xpkg build` without pushing |
+| `make lint` · `make validate` | yamllint + kubeconform · `xpkg build` without pushing |
 | `make build` · `make push` | Build OCI packages · build and push (`REGISTRY=`, `VERSION=`) |
 | `make providers` · `install` · `install-dev` | Install providers · packages from the registry · XRDs and Compositions directly ([setup](../../docs/user-guide/setup.md)) |
 | `make uninstall` · `uninstall-dev` | Remove what the matching install applied |

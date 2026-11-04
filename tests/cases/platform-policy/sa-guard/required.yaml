@@ -1,0 +1,14 @@
+# Fixture for `crossplane composition render --required-resources`: the exempt persona, a single named lookup via the "crossplane.io/composite" label.
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPersona
+metadata:
+  name: platform
+  labels:
+    crossplane.io/composite: platform
+spec:
+  parameters:
+    description: Takes responsibility across every org, team and cluster
+status:
+  subjects:
+    - {kind: Group, name: "wxops-idp:platform", apiGroup: rbac.authorization.k8s.io}
+    - {kind: User, name: root, apiGroup: rbac.authorization.k8s.io}

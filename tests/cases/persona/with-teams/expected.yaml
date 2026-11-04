@@ -1,0 +1,37 @@
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPersona
+metadata:
+  name: developers
+spec:
+  crossplane:
+    resourceRefs: []
+status:
+  conditions:
+    - reason: WatchCircuitClosed
+      status: 'True'
+      type: Responsive
+    - reason: ReconcileSuccess
+      status: 'True'
+      type: Synced
+    - reason: Available
+      status: 'True'
+      type: Ready
+  created: true
+  environments:
+    - dev
+    - staging
+  groups:
+    - wxops-idp:payment
+    - wxops-idp:search
+  ready: true
+  subjects:
+    - apiGroup: rbac.authorization.k8s.io
+      kind: Group
+      name: wxops-idp:payment
+    - apiGroup: rbac.authorization.k8s.io
+      kind: Group
+      name: wxops-idp:search
+  synced: true
+  teams:
+    - payment
+    - search

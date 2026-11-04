@@ -1,0 +1,9 @@
+# What onboarding creates for a team. `wxops.cloud/owner` is the team's slug — group `wxops-idp:payment` owns `payment`. `auth.wxops.cloud/tenant-namespace` is the fixed
+# label XPersonaBinding (scope: owned) and the owner-stamp policy discover namespaces by. Only the platform persona may set either (rbac-guard / owner-seal).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: payment-api
+  labels:
+    auth.wxops.cloud/tenant-namespace: "true"
+    wxops.cloud/owner: payment

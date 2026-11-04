@@ -1,0 +1,8 @@
+# expect: 'personaRef' is a required property
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPersonaBinding
+metadata:
+  name: nope
+spec:
+  parameters:
+    role: wxops:persona-developers

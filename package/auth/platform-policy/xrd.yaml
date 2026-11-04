@@ -1,0 +1,147 @@
+apiVersion: apiextensions.crossplane.io/v2
+kind: CompositeResourceDefinition
+metadata:
+  name: xplatformpolicies.auth.wxops.cloud
+spec:
+  group: auth.wxops.cloud
+  scope: Cluster
+  names:
+    kind: XPlatformPolicy
+    plural: xplatformpolicies
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - parameters
+              properties:
+                parameters:
+                  type: object
+                  required:
+                    - template
+                    - scmOrgs
+                  x-kubernetes-validations:
+                    - rule: "self.template != 'exec-guard' || self.personaRef.name != ''"
+                      message: "template 'exec-guard' needs personaRef — the persona that may exec"
+                    - rule: "self.template == 'exec-guard' || self.personaRef.name == ''"
+                      message: "personaRef is for template 'exec-guard' only"
+                    - rule: "self.template == 'owner-seal' || (!has(self.ownerPattern) && !self.immutableOwner)"
+                      message: "ownerPattern and immutableOwner are options of template 'owner-seal' only"
+                  properties:
+                    template:
+                      type: string
+                      description: |
+                        Which reviewed rule to render. Policies are templates with parameters, not free-form CEL: a new rule is a change to this package, with tests.
+
+                        `owner-stamp` — a MutatingPolicy: a new object in a tenant namespace gets that namespace's `wxops.cloud/owner` label if it has none.
+
+                        `owner-seal` — a ValidatingPolicy: an SCM user creates, updates or deletes an object only if its owner is one of their teams. The owner is the
+                        object's `wxops.cloud/owner` label, or — for an unlabelled namespaced object — its namespace's. On update, both the old and the new owner must be theirs.
+
+                        `secret-readonly` — an SCM user cannot create, update or delete a `Secret`; values come from OpenBao through External Secrets Operator.
+
+                        `exec-guard` — `exec`, `attach` and `port-forward` only for the members of `personaRef`, and only in namespaces one of their teams owns.
+
+                        `protected` — an SCM user cannot update or delete an object labelled `wxops.cloud/protected: "true"`.
+
+                        `rbac-guard` — an SCM user cannot write a `Role`, `RoleBinding`, `ClusterRole`, `ClusterRoleBinding` or any `auth.wxops.cloud` kind. Bindings are
+                        `XPersonaBinding`'s; without this a team `admin`, who may create RoleBindings in its namespace, could bind around it.
+
+                        `sa-guard` — a Pod, or a workload's pod template, created or updated by an SCM user runs only as `default` or a ServiceAccount whose
+                        `wxops.cloud/owner` is one of their teams — no one runs a workload as another team's, or the platform's, ServiceAccount.
+
+                        `namespace-guard` — an SCM user cannot create or delete a Namespace, nor change its `wxops.cloud/owner` or
+                        `auth.wxops.cloud/tenant-namespace` label: the labels every other rule trusts.
+                      enum:
+                        - owner-stamp
+                        - owner-seal
+                        - secret-readonly
+                        - exec-guard
+                        - protected
+                        - rbac-guard
+                        - sa-guard
+                        - namespace-guard
+                    mode:
+                      type: string
+                      description: |
+                        `Audit` records what the policy would refuse as a PolicyReport and lets the request through; `Deny` refuses it. Every policy starts in `Audit`,
+                        and moves to `Deny` once its reports are clean. Ignored by `owner-stamp`, which only mutates.
+                      enum:
+                        - Audit
+                        - Deny
+                      default: Audit
+                    scmOrgs:
+                      type: array
+                      description: |
+                        The SCM orgs whose `<org>:<team>` groups make a caller an SCM user. A policy matches SCM users only — never a `system:` username, never a controller,
+                        Crossplane or Argo CD. Use the same orgs as the `XOIDCConnector` that admits them.
+                      minItems: 1
+                      items:
+                        type: string
+                        pattern: '^[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$'
+                    personaRef:
+                      type: object
+                      description: |
+                        The persona `exec-guard` lets exec. Read for its groups and users. Empty means none — the composition looks the persona up by this name at every
+                        reconcile, so the field is always present.
+                      default: {name: ""}
+                      required:
+                        - name
+                      properties:
+                        name:
+                          type: string
+                          default: ""
+                    exemptPersonaRef:
+                      type: object
+                      description: |
+                        A persona the policy does not apply to — the platform team, for `owner-seal` on Core XRs, `rbac-guard`, `protected`, `sa-guard` and `namespace-guard`. Empty, nobody is exempt.
+                        If the persona cannot be found the policy is rendered with no exemption, and `syncMessage` says so: a missing persona makes a policy stricter, never looser.
+                      default: {name: ""}
+                      required:
+                        - name
+                      properties:
+                        name:
+                          type: string
+                          default: ""
+                    ownerPattern:
+                      type: string
+                      description: |
+                        For `owner-seal`: the owner label must match this regular expression on create and update — the team-slug pattern for Core XRs, which
+                        have no namespace to fall back on. Absent, any owner value is accepted.
+                    immutableOwner:
+                      type: boolean
+                      description: |
+                        For `owner-seal`: on update the owner must not change at all — not even between two of the caller's own teams. Core XRs are sealed this way;
+                        a namespaced object may be moved by its owners.
+                      default: false
+            status:
+              type: object
+              properties:
+                created:
+                  type: boolean
+                  description: |
+                    True once the policy has been applied at least once.
+
+                    Absent — not false — until then. Treat absent as false.
+                ready:
+                  type: boolean
+                  description: True when the policy is applied and in sync.
+                synced:
+                  type: boolean
+                  description: |
+                    False while the policy failed its last apply, or a referenced persona cannot be found. `syncMessage` says what. Absent until the first reconcile.
+                syncMessage:
+                  type: string
+                  description: The provider's own message, or which persona is missing; truncated.
+                policyName:
+                  type: string
+                  description: The Kyverno policy this resource renders.
+                policyKind:
+                  type: string
+                  description: '`ValidatingPolicy` or `MutatingPolicy`.'

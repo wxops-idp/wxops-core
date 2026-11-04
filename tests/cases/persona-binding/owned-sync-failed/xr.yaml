@@ -1,0 +1,9 @@
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPersonaBinding
+metadata:
+  name: developers-edit
+spec:
+  parameters:
+    personaRef:
+      name: developers
+    role: wxops:persona-developers

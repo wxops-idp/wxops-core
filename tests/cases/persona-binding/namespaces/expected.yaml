@@ -1,0 +1,124 @@
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPersonaBinding
+metadata:
+  name: agents-view-tools
+spec:
+  crossplane:
+    resourceRefs:
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: 0d3354ee-observability-persona-viewers
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: 0d3354ee-shared-tools-persona-viewers
+status:
+  bindings:
+    - kind: RoleBinding
+      name: wxops-agents-view-tools-persona-viewers
+      namespace: shared-tools
+      subjects: 3
+    - kind: RoleBinding
+      name: wxops-agents-view-tools-persona-viewers
+      namespace: observability
+      subjects: 3
+  conditions:
+    - reason: WatchCircuitClosed
+      status: 'True'
+      type: Responsive
+    - reason: ReconcileSuccess
+      status: 'True'
+      type: Synced
+    - message: 'Unready resources: 0d3354ee-observability-persona-viewers, 0d3354ee-shared-tools-persona-viewers'
+      reason: Creating
+      status: 'False'
+      type: Ready
+  created: false
+  ready: false
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: 0d3354ee-observability-persona-viewers
+  labels:
+    crossplane.io/composite: agents-view-tools
+  name: 0d3354ee-observability-persona-viewers
+  ownerReferences:
+    - apiVersion: auth.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XPersonaBinding
+      name: agents-view-tools
+      uid: 0d3354ee-ce47-52f7-8688-1306a291b381
+spec:
+  forProvider:
+    manifest:
+      apiVersion: rbac.authorization.k8s.io/v1
+      kind: RoleBinding
+      metadata:
+        labels:
+          auth.wxops.cloud/binding: agents-view-tools
+          auth.wxops.cloud/persona: agents
+          wxops.cloud/managed-by: persona-binding
+        name: wxops-agents-view-tools-persona-viewers
+        namespace: observability
+      roleRef:
+        apiGroup: rbac.authorization.k8s.io
+        kind: ClusterRole
+        name: wxops:persona-viewers
+      subjects:
+        - apiGroup: rbac.authorization.k8s.io
+          kind: Group
+          name: wxops-idp:platform
+        - apiGroup: rbac.authorization.k8s.io
+          kind: User
+          name: alice
+        - kind: ServiceAccount
+          name: debugger
+          namespace: ai-suite
+  providerConfigRef:
+    name: default
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: 0d3354ee-shared-tools-persona-viewers
+  labels:
+    crossplane.io/composite: agents-view-tools
+  name: 0d3354ee-shared-tools-persona-viewers
+  ownerReferences:
+    - apiVersion: auth.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XPersonaBinding
+      name: agents-view-tools
+      uid: 0d3354ee-ce47-52f7-8688-1306a291b381
+spec:
+  forProvider:
+    manifest:
+      apiVersion: rbac.authorization.k8s.io/v1
+      kind: RoleBinding
+      metadata:
+        labels:
+          auth.wxops.cloud/binding: agents-view-tools
+          auth.wxops.cloud/persona: agents
+          wxops.cloud/managed-by: persona-binding
+        name: wxops-agents-view-tools-persona-viewers
+        namespace: shared-tools
+      roleRef:
+        apiGroup: rbac.authorization.k8s.io
+        kind: ClusterRole
+        name: wxops:persona-viewers
+      subjects:
+        - apiGroup: rbac.authorization.k8s.io
+          kind: Group
+          name: wxops-idp:platform
+        - apiGroup: rbac.authorization.k8s.io
+          kind: User
+          name: alice
+        - kind: ServiceAccount
+          name: debugger
+          namespace: ai-suite
+  providerConfigRef:
+    name: default

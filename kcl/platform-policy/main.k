@@ -1,0 +1,306 @@
+"""
+XPlatformPolicy — KCL composition source.
+
+Renders ONE reviewed Kyverno CEL policy (policies.kyverno.io/v1) per XR, chosen by `template`. Policies are templates with parameters, not free-form CEL: a new rule is a
+change to this file, with tests. Kyverno only ever refuses (ValidatingPolicy) or copies a namespace's owner (MutatingPolicy); it grants nothing — RBAC does (XPersonaBinding).
+
+Inputs (via option("params").oxr.spec.parameters):
+  template          string    owner-stamp | owner-seal | secret-readonly | exec-guard | protected | rbac-guard | sa-guard | namespace-guard.
+  mode              string    Audit (default) | Deny. Ignored by owner-stamp.
+  scmOrgs           [string]  The orgs whose "<org>:<team>" groups make a caller an SCM user.
+  personaRef.name   string    exec-guard: the persona that may exec.
+  exemptPersonaRef.name string  A persona the policy does not apply to (the platform team).
+  ownerPattern      string    owner-seal: the owner label must match this RE2 pattern.
+  immutableOwner    bool      owner-seal: the owner may not change on update.
+
+Design:
+  Who a policy applies to — SCM users and nobody else. The match condition `scm-user` is: no `system:` username, and at least one group "<org>:..." for a listed org.
+  Controllers, Crossplane, External Secrets Operator and Argo CD are never matched; they answer to their own RBAC (Argo CD to its AppProjects and merge review).
+  Who owns an object — its `wxops.cloud/owner` label; an unlabelled NAMESPACED object takes its namespace's. A cluster-scoped object has no namespace to fall back on, so
+  it needs the label — which is how Core XRs are sealed. An owner is a team: group "<org>:<team>" owns "<team>", matched exactly (no case folding).
+  A missing persona makes a policy stricter, never looser: exec-guard then allows nobody and an exemption disappears — rendered, with the reason in syncMessage.
+  Background scanning is off: these policies read `request.userInfo`, which a background scan does not have. PolicyReports come from admission.
+
+Composed resources:
+  <short>-policy    kubernetes.crossplane.io/v1alpha2 Object  — wraps the ValidatingPolicy or MutatingPolicy.
+"""
+
+oxr = option("params").oxr
+params = oxr.spec.parameters
+uid = oxr.metadata.uid
+short = uid[:8:]
+xrName = oxr.metadata.name
+
+_get = lambda d: any, k: str, default: any -> any {
+    _safe = d or {}
+    _safe[k] if k in _safe else default
+}
+
+_ctxExtras = option("params").ctx["apiextensions.crossplane.io/extra-resources"] or {}
+
+template = params.template
+mode = _get(params, "mode", "Audit")
+scmOrgs = params.scmOrgs
+personaName = _get(_get(params, "personaRef", {}), "name", "")
+exemptName = _get(_get(params, "exemptPersonaRef", {}), "name", "")
+ownerPattern = _get(params, "ownerPattern", "")
+immutableOwner = _get(params, "immutableOwner", False)
+
+_policyName = "wxops-" + xrName
+_kind = "MutatingPolicy" if template == "owner-stamp" else "ValidatingPolicy"
+
+# ── Personas ────────────────────────────────────────────────────────────────
+_personas = _ctxExtras.personas or []
+_exemptPersonas = _ctxExtras.exemptPersonas or []
+_subjectsOf = lambda ps: [any] -> [any] {
+    _get(_get(ps[0] if ps else {}, "status", {}), "subjects", [])
+}
+_groupsOf = lambda ps: [any] -> [str] {
+    [s.name for s in _subjectsOf(ps) if s.kind == "Group"]
+}
+_usersOf = lambda ps: [any] -> [str] {
+    [s.name for s in _subjectsOf(ps) if s.kind == "User"]
+}
+
+_problems = [p for p in [
+    "persona '" + personaName + "' not found — exec-guard allows nobody until it exists" if personaName != "" and not _personas else "",
+    "exempt persona '" + exemptName + "' not found — the policy applies to everyone until it exists" if exemptName != "" and not _exemptPersonas else "",
+] if p != ""]
+
+# ── CEL building blocks ─────────────────────────────────────────────────────
+_q = lambda s: str -> str {
+    "'" + s.replace("\\", "\\\\").replace("'", "\\'") + "'"
+}
+_list = lambda xs: [str] -> str {
+    "[" + ", ".join([_q(x) for x in xs]) + "]"
+}
+
+_prefixes = _list([o + ":" for o in scmOrgs])
+_isScmUser = "!request.userInfo.username.startsWith('system:') && request.userInfo.groups.exists(g, " + _prefixes + ".exists(p, g.startsWith(p)))"
+_exemptGroups = _groupsOf(_exemptPersonas)
+_exemptUsers = _usersOf(_exemptPersonas)
+_isExempt = "request.userInfo.groups.exists(g, g in " + _list(_exemptGroups) + ") || request.userInfo.username in " + _list(_exemptUsers)
+
+_matchConditions = [{name = "scm-user", expression = _isScmUser}] + ([{name = "not-exempt", expression = "!(" + _isExempt + ")"}] if exemptName != "" and (_exemptGroups or _exemptUsers) else [])
+
+# The caller's teams: "<org>:<team>" groups of a listed org, with the org removed.
+_teamsVar = {name = "teams", expression = "request.userInfo.groups.filter(g, " + _prefixes + ".exists(p, g.startsWith(p))).map(g, g.substring(g.indexOf(':') + 1))"}
+# The owner of the namespace the request is in; empty for a cluster-scoped object.
+_nsOwnerVar = {name = "nsOwner", expression = "namespaceObject != null && has(namespaceObject.metadata.labels) && 'wxops.cloud/owner' in namespaceObject.metadata.labels ? namespaceObject.metadata.labels['wxops.cloud/owner'] : ''"}
+_ownerOf = lambda obj: str -> str {
+    "(" + obj + " != null ? (has(" + obj + ".metadata.labels) && 'wxops.cloud/owner' in " + obj + ".metadata.labels ? " + obj + ".metadata.labels['wxops.cloud/owner'] : variables.nsOwner) : '')"
+}
+_newOwnerVar = {name = "newOwner", expression = _ownerOf("object")}
+_oldOwnerVar = {name = "oldOwner", expression = _ownerOf("oldObject")}
+
+# Requests that carry no owner by nature — access and token reviews, Pinniped's login APIs, events and leases — are never sealed.
+_excludedGroups = ["authentication.k8s.io", "authorization.k8s.io", "login.concierge.pinniped.dev", "identity.concierge.pinniped.dev"]
+_excludeRules = [
+    {apiGroups = _excludedGroups, apiVersions = ["*"], operations = ["*"], resources = ["*"]}
+    {apiGroups = ["", "events.k8s.io"], apiVersions = ["*"], operations = ["*"], resources = ["events"]}
+    {apiGroups = ["coordination.k8s.io"], apiVersions = ["*"], operations = ["*"], resources = ["leases"]}
+]
+# The same exclusions as a match condition. Kyverno copies match conditions into the webhook it registers, but not excludeResourceRules — without this,
+# the API server calls Kyverno for every access review, so every authorization check (Pinniped's proxy, aggregated APIs) waits on Kyverno first.
+_notExcluded = {name = "not-excluded", expression = "!(request.resource.group in " + _list(_excludedGroups) + ") && !(request.resource.resource in ['events', 'leases'])"}
+_rule = lambda groups: [str], resources: [str], ops: [str] -> any {
+    {apiGroups = groups, apiVersions = ["*"], operations = ops, resources = resources}
+}
+
+# ── The templates ────────────────────────────────────────────────────────
+_common = {
+    failurePolicy = "Fail" if mode == "Deny" else "Ignore"
+    evaluation = {background = {enabled = False}}
+}
+_validating = _common | {validationActions = [mode]}
+
+_ownerStamp = {
+    failurePolicy = "Ignore"
+    evaluation = {background = {enabled = False}}
+    matchConstraints = {
+        namespaceSelector = {matchLabels = {"auth.wxops.cloud/tenant-namespace" = "true"}}
+        # Namespaced only: a namespace selector does not apply to cluster-scoped objects, so without this every cluster-scoped CREATE reaches Kyverno.
+        resourceRules = [_rule(["*"], ["*"], ["CREATE"]) | {scope = "Namespaced"}]
+        excludeResourceRules = _excludeRules
+    }
+    matchConditions = [
+        _notExcluded
+        {name = "namespace-has-owner", expression = "namespaceObject != null && has(namespaceObject.metadata.labels) && 'wxops.cloud/owner' in namespaceObject.metadata.labels"}
+        {name = "object-has-no-owner", expression = "!(has(object.metadata.labels) && 'wxops.cloud/owner' in object.metadata.labels)"}
+    ]
+    mutations = [{
+        patchType = "ApplyConfiguration"
+        applyConfiguration = {expression = "Object{metadata: Object.metadata{labels: {'wxops.cloud/owner': namespaceObject.metadata.labels['wxops.cloud/owner']}}}"}
+    }]
+}
+
+_ownerSealValidations = [{
+    expression = "(request.operation == 'DELETE' || variables.newOwner in variables.teams) && (request.operation == 'CREATE' || variables.oldOwner in variables.teams)"
+    messageExpression = "'auth.wxops.cloud: owner ' + (request.operation == 'DELETE' ? variables.oldOwner : variables.newOwner) + ' is not one of your teams [' + variables.teams.join(', ') + ']'"
+}] + ([{
+    expression = "request.operation == 'DELETE' || variables.newOwner.matches(" + _q(ownerPattern) + ")"
+    message = "auth.wxops.cloud: the wxops.cloud/owner label must match " + ownerPattern
+}] if ownerPattern != "" else []) + ([{
+    expression = "request.operation != 'UPDATE' || variables.newOwner == variables.oldOwner"
+    message = "auth.wxops.cloud: the wxops.cloud/owner label is immutable"
+}] if immutableOwner else [])
+
+_ownerSeal = _validating | {
+    matchConstraints = {
+        resourceRules = [_rule(["*"], ["*"], ["CREATE", "UPDATE", "DELETE"])]
+        excludeResourceRules = _excludeRules
+    }
+    matchConditions = [_notExcluded] + _matchConditions
+    variables = [_teamsVar, _nsOwnerVar, _newOwnerVar, _oldOwnerVar]
+    validations = _ownerSealValidations
+}
+
+_secretReadonly = _validating | {
+    matchConstraints = {resourceRules = [_rule([""], ["secrets"], ["CREATE", "UPDATE", "DELETE"])]}
+    matchConditions = _matchConditions
+    validations = [{
+        expression = "false"
+        message = "auth.wxops.cloud: Secrets are written by External Secrets Operator from OpenBao, not by hand"
+    }]
+}
+
+_execGuard = _validating | {
+    matchConstraints = {resourceRules = [_rule([""], ["pods/exec", "pods/attach", "pods/portforward"], ["CONNECT"])]}
+    matchConditions = _matchConditions
+    variables = [_teamsVar, _nsOwnerVar]
+    validations = [{
+        expression = "(request.userInfo.groups.exists(g, g in " + _list(_groupsOf(_personas)) + ") || request.userInfo.username in " + _list(_usersOf(_personas)) + ") && variables.nsOwner in variables.teams"
+        message = "auth.wxops.cloud: exec, attach and port-forward are for the members of persona '" + personaName + "', in a namespace one of their teams owns"
+    }]
+}
+
+_protected = _validating | {
+    matchConstraints = {
+        resourceRules = [_rule(["*"], ["*"], ["UPDATE", "DELETE"])]
+        excludeResourceRules = _excludeRules
+    }
+    matchConditions = [_notExcluded] + _matchConditions
+    validations = [{
+        expression = "!(has(oldObject.metadata.labels) && 'wxops.cloud/protected' in oldObject.metadata.labels && oldObject.metadata.labels['wxops.cloud/protected'] == 'true')"
+        message = "auth.wxops.cloud: this object is protected (wxops.cloud/protected) — the platform team changes it"
+    }]
+}
+
+_rbacGuard = _validating | {
+    matchConstraints = {resourceRules = [
+        _rule(["rbac.authorization.k8s.io"], ["roles", "rolebindings", "clusterroles", "clusterrolebindings"], ["CREATE", "UPDATE", "DELETE"])
+        _rule(["auth.wxops.cloud"], ["*"], ["CREATE", "UPDATE", "DELETE"])
+    ]}
+    matchConditions = _matchConditions
+    validations = [{
+        expression = "false"
+        message = "auth.wxops.cloud: bindings are written by XPersonaBinding and personas and policies by the platform team, not by hand"
+    }]
+}
+
+# A workload's pod spec, wherever its kind keeps it, and the ServiceAccount it runs as (the deprecated `serviceAccount` field still counts).
+_podSpecVar = {name = "podSpec", expression = "object.kind == 'Pod' ? object.spec : object.kind == 'CronJob' ? object.spec.jobTemplate.spec.template.spec : object.spec.template.spec"}
+_serviceAccountVar = {name = "serviceAccount", expression = "has(variables.podSpec.serviceAccountName) && variables.podSpec.serviceAccountName != '' ? variables.podSpec.serviceAccountName : has(variables.podSpec.serviceAccount) && variables.podSpec.serviceAccount != '' ? variables.podSpec.serviceAccount : 'default'"}
+
+_saGuard = _validating | {
+    matchConstraints = {resourceRules = [
+        _rule([""], ["pods"], ["CREATE", "UPDATE"])
+        _rule(["apps"], ["deployments", "statefulsets", "daemonsets", "replicasets"], ["CREATE", "UPDATE"])
+        _rule(["batch"], ["jobs", "cronjobs"], ["CREATE", "UPDATE"])
+    ]}
+    matchConditions = _matchConditions
+    variables = [_teamsVar, _podSpecVar, _serviceAccountVar]
+    validations = [{
+        # Reads the namespace's ServiceAccounts at admission (Kyverno's resource library), so this template stays a Kyverno webhook policy.
+        expression = "variables.serviceAccount == 'default' || dyn(resource.List('v1', 'serviceaccounts', request.namespace).items).exists(s, s.metadata.name == variables.serviceAccount && has(s.metadata.labels) && 'wxops.cloud/owner' in s.metadata.labels && s.metadata.labels['wxops.cloud/owner'] in variables.teams)"
+        messageExpression = "'auth.wxops.cloud: ServiceAccount ' + variables.serviceAccount + ' is not owned by one of your teams [' + variables.teams.join(', ') + '] — run as default or your own'"
+    }]
+}
+
+_guardedNamespaceLabels = _list(["wxops.cloud/owner", "auth.wxops.cloud/tenant-namespace"])
+_namespaceGuard = _validating | {
+    matchConstraints = {resourceRules = [_rule([""], ["namespaces"], ["CREATE", "UPDATE", "DELETE"])]}
+    matchConditions = _matchConditions
+    validations = [
+        {
+            expression = "request.operation == 'UPDATE'"
+            message = "auth.wxops.cloud: Namespaces are created and deleted by the platform team"
+        }
+        {
+            expression = "request.operation != 'UPDATE' || " + _guardedNamespaceLabels + ".all(k, (has(object.metadata.labels) && k in object.metadata.labels ? object.metadata.labels[k] : '') == (has(oldObject.metadata.labels) && k in oldObject.metadata.labels ? oldObject.metadata.labels[k] : ''))"
+            message = "auth.wxops.cloud: a Namespace's wxops.cloud/owner and auth.wxops.cloud/tenant-namespace labels change only by the platform team"
+        }
+    ]
+}
+
+_spec = _ownerStamp if template == "owner-stamp" else _ownerSeal if template == "owner-seal" else _secretReadonly if template == "secret-readonly" else _execGuard if template == "exec-guard" else _protected if template == "protected" else _saGuard if template == "sa-guard" else _namespaceGuard if template == "namespace-guard" else _rbacGuard
+
+# ── Readiness ───────────────────────────────────────────────────────────────
+_ocds = option("params").ocds or {}
+# A composed resource whose last apply failed keeps Ready=True from the earlier success, so Ready
+# alone cannot say the apply worked: Synced is the condition the provider sets False.
+_syncConds = lambda name: str -> [any] {
+    _res = _get(_get(_ocds, name, {}), "Resource", {})
+    [c for c in _get(_get(_res, "status", {}), "conditions", []) if _get(c, "type", "") == "Synced" and _get(c, "status", "") == "False"]
+}
+_syncFailed = lambda name: str -> bool {
+    len(_syncConds(name)) > 0
+}
+_isReady = lambda name: str -> bool {
+    _ocd = _ocds[name] if name in _ocds else {}
+    _res = _get(_ocd, "Resource", {})
+    _conds = _get(_get(_res, "status", {}), "conditions", [])
+    len([c for c in _conds if _get(c, "type", "") == "Ready" and _get(c, "status", "") == "True"]) > 0 and not _syncFailed(name)
+}
+
+# ── Composed Object ─────────────────────────────────────────────────────────
+_objectName = short + "-policy"
+_policy_object = {
+    apiVersion = "kubernetes.crossplane.io/v1alpha2"
+    kind = "Object"
+    metadata = {
+        name = _objectName
+        annotations = {
+            "crossplane.io/composition-resource-name" = _objectName
+        } | ({"krm.kcl.dev/ready" = "True"} if _isReady(_objectName) else {})
+    }
+    spec = {
+        providerConfigRef = {name = "default"}
+        forProvider = {
+            manifest = {
+                apiVersion = "policies.kyverno.io/v1"
+                kind = _kind
+                metadata = {
+                    name = _policyName
+                    labels = {
+                        "wxops.cloud/managed-by" = "platform-policy"
+                        "auth.wxops.cloud/policy" = xrName
+                        "auth.wxops.cloud/template" = template
+                    }
+                }
+                spec = _spec
+            }
+        }
+    }
+}
+
+# ── dxr update — status write-back ──────────────────────────────────────────
+_created = _objectName in _ocds
+_ready = _isReady(_objectName) and len(_problems) == 0
+
+_syncFailures = _problems + [n + ": " + _get(_syncConds(n)[0], "message", _get(_syncConds(n)[0], "reason", "not synced")) for n in _ocds if _syncFailed(n)]
+_synced = len(_syncFailures) == 0
+_syncMessage = (_syncFailures[0] + (" (+" + str(len(_syncFailures) - 1) + " more)" if len(_syncFailures) > 1 else ""))[:400] if _syncFailures else ""
+
+_dxr = {
+    apiVersion = "auth.wxops.cloud/v1alpha1"
+    kind = "XPlatformPolicy"
+    status = {
+        created = _created
+        ready = _ready
+        policyName = _policyName
+        policyKind = _kind
+    } | ({"synced" = _synced} if _ocds or _problems else {}) | ({"syncMessage" = _syncMessage} if _syncFailures else {})
+}
+
+items = [_dxr, _policy_object]

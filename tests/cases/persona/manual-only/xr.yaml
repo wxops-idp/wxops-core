@@ -1,0 +1,14 @@
+# Nothing generated: teams are off, and every member is listed by hand — a group outside the SCM family, a user, and an agent's ServiceAccount.
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPersona
+metadata:
+  name: agents
+spec:
+  parameters:
+    description: Read-only agents
+    members:
+      teams: false
+      groups: [wxops-idp:platform]
+      users: [bob, alice, bob]
+      serviceAccounts:
+        - {namespace: ai-suite, name: debugger}

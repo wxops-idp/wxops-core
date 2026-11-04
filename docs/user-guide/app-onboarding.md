@@ -1,7 +1,7 @@
 # Application Onboarding — Golden Path
 
-End-to-end flow for taking a developer from "pick a flavor and template" to a running [`tenant-app`](../api-reference/tenant-app.md), tying together the
-templates catalog, [`scm-repository`](../api-reference/scm-repository.md), and `tenant-app`'s `appFlavor`/`templateId`/`repository.url`/`secretsFrom` fields.
+End-to-end flow for taking a developer from "pick a flavor and template" to a running [`tenant-app`](../api-reference/platform/tenant-app.md), tying together the
+templates catalog, [`scm-repository`](../api-reference/scm/repository.md), and `tenant-app`'s `appFlavor`/`templateId`/`repository.url`/`secretsFrom` fields.
 The portal/scaffolder that drives this flow lives outside `wxops-core` — this doc describes the contract between it and the packages in this repo. Steps 1–2,
 4–7 are pure portal-backend logic (the host's API + git operations); only steps 3 and 8 touch this repo's XRDs.
 
@@ -22,8 +22,8 @@ below).
 
 ## 3. Create the application repository — `XScmRepository`
 
-The portal creates an [`XScmRepository`](../api-reference/scm-repository.md) resource, naming the platform's
-[`XScmConnection`](../api-reference/scm-connection.md) — the connection carries the host and the org, so neither appears here:
+The portal creates an [`XScmRepository`](../api-reference/scm/repository.md) resource, naming the platform's
+[`XScmConnection`](../api-reference/scm/connection.md) — the connection carries the host and the org, so neither appears here:
 
 ```yaml
 spec:
@@ -63,7 +63,7 @@ in step 8.
 
 ## 8. Create the application — `tenant-app`
 
-Once the repo exists and CI has produced an image, the portal creates the [`XTenantApp`](../api-reference/tenant-app.md) claim:
+Once the repo exists and CI has produced an image, the portal creates the [`XTenantApp`](../api-reference/platform/tenant-app.md) claim:
 
 ```yaml
 spec:
@@ -79,9 +79,9 @@ spec:
 
 ## 9. (Optional) Wire database secrets
 
-If the app needs a database, create a [`tenant-database`](../api-reference/tenant-database.md) claim first (or alongside), then set
+If the app needs a database, create a [`tenant-database`](../api-reference/platform/tenant-database.md) claim first (or alongside), then set
 `secretsFrom.database.enabled: true` on the `tenant-app` claim — see [tenant-app's go-live ordering
-contract](../api-reference/tenant-app.md#vault-secrets--databases) for why the database/secret claim must exist before (or alongside) `tenant-app`.
+contract](../api-reference/platform/tenant-app.md#vault-secrets--databases) for why the database/secret claim must exist before (or alongside) `tenant-app`.
 
 ## Templates catalog
 
@@ -95,10 +95,10 @@ subfolder name.
 |---|---|---|
 | 1 | Pick `appFlavor` (filters template choices) | metadata only |
 | 2 | Pick `templateId` | external (templates catalog) |
-| 3 | Create new app repo | [`scm-repository`](../api-reference/scm-repository.md) (skip if importing an existing repo) |
+| 3 | Create new app repo | [`scm-repository`](../api-reference/scm/repository.md) (skip if importing an existing repo) |
 | 4 | Fetch template skeleton (tarball/tree) | external (portal) |
 | 5 | Render placeholders | external (portal) |
 | 6 | Commit + push initial commit | external (portal) |
 | 7 | CI builds image | external (skeleton's CI config) |
-| 8 | Application workload | [`tenant-app`](../api-reference/tenant-app.md) |
-| 9 | Database + secrets (optional) | [`tenant-database`](../api-reference/tenant-database.md) + platform `ExternalSecret`/`PushSecret` |
+| 8 | Application workload | [`tenant-app`](../api-reference/platform/tenant-app.md) |
+| 9 | Database + secrets (optional) | [`tenant-database`](../api-reference/platform/tenant-database.md) + platform `ExternalSecret`/`PushSecret` |

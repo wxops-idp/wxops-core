@@ -25,6 +25,9 @@ resources:
   - ../auth/oidc-static-password
   - ../auth/oidc-client
   - ../auth/oidc-connector
+  - ../auth/persona
+  - ../auth/persona-binding
+  - ../auth/platform-policy
 
 # Every package/<pkg>/composition.yaml ships channel: stable (the release default). Overriding it
 # here means everything applied via `make install-dev` is unambiguously channel: nightly, so an XR

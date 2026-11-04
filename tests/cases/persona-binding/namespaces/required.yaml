@@ -1,0 +1,14 @@
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPersona
+metadata:
+  name: agents
+  labels:
+    crossplane.io/composite: agents
+spec:
+  parameters:
+    description: Read-only agents
+status:
+  subjects:
+    - {kind: Group, name: "wxops-idp:platform", apiGroup: rbac.authorization.k8s.io}
+    - {kind: User, name: alice, apiGroup: rbac.authorization.k8s.io}
+    - {kind: ServiceAccount, name: debugger, namespace: ai-suite}

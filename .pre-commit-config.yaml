@@ -172,7 +172,7 @@ repos:
   # ── Test suite ───────────────────────────────────────────────────────────────
   # See tests/README.md. Split by cost:
   #   xrd + invariants  — no Docker, ~0.5s total, run on every commit
-  #   golden            — ~90s (a container per function per case), runs on push
+  #   golden            — ~8 min (a container per function per case; WXOPS_RENDER=shared: seconds), runs on push
   # Requires: pip install -r tests/requirements.txt  (or `make test-deps`)
   - repo: local
     hooks:

@@ -1,0 +1,13 @@
+# Two labels = two personas. Developers and viewers gain read access to policy reports; owners and platform inherit it because their roles aggregate the same
+# `view`/`edit` pieces (aggregate-to-admin selects everything aggregate-to-edit does).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: wxops:piece:persona-policyreports
+  labels:
+    auth.wxops.cloud/aggregate-to-persona-developers: "true"
+    auth.wxops.cloud/aggregate-to-persona-viewers: "true"
+rules:
+  - apiGroups: ["wgpolicyk8s.io"]
+    resources: ["policyreports"]
+    verbs: ["get", "list", "watch"]

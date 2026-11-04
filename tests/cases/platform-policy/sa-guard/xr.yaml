@@ -1,0 +1,11 @@
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPlatformPolicy
+metadata:
+  name: sa-guard
+spec:
+  parameters:
+    template: sa-guard
+    scmOrgs: [wxops-idp]
+    mode: Deny
+    exemptPersonaRef:
+      name: platform

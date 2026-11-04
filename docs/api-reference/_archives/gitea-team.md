@@ -9,7 +9,7 @@ Manages a team inside a Gitea organisation, including membership.
 | **Plural** | `xgiteateams` |
 | **Scope** | `Cluster` |
 | **API versions** | `v1alpha1` (served, storage) |
-| **Package** | [`package/platform/archives/gitea-team/`](../../../package/platform/archives/gitea-team/) — see [`VERSIONS.yaml`](../../../VERSIONS.yaml) for the current package version |
+| **Package** | [`package/platform/archives/gitea-team/`](../../../package/platform/archives/gitea-team) — see [`VERSIONS.yaml`](../../../VERSIONS.yaml) for the current package version |
 
 ## `spec.parameters`
 

@@ -104,6 +104,9 @@ category is also where Crossplane's operational features would be organised if a
   package must be added to a list by hand.
 - **Directory per category for everything** (`kcl/`, `examples/`, `tests/cases/`, `docs/api-reference/` as well). Maximum clarity, and a much
   larger change, since the test harness addresses cases by `<package>/<case>`. A possible second step once the first has settled.
+  **Taken for `docs/api-reference/` (2026-11-03):** its pages now sit at `docs/api-reference/<group>/<name>.md`, mirroring `package/<group>/<name>/`;
+  nothing reads that path, so it moved alone. `examples/` followed the same day (`examples/<group>/<name>/xr.yaml`, one path change in `tests/xrd.py`);
+  `kcl/` and `tests/cases/` stay flat.
 - **Separate repositories per category.** Strongest ownership boundaries, but it splits releases and the shared test and release
   tooling that this repo's date-named release depends on.
 - **Do nothing.** Cheap now; the flat list gets worse with every package added by the next RFCs.
@@ -118,8 +121,8 @@ category is also where Crossplane's operational features would be organised if a
 - [x] **Step 3 — category Kustomizations**, dev and install. `package/scm/` and `package/auth/` each have a dev Kustomization, and `package/install/<group>/` has one per released group, so a category installs with `kubectl apply -k`. A `make install` category argument was **not built, by decision** — `kubectl apply -k` already does it.
 - [x] **Step 4 — docs and contributor guidance**, including a short "adding a package to a category" page — the *Adding a new package* section of `CONTRIBUTING.md`.
 
-`kcl/`, `examples/` and `tests/cases/` stay flat (`kcl/<name>/`, `examples/<name>/`, `tests/cases/<name>/`); the harness finds each package's group through
-`VERSIONS.yaml`, so nothing needs them grouped.
+`kcl/` and `tests/cases/` stay flat (`kcl/<name>/`, `tests/cases/<name>/`); the harness finds each package's group through `VERSIONS.yaml`, so nothing needs
+them grouped. `examples/` and `docs/api-reference/` were grouped later (2026-11-04), for readers rather than tools.
 
 On acceptance, one ADR is optional: the layout is a convention more than a decision with lasting architectural consequence. ADR-002 already records the groups
 it follows.

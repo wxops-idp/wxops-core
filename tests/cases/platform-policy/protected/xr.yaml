@@ -1,0 +1,10 @@
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPlatformPolicy
+metadata:
+  name: protected
+spec:
+  parameters:
+    template: protected
+    scmOrgs: [wxops-idp]
+    exemptPersonaRef:
+      name: platform

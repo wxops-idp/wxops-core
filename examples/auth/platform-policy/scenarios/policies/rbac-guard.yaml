@@ -1,0 +1,16 @@
+# The rbac-guard template, in the sandbox — applied by run.sh after the personas in sandbox.yaml are ready.
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPlatformPolicy
+metadata:
+  name: sbx-rbac-guard
+spec:
+  crossplane:
+    compositionRevisionSelector:
+      matchLabels:
+        channel: nightly
+    compositionUpdatePolicy: Automatic
+  parameters:
+    template: rbac-guard
+    mode: Deny
+    scmOrgs: [wxops-sbx]
+    exemptPersonaRef: {name: sbx-platform}

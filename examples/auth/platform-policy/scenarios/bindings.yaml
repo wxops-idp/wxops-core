@@ -1,0 +1,49 @@
+# The sandbox personas' bindings — applied by run.sh once the personas in sandbox.yaml are ready.
+# wxops:persona-owners in the namespace each team owns (scope owned: team-a → wxops-sbx-a, team-b → wxops-sbx-b) ...
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPersonaBinding
+metadata:
+  name: sbx-teams-owned
+spec:
+  crossplane:
+    compositionRevisionSelector:
+      matchLabels:
+        channel: nightly
+    compositionUpdatePolicy: Automatic
+  parameters:
+    personaRef: {name: sbx-teams}
+    role: wxops:persona-owners
+    scope: owned
+---
+# ... and in both, so RBAC lets each team write and exec in the other's namespace and only the policies stop it — the case owner-seal and exec-guard exist for.
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPersonaBinding
+metadata:
+  name: sbx-teams-both
+spec:
+  crossplane:
+    compositionRevisionSelector:
+      matchLabels:
+        channel: nightly
+    compositionUpdatePolicy: Automatic
+  parameters:
+    personaRef: {name: sbx-teams}
+    role: wxops:persona-owners
+    scope: namespaces
+    namespaces: [wxops-sbx-a, wxops-sbx-b]
+---
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPersonaBinding
+metadata:
+  name: sbx-platform-both
+spec:
+  crossplane:
+    compositionRevisionSelector:
+      matchLabels:
+        channel: nightly
+    compositionUpdatePolicy: Automatic
+  parameters:
+    personaRef: {name: sbx-platform}
+    role: wxops:persona-platform
+    scope: namespaces
+    namespaces: [wxops-sbx-a, wxops-sbx-b]

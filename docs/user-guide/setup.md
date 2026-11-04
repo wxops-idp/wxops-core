@@ -4,23 +4,42 @@
 > the [API reference](../api-reference/README.md).
 
 **Table of Contents**
-- [Prerequisites](#prerequisites)
-- [Platform dependencies, per package](#platform-dependencies-per-package)
-- [1 — Install providers once per cluster](#1--install-providers-once-per-cluster)
-- [2 — Seed a connection token](#2--seed-a-connection-token)
-- [3 — Install packages](#3--install-packages)
-- [4 — Apply a first resource](#4--apply-a-first-resource)
-- [Uninstalling](#uninstalling)
-- [Next](#next)
+- [Setup — installing W'xOps Core on a cluster](#setup--installing-wxops-core-on-a-cluster)
+  - [Prerequisites](#prerequisites)
+    - [CLI (Command Line Interface)](#cli-command-line-interface)
+    - [Platform \& Kubernetes Controller](#platform--kubernetes-controller)
+  - [Platform dependencies, per package](#platform-dependencies-per-package)
+  - [1 — Install providers once per cluster](#1--install-providers-once-per-cluster)
+  - [2 — Seed a connection token](#2--seed-a-connection-token)
+  - [3 — Install packages](#3--install-packages)
+  - [4 — Apply a first resource](#4--apply-a-first-resource)
+  - [Uninstalling](#uninstalling)
+    - [Removing one category](#removing-one-category)
+  - [Next](#next)
 
 ---
 
 ## Prerequisites
 
-- The [`crossplane` CLI](https://docs.crossplane.io/latest/cli/), v2.3 or later
+![W'xOps IDP Landscape](../../images/w'xops-idp-landscape.png)
+
+### CLI (Command Line Interface)
+
+- The [`crossplane` CLI](https://docs.crossplane.io/latest/cli/), v2.3 or later (**NOTE:** Should match between `crossplane` Client and Server)
 - `kubectl` pointed at a cluster with Crossplane v2.3 or later installed
-- `pre-commit`, only if you will change this repository (see the
-  [development guide](../../development-docs/development/README.md))
+- `pre-commit`, only if you will change this repository (see the [development guide](../../development-docs/development/README.md))
+
+### Platform & Kubernetes Controller
+
+- Crossplane and Controller: **(Supported)** [`Crossplane Runtime`](https://www.crossplane.io/), [`Crossplane Functions & Providers`](https://docs.crossplane.io/v2.4/learn/community-extension-projects/) (Explore more at [Upbound Marketplace](https://marketplace.upbound.io/))
+- SCM: **(Supported)** `Github`, or [`Gitea (Self-hosted)`](https://about.gitea.com/). **(Future)** `GitLab`, [`GitLab CE (Self-hosted)`](https://docs.gitlab.com/topics/offline/quick_start_guide/)
+- Identity (Authentication): **(Supported)** [`DexiDP`](https://dexidp.io/) (Explore and install with [Charts](https://github.com/wxops-idp/charts/tree/main/dexidp)), [`Pinniped`](https://pinniped.dev/) (Explore and install with [Charts](https://github.com/wxops-idp/charts/tree/main/pinniped))
+- Secrets Management: **(Supported)** `OpenBao` (Recommended) or `Hashicorp Vault`
+- Supply Chain Utilities: **(Supported)** [`CertManager`](https://cert-manager.io/), [`Stakater Reloader`](https://github.com/stakater/reloader), and [`External Secrets Operator`](https://external-secrets.io/latest/)
+- Policies Management (Policies as Code): **(Supported)** [`Kyverno`](https://kyverno.io/docs/introduction/)
+- Database Managment (Created and Migration): **(Supported)** [`CNPG`](https://cloudnative-pg.io/)
+- **(Option)** Gitops: **(Supported)** [`ArgoCD`](https://argo-cd.readthedocs.io/en/stable/)
+- **(Option)** Observability: **(Supported)** `Grafana-CE Ecosystem (Grafana, Prometheus, Loki, Tempo, Pyroscope, and Alloy)`
 
 ## Platform dependencies, per package
 
@@ -30,9 +49,9 @@ W'xOps Core composes resources that other operators reconcile. Install what the 
 |---|---|
 | `scm-connection`, `scm-repository`, `scm-oauth-app` | A reachable Gitea or GitHub host and an admin/API token, written to the secret store (step 2) |
 | `platform-database-clusters` | CloudNativePG operator; External Secrets Operator with a Vault `ClusterSecretStore`; provider-sql (installed by step 1) |
-| `tenant-database` | Everything `platform-database-clusters` needs, plus a cluster labelled for discovery; see [Required discovery labels](../api-reference/tenant-database.md#required-discovery-labels) |
+| `tenant-database` | Everything `platform-database-clusters` needs, plus a cluster labelled for discovery; see [Required discovery labels](../api-reference/platform/tenant-database.md#required-discovery-labels) |
 | `tenant-app` | Only what the XR enables: cert-manager for `ingress.tls`, Traefik CRDs for `ingress`, Prometheus Operator CRDs for `monitoring`, Stakater Reloader for `reloader` |
-| Darlane TTL enforcement (optional) | Kyverno, plus [`providers/policies/darlane-ttl.yaml`](../../providers/policies/darlane-ttl.yaml) |
+| Darlane TTL enforcement **(Not Enforced)** | ~~Kyverno, plus `providers/policies/darlane-ttl.yaml`~~ |
 
 ## 1 — Install providers once per cluster
 
@@ -78,7 +97,7 @@ bao login                                       # however your operators authent
 bao kv put platform/scm/github-wxops-idp/credentials token="your-admin-or-pat-token"
 ```
 
-See [Seeding a connection's token](../../examples/scm-connection/token-secret.md) for the full walkthrough, including what scope the token needs per vendor.
+See [Seeding a connection's token](../../examples/scm/connection/token-secret.md) for the full walkthrough, including what scope the token needs per vendor.
 
 ## 3 — Install packages
 
@@ -101,8 +120,8 @@ Compositions and skips every release gate. Everything it applies carries `channe
 ## 4 — Apply a first resource
 
 ```bash
-kubectl apply -f examples/scm-connection/xr.yaml
-kubectl apply -f examples/scm-repository/xr.yaml
+kubectl apply -f examples/scm/connection/xr.yaml
+kubectl apply -f examples/scm/repository/xr.yaml
 kubectl get xscmrepositories
 kubectl describe xscmrepository <name>
 crossplane resource trace xscmrepository <name>   # the XR and everything it composed

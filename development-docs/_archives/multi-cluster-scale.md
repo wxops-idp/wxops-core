@@ -320,4 +320,4 @@ Direction-setting, not yet work:
 **Internal**
 - [`multi-cluster.md`](multi-cluster.md) — the option space this builds on
 - [`multi-cluster-proposal.md`](multi-cluster-proposal.md) — the chosen path this extends
-- [`tenant-database.md`](../../docs/api-reference/tenant-database.md) — the `tier:` concept this generalises
+- [`tenant-database.md`](../../docs/api-reference/platform/tenant-database.md) — the `tier:` concept this generalises

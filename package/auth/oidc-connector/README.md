@@ -67,7 +67,7 @@ spec:
     # ...
 ```
 
-See [`examples/oidc-connector/xr.yaml`](../../../examples/oidc-connector/xr.yaml).
+See [`examples/auth/oidc-connector/xr.yaml`](../../../examples/auth/oidc-connector/xr.yaml).
 
 ## How a team gets into the `groups` claim
 
@@ -107,7 +107,7 @@ and `useLoginAsID: false` (both vendors), `teamNameField: slug` (GitHub only —
 confirmed against its `Config` struct; see the package's own comment in `kcl/oidc-connector/main.k`).
 
 The full picture — the three ways to choose teams, slug versus plain name per vendor, and a worked example — is in
-[`docs/api-reference/oidc-connector.md`](../../../docs/api-reference/oidc-connector.md#choosing-which-teams-can-sign-in).
+[`docs/api-reference/auth/oidc-connector.md`](../../../docs/api-reference/auth/oidc-connector.md#choosing-which-teams-can-sign-in).
 
 GitHub's slug is always lowercase; Gitea has no slug concept, and its own team-name validation
 (`AlphaDashDot`) allows uppercase, so `orgs[].teams` can carry two different cases for what's really
@@ -123,7 +123,7 @@ the same claim shape. Not normalized here — see [`scm-team`'s README](../../sc
 | `vaultKey` | Where the record was pushed |
 | `teams` | Per org, the full resolved team list (generated + hand-listed) |
 
-Full reference: [`docs/api-reference/oidc-connector.md`](../../../docs/api-reference/oidc-connector.md).
+Full reference: [`docs/api-reference/auth/oidc-connector.md`](../../../docs/api-reference/auth/oidc-connector.md).
 
 ## Build and publish
 

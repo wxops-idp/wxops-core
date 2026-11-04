@@ -1,0 +1,87 @@
+# Platform API roles: W'xOps's own kinds only, so a persona can be given "edit the platform" without "edit every namespace" (RFC-009).
+# Core kinds are cluster-scoped today, so they are bound by XPersonaBinding with a ClusterRoleBinding (scope: platform); ownership of each XR is sealed by Kyverno
+# (RFC-005). When a tenant kind moves to namespace scope, its piece stays here and is bound per owned namespace instead.
+#
+# Each role aggregates the pieces carrying its label. Pieces nest the way the built-in view/edit/admin do: a read piece carries all three labels, a tenant-write
+# piece carries edit + admin, a platform-only piece carries admin alone. Add a kind by adding its resource to a piece, or a new piece with the right labels.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: wxops:platform-view
+aggregationRule:
+  clusterRoleSelectors:
+    - matchLabels: {auth.wxops.cloud/aggregate-to-platform-view: "true"}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: wxops:platform-edit
+aggregationRule:
+  clusterRoleSelectors:
+    - matchLabels: {auth.wxops.cloud/aggregate-to-platform-edit: "true"}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: wxops:platform-admin
+aggregationRule:
+  clusterRoleSelectors:
+    - matchLabels: {auth.wxops.cloud/aggregate-to-platform-admin: "true"}
+---
+# Read every W'xOps kind (references, never secret values).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: wxops:piece:platform-read
+  labels:
+    auth.wxops.cloud/aggregate-to-platform-view: "true"
+    auth.wxops.cloud/aggregate-to-platform-edit: "true"
+    auth.wxops.cloud/aggregate-to-platform-admin: "true"
+rules:
+  - apiGroups: ["platform.wxops.cloud", "scm.wxops.cloud", "auth.wxops.cloud"]
+    resources: ["*", "*/status"]
+    verbs: ["get", "list", "watch"]
+---
+# Tenant kinds: a team creates, updates and deletes its own (owner-seal narrows to its owner).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: wxops:piece:platform-tenant-write
+  labels:
+    auth.wxops.cloud/aggregate-to-platform-edit: "true"
+    auth.wxops.cloud/aggregate-to-platform-admin: "true"
+rules:
+  - apiGroups: ["platform.wxops.cloud"]
+    resources: ["xtenantapps", "xtenantdatabases"]
+    verbs: ["create", "update", "patch", "delete"]
+---
+# Platform-only kinds: connections, OAuth apps, teams, repositories, database clusters, and the auth.wxops.cloud kinds themselves.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: wxops:piece:platform-admin-write
+  labels:
+    auth.wxops.cloud/aggregate-to-platform-admin: "true"
+rules:
+  - apiGroups: ["platform.wxops.cloud"]
+    resources: ["xplatformdatabaseclusters"]
+    verbs: ["create", "update", "patch", "delete"]
+  - apiGroups: ["scm.wxops.cloud"]
+    resources: ["*"]
+    verbs: ["create", "update", "patch", "delete"]
+  - apiGroups: ["auth.wxops.cloud"]
+    resources: ["*"]
+    verbs: ["create", "update", "patch", "delete"]
+---
+# Crossplane reads the tenant Namespaces for XPersonaBinding (function-extra-resources, scope: owned). Aggregated into Crossplane's own role, which Crossplane's RBAC manager
+# supports for exactly this. Harmless where Crossplane can already list namespaces; verify with `kubectl auth can-i list namespaces --as=system:serviceaccount:crossplane-system:crossplane`.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: wxops:piece:crossplane-read-namespaces
+  labels:
+    rbac.crossplane.io/aggregate-to-crossplane: "true"
+rules:
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "list", "watch"]

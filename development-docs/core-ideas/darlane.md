@@ -2,7 +2,7 @@
 
 > [!NOTE]
 > **Status: shipped inside `XTenantApp`** (`spec.parameters.darlane`); the standalone `XDarlane` is the future. Every field is in the
-> [API reference](../../docs/api-reference/tenant-app.md#darlane-debug-twin-deployment). This page is the why, what ships, and what comes next — the
+> [API reference](../../docs/api-reference/platform/tenant-app.md#darlane-debug-twin-deployment). This page is the why, what ships, and what comes next — the
 > [detailed edition](../_archives/darlane-detailed.md) keeps every workflow pattern, scenario playbook and trade-off for anyone diving deeper.
 
 ---
@@ -48,7 +48,7 @@ declared in the XR.** It costs one Deployment at `replicas: 0` when nobody is us
 | Telemetry | `telemetryPort` | A `ClusterIP` Service for OTel/Prometheus scraping |
 | Identity | `serviceAccount` (`create`, `name`, `annotations`) | The composition creates the ServiceAccount and publishes its name; **RBAC is never composed** — GitOps binds it |
 | Production guard | `productionOverride` | Required when `environment: prod`; enforced in the composition, visible in the PR |
-| Lifetime | `ttl` | Annotation enforced by `providers/policies/darlane-ttl.yaml` (Kyverno) — see [Safety](#safety) |
+| Lifetime | `ttl` | **Not enforced** — expiry was dropped 2026-10-22; the field and `status.darlane.ttl` stay (the API is additive-only). See [Safety](#safety) |
 | Status | `status.darlane.{ready, replicas, trafficMode, ttl, serviceAccountName}` | `trafficMode`: `none`, `weighted`, `header` or `both` |
 
 **Scale through the XR, not `kubectl scale`.** The Deployment is Crossplane-managed; a direct scale is reverted on the next reconcile.
@@ -112,11 +112,12 @@ Darlane is for the **inner loop**: pre-PR validation, QA opt-in, hotfixes, canar
 | Steal, staging | Medium — local code answers real requests | Header filter |
 | Mirror, prod | Medium — real user data is visible | `productionOverride: true` |
 | Steal, prod | High — local code serves production users | `productionOverride` + mirrord `--steal` + session audit |
-| Abandoned session | Medium — a stale twin keeps running | `ttl` |
+| Abandoned session | Medium — a stale twin keeps running | Scale it back to `replicas: 0` in the XR — nothing expires it today |
 
-**A TTL needs two actions.** The Kyverno policy adds `wxops.cloud/darlane-ttl-warning: expiring-soon` 30 minutes before expiry and deletes the Deployment once
-the TTL has passed — but Crossplane re-creates it from `darlane.replicas`. The portal (or whoever scaled it up) must also set `replicas: 0` in the XR; that is
-what makes the scale-down stick. The warning label is what the portal watches to show "expiring soon".
+**Expiry is not enforced** — dropped 2026-10-22. The old policy deleted the twin's Deployment, which Crossplane recreated from the XR, so it needed a second
+action to stick (and it never fired: it selected the wrong label). It has been removed. Expiry returns with the
+`XTenantApp` redesign below, done properly: the twin is its own claim, a Kyverno `DeletingPolicy` deletes the claim once `ttl` has passed, and Crossplane
+removes what it composed — one action, nothing fighting back. Until then, a twin runs until someone sets `replicas: 0`.
 
 ### Access
 
@@ -133,7 +134,7 @@ come from the [archived Guardian design](../_archives/guardian.md); the sidecar 
 composition, not by a separate layer.
 
 1. **The composition owns the pod spec.** Anything beside the developer's container — a tools mount, an audit container — is composed by the Darlane
-   composition, deterministic and testable with `make render`. No controller or mutating webhook injects containers after the fact; Kyverno may *require* a
+   composition, deterministic and testable with the golden tests. No controller or mutating webhook injects containers after the fact; Kyverno may *require* a
    setting by validation, never add it.
 2. **Debug tooling is platform-owned.** One versioned, scanned tools image per ecosystem (general: `curl`, `jq`, `strace`, `tcpdump`, `grpcurl`; Python:
    `debugpy`, `py-spy`; Node: inspector, `clinic`; Go: `dlv`, `pprof`; databases: `psql`, `redis-cli`), copied by an init container into an `emptyDir` and
@@ -172,8 +173,21 @@ the rules in [the access model](access-model.md#data-boundary-and-audit).
 
 ### `XDarlane` — a workspace claim of its own
 
-Today Darlane is a field of the app, so its lifecycle is the app's: one twin per app, every session is an edit to the app's XR, and a developer, a hotfix
-and an agent cannot hold workspaces at the same time.
+Today Darlane is a field of an all-in-one `XTenantApp`, so its lifecycle is the app's: one twin per app, every session is an edit to the app's XR, and a
+developer, a hotfix and an agent cannot hold workspaces at the same time — and nothing can expire it without touching the app. `XDarlane` belongs to the
+**`XTenantApp` redesign**: smaller packages with their own maturity instead of one all-in-one kind, the twin among them as a claim of its own.
+
+**The redesign is namespace-scoped.** The new tenant kinds — the app, its database (`XTenantDatabase`'s successor), a future monitoring kind, and `XDarlane` —
+are namespaced XRs, the shape Crossplane v2 defaults to. The namespace is the owner: a persona's `RoleBinding` per owned namespace grants them, and another
+team cannot even read them — which cluster scope cannot give. Most of [RFC-005](../rfc/005-git-mapped-authorization.md)'s owner rules then reduce to plain
+RBAC. Platform kinds (`XPlatformDatabaseCluster`, `XScm*`, `XOIDC*`, `auth.wxops.cloud`) stay cluster-scoped. Two things to settle first:
+
+- **Namespaced managed resources in every provider a tenant kind uses** — a namespaced XR composes only namespaced resources in its own namespace. All three
+  installed providers ship them (checked on the cluster 2026-10-26): `objects.kubernetes.m.crossplane.io`, `workspaces.opentofu.m.upbound.io`, and the
+  `postgresql.sql.m.crossplane.io` family — and `provider-vault` v4 does too. What is left is writing the compositions against the `.m` kinds and their
+  namespaced `ProviderConfig`s.
+- **Migration** — a scope change is a new kind with no conversion from the old one, so existing `XTenantApp` and `XTenantDatabase` XRs move over, not
+  upgrade in place.
 
 | Today (`darlane.*` on `XTenantApp`) | `XDarlane` |
 |---|---|
@@ -206,11 +220,33 @@ spec:
 Each consumer holds its own claim — `payment-api-dev-alice` (8h), `payment-api-sre-hotfix` (2h, `productionOverride`), `payment-api-agent-branch` (4h, no
 traffic) — and the app's XR never changes. Migration is additive: `darlane.*` keeps working.
 
+### Agent access — open, decided with the agent work
+
+How an agent reads the cluster and drives a twin is **not decided**. It depends on how agents are built when `XDarlane` splits out — a modern agent framework
+that brings its own control, or W'xOps's own skills and MCP servers — so the choice waits for that work. The options on the table:
+
+| Option | Shape | Trade-off |
+|---|---|---|
+| `view` + `wxops:platform-view` | Standard roles, through an agent persona's `XPersonaBinding` | Simplest. `view` grows with every CRD that aggregates into it, and reads every ConfigMap |
+| `wxops:persona-agents` | An aggregated allowlist: pods, `pods/log`, events, workloads, services, policy reports, ESO status, XR status | Nothing added silently; one more role in the binding enum and in provider-kubernetes's `bind` list |
+| A read proxy (MCP or tool server) | The agent holds no Kubernetes token; the server answers and redacts | Strongest boundary; a new component, worth it once agents act across many clusters |
+
+Whichever is chosen, these hold — they come from the rules above, not from the option:
+
+- **No `exec` or port-forward into a twin** — it carries production `env`, so exec reads its secrets. A coding agent works through `fileSync` and the twin's
+  own endpoint, and leaves only by pull request.
+- **Logs are payloads** — anything reading `pods/log` runs on in-cluster inference ([data boundary](access-model.md#data-boundary-and-audit)).
+- **Agents are ServiceAccounts** — `XPersonaBinding`'s `scope: owned` binds only groups, so an agent persona needs `scope: namespaces` today, unless `owned`
+  later learns to match a ServiceAccount's namespace owner.
+- **Kyverno matches SCM groups only** — `XPlatformPolicy` templates do not cover agents yet, so RBAC alone guards them until agents join policy matching.
+
 ### Also ahead
 
+- **Expiry, as deleting the claim** — `ttl` mandatory on `XDarlane`, capped per persona, ended by a `DeletingPolicy`; the portal reads `startedAt` and `ttl`
+  from status instead of a warning label.
 - **Session audit and the tools image** — the two [session-safety](#session-safety--tools-audit-data-boundary) items not yet built; audit unblocks
   production steal mode.
-- **Access by persona** — the twin's bindings rendered from the persona file instead of written per app ([access model](access-model.md)).
+- **Access by persona** — the twin's bindings rendered by an `XPersonaBinding` for its owner's persona instead of written per app ([RFC-009](../rfc/009-scm-personas.md)).
 - **Across clusters** — a twin runs in its app's cluster. `kubectl` and mirrord reach it through Pinniped like any other access; in-cluster agents and
   inference reach it over the [backbone](multi-cluster.md). No tunnel product is needed.
 - **A debug port** (`debugPort`, DAP) so an editor attaches without hand-written port-forward commands.
@@ -220,6 +256,6 @@ traffic) — and the app's XR never changes. Migration is additive: `darlane.*` 
 ## Prerequisites
 
 - Traefik with the `TraefikService` CRD — for any traffic mode.
-- Kyverno — for `ttl` (`kubectl apply -f providers/policies/darlane-ttl.yaml`).
+- The Kyverno controller — a bootstrap prerequisite, not installed by W'xOps. No Darlane policy is applied today.
 - Cluster access as yourself — Pinniped, per the [access model](access-model.md#kubernetes-pinniped--rbac--kyverno).
 - Optional, on the developer's machine: the `mirrord` CLI; Telepresence (needs its Traffic Manager in the cluster); a sync tool for `fileSync`.
