@@ -94,6 +94,19 @@ git diff tests/     # then READ IT
 
 A golden accepted without reading the diff is not a test.
 
+#### Render modes — `isolated` (default) and `shared` (opt-in)
+
+Every render uses the Crossplane render engine pinned in [`crossplane-version.txt`](crossplane-version.txt) — one file, read by `tests/lib/render.py` and CI.
+Bump it with the reference stack; the goldens are only reproducible against one engine version.
+
+| Mode | How a case renders | Time | Where |
+|---|---|---|---|
+| `isolated` (default) | `crossplane composition render` starts the engine and each function as containers for that case, then stops them | ~7s a case, ~8 minutes for the suite | anywhere Docker runs |
+| `shared` — `WXOPS_RENDER=shared make test` | each function container starts once per run on a free localhost port (Crossplane's `Development` runtime); the engine runs as a local binary, copied once out of the pinned image into `~/.cache/wxops-core/` | ~0.15s a case | Linux with Docker; on anything else, or if setup fails, it says so and renders isolated |
+
+Both modes must produce the same goldens; `shared` is opt-in until that has held on more machines than one. A run in `shared` mode prints
+`render: shared runtime — …` once; containers carry a per-run id and are removed when the run ends, including on failure. CI renders `isolated`.
+
 ### `test-invariants` — rules, not snapshots
 
 Golden files catch *changes*. These catch *wrongness*, in cases nobody has

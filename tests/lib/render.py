@@ -28,6 +28,14 @@ FUNCTIONS = [
     "providers/functions/function-extra-resources.yaml",
 ]
 
+# The Crossplane render engine, pinned in one file so every machine and CI render with the same version. Bump it with the reference stack.
+CROSSPLANE_VERSION = (ROOT / "tests" / "crossplane-version.txt").read_text().strip()
+ENGINE_IMAGE = f"xpkg.crossplane.io/crossplane/crossplane:{CROSSPLANE_VERSION}"
+
+# WXOPS_RENDER=shared (opt-in): start each function container once per run and use the engine as a local binary, instead of a container per function and
+# per case for every render — about 0.15s a case instead of ~7s. Linux with Docker only; anything else, or any setup failure, falls back to isolated.
+RENDER_MODE = os.environ.get("WXOPS_RENDER", "isolated")
+
 # Fields stripped before comparison: values change on every render and carry no
 # information about whether the composition is correct.
 VOLATILE_TOP = ("creationTimestamp",)
@@ -65,6 +73,104 @@ def functions_file() -> str:
         fh.write((ROOT / rel).read_text())
     fh.close()
     return fh.name
+
+
+class _Shared:
+    """The shared runtime: function containers started once, and the engine as a local binary. Torn down when the process exits."""
+
+    def __init__(self):
+        import atexit
+        import platform
+        import shutil
+        import signal
+        import socket
+        import time
+        import uuid
+
+        if platform.system() != "Linux":
+            raise RuntimeError(f"shared mode needs Linux, this is {platform.system()}")
+        if not shutil.which("docker"):
+            raise RuntimeError("shared mode needs docker on PATH")
+        self.containers: list[str] = []
+        atexit.register(self.close)
+        signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
+
+        # The engine: the core binary from the pinned Crossplane image, cached per user, version and architecture. The CLI cannot stand in for it —
+        # it has no `internal render` — and the image's /bin/crossplane is a symlink, hence `docker cp -L`.
+        cache = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "wxops-core"
+        self.engine = cache / f"crossplane-{CROSSPLANE_VERSION}-linux-{platform.machine()}"
+        if not self.engine.exists():
+            cache.mkdir(parents=True, exist_ok=True)
+            cid = _docker("create", ENGINE_IMAGE).strip()
+            try:
+                tmp = self.engine.with_suffix(".partial")
+                _docker("cp", "-L", f"{cid}:/bin/crossplane", str(tmp))
+                tmp.chmod(0o755)
+                tmp.rename(self.engine)
+            finally:
+                _docker("rm", cid)
+
+        # The functions: one container each, on a free localhost port, reached through the `Development` runtime. Names carry a run id, so two runs
+        # (a pre-commit hook beside `make test`) never collide.
+        run = uuid.uuid4().hex[:8]
+        docs = []
+        for rel in FUNCTIONS:
+            doc = yaml.safe_load((ROOT / rel).read_text())
+            name = f"wxops-render-{run}-{doc['metadata']['name']}"
+            _docker("run", "-d", "--rm", "--name", name, "-p", "127.0.0.1::9443", doc["spec"]["package"], "--insecure")
+            self.containers.append(name)
+            target = _docker("port", name, "9443/tcp").splitlines()[0].strip()
+            doc["metadata"].setdefault("annotations", {}).update({
+                "render.crossplane.io/runtime": "Development",
+                "render.crossplane.io/runtime-development-target": target,
+            })
+            docs.append((doc, target))
+        for _, target in docs:
+            host, port = target.rsplit(":", 1)
+            deadline = time.time() + 30
+            while True:
+                try:
+                    socket.create_connection((host, int(port)), timeout=1).close()
+                    break
+                except OSError:
+                    if time.time() > deadline:
+                        raise RuntimeError(f"function at {target} did not start listening")
+                    time.sleep(0.2)
+        fh = tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False)
+        yaml.safe_dump_all([d for d, _ in docs], fh)
+        fh.close()
+        self.functions = fh.name
+
+    def close(self):
+        if self.containers:
+            subprocess.run(["docker", "rm", "-f", *self.containers], capture_output=True)
+            self.containers = []
+
+
+def _docker(*args: str) -> str:
+    proc = subprocess.run(["docker", *args], capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise RuntimeError(f"docker {args[0]}: {proc.stderr.strip()}")
+    return proc.stdout
+
+
+_SHARED: "_Shared | None | bool" = False  # False: not tried yet; None: unavailable, render isolated
+
+
+def _shared_runtime() -> "_Shared | None":
+    """The shared runtime when WXOPS_RENDER=shared and it can start; None renders isolated, as before. Says once which mode is in use."""
+    global _SHARED
+    if _SHARED is False:
+        _SHARED = None
+        if RENDER_MODE == "shared":
+            try:
+                _SHARED = _Shared()
+                print(f"render: shared runtime — engine {CROSSPLANE_VERSION} local, functions started once", file=sys.stderr)
+            except Exception as exc:  # noqa: BLE001 — reported, then isolated
+                print(f"render: shared runtime unavailable ({exc}); rendering isolated", file=sys.stderr)
+        elif RENDER_MODE != "isolated":
+            print(f"render: unknown WXOPS_RENDER={RENDER_MODE!r}; rendering isolated", file=sys.stderr)
+    return _SHARED
 
 
 def _defaulted(xr_path: Path, package: str) -> Path:
@@ -111,10 +217,12 @@ def render(case_dir: Path, package: str) -> tuple[bool, str, str]:
     # defaults, so any disagreement between the two would be untestable.
     xr = _defaulted(xr, package)
 
+    shared = _shared_runtime()
     cmd = [
         "crossplane", "composition", "render",
-        str(xr), str(composition), functions_file(),
+        str(xr), str(composition), shared.functions if shared else functions_file(),
     ]
+    cmd += [f"--crossplane-binary={shared.engine}"] if shared else [f"--crossplane-image={ENGINE_IMAGE}"]
     observed = case_dir / "observed.yaml"
     if observed.exists():
         cmd += [f"--observed-resources={observed}"]

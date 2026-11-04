@@ -179,7 +179,7 @@ Commits are validated by:
 5. **Package pins** — `VERSIONS.yaml` `current` agrees with `package/install/` (both written by `make release`)
 6. **README packages table** in sync with VERSIONS.yaml
 7. **XRD conformance** + **API compatibility** + **composition invariants** (fast, every commit)
-8. **Golden render tests** — `pre-push` stage only, ~90s
+8. **Golden render tests** — `pre-push` stage only, ~8 minutes (`WXOPS_RENDER=shared`: seconds, Linux)
 
 CI enforces the same gates on every pull request via
 `.github/workflows/pr-validate.yaml`. Pre-commit runs locally and is bypassable
@@ -226,12 +226,13 @@ make test-deps        # once — pip install -r tests/requirements.txt
 make test             # the merge gate: XRD conformance + API compat + golden + invariants
 make test-update      # regenerate goldens after an INTENTIONAL change, then read the diff
 make test-structural  # advisory only, never gates
+WXOPS_RENDER=shared make test   # opt-in, Linux: functions started once, engine local — seconds, not ~8 minutes
 ```
 
 | Check | Cost | Gates | What it catches |
 |---|---|---|---|
 | `test-xrd` | 0.3s | yes | XRs violating our XRD; negative cases that are *not* rejected |
-| `test-golden` | ~90s | yes | any change to rendered output |
+| `test-golden` | ~8 min (shared: seconds) | yes | any change to rendered output |
 | `test-invariants` | 0.2s | yes | cross-cutting rules + third-party field contracts |
 | `test-api-compat` | <1s | yes | breaking changes vs the last release tag: removed/retyped/newly-required fields, narrowed enums, renamed composed resources, changed selectors |
 | `test-structural` | ~5s | **no** | third-party structural smoke, best-effort |

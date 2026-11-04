@@ -39,7 +39,8 @@ pre-commit install --hook-type pre-push --hook-type commit-msg
 ```
 
 The first `make test` pulls ~800MB of function images. After that they are
-cached.
+cached. On Linux, `WXOPS_RENDER=shared make test` renders the goldens in seconds instead of minutes — see
+[render modes](tests/README.md#render-modes--isolated-default-and-shared-opt-in).
 
 ---
 
