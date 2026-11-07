@@ -66,6 +66,7 @@ the reasoning stays discoverable without depending on anyone's memory of the con
 | [001 — Package channel label](adr/001-package-channel-label.md) | `stable`/`nightly` over a guardrailed rollout system, and why |
 | [002 — Three API groups](adr/002-three-api-groups.md) | `scm`, `auth`, `platform` by trust boundary, and replacing rather than converting `gitea-*` |
 | [004 — `scm-repository`'s vendor field](adr/004-scm-repository-vendor-field.md) | Why the `scm` kinds that run a Terraform provider (`scm-repository`, `scm-team`, `scm-oauth-app`) repeat `vendor` from their connection — a Terraform provider can't be made conditional |
+| [005 — Kind naming](adr/005-kind-naming-x-prefix.md) | `X` plus a noun, never the group's word: `XPlatformPolicy` → `XPolicy` next release, RFC-010's `XApp`/`XDatabase`, `XDatabaseCluster`, the `XScm*` batch later — and why `X` stays |
 
 ### RFC
 
@@ -84,6 +85,7 @@ acceptance and rollout, and links to the ADRs it produces.
 | [007 — Package layout by API group](rfc/007-package-layout-by-api-group.md) | `package/{scm,auth,platform}/`, a Kustomization per category, and `group`/`path` in `VERSIONS.yaml` — *accepted* |
 | [008 — Built-in tools](rfc/008-built-in-tools-identity-and-catalog.md) | Argo CD, Grafana and OpenBao on their own native objects (`AppProject`, grafana-operator, `provider-vault` on the hub) — one login, persona groups, a catalog read from cluster and Git; no W'xOps kind per tool — *draft* |
 | [009 — SCM Personas](rfc/009-scm-personas.md) | `XPersona`, `XPersonaBinding`, `XPlatformPolicy` in `auth.wxops.cloud`: personas collect Git teams, bindings grant the persona roles (`view` plus W'xOps write pieces, by aggregation) per owned namespace, eight Kyverno CEL templates seal each object to its owner — *implemented (Phases 1–3)* |
+| [010 — Namespaced tenant kinds](rfc/010-namespaced-tenant-kinds.md) | `XApp` and `XDatabase` replace the cluster-scoped `XTenantApp`/`XTenantDatabase`: created in the tenant's namespace, owned by the namespace's `wxops.cloud/owner`, written through `scope: owned` bindings, sealed by `owner-stamp` then `owner-seal` on CREATE, UPDATE and DELETE — *draft* |
 
 ---
 
