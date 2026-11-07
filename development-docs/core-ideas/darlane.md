@@ -218,7 +218,45 @@ spec:
 ```
 
 Each consumer holds its own claim — `payment-api-dev-alice` (8h), `payment-api-sre-hotfix` (2h, `productionOverride`), `payment-api-agent-branch` (4h, no
-traffic) — and the app's XR never changes. Migration is additive: `darlane.*` keeps working.
+traffic) — and the app's XR never changes. Migration is additive: `darlane.*` keeps working. The app kind it mirrors is
+[RFC-010](../rfc/010-namespaced-tenant-kinds.md)'s namespaced `XApp`, named by [ADR-005](../adr/005-kind-naming-x-prefix.md).
+
+### Built as a Crossplane function — not a provider, not an operator
+
+*Decided 2026-11-06.* `XDarlane` is a Configuration package whose pipeline ends in a composition function: `function-kcl` while the logic is small (today's
+~150 lines in `kcl/tenant-app/main.k`), then **`function-darlane`**, written in Go with `function-sdk-go`, once twin inheritance, flags and test wiring
+outgrow KCL. Crossplane's own reconciler does the watching, retries and drift; Darlane writes only the step that turns an app into its twin. This is the
+escape hatch the [no-controller decision](../_archives/ROADMAP.md) names — "the answer is a new Crossplane *function*, not a bespoke operator".
+
+| | Function (chosen) | Provider | kubebuilder operator |
+|---|---|---|---|
+| Reconcile loop | Crossplane's | Our own Observe/Create/Update/Delete, finalizers, credentials | Our own, plus CRD versions, conversion, leader election, HA |
+| Fits the `XApp` pipeline | The same pipeline: `function-extra-resources` reads the `XApp`, `function-darlane` renders | A second control plane beside it | A second control plane beside it |
+| Tests | Offline goldens (`crossplane render` runs the function image) plus Go unit tests | envtest or a cluster | envtest or a cluster |
+| Writes into tenant namespaces | provider-kubernetes, under the RBAC RFC-009 designed | Its own ServiceAccount | Its own ServiceAccount, plus an admission webhook in the request path |
+
+**One pipeline, three uses:**
+
+```text
+XDarlane claim ──► function-extra-resources (read the XApp) ──► function-darlane
+                                                                  ├─ twin Deployment / Service               → feature debugging
+                                                                  ├─ OpenFeature flags + TraefikService split → feature-flag experiments
+                                                                  └─ a test Job against the twin              → integration tests
+AI agents ──► create and delete XDarlane claims as an agent persona — never write workloads directly
+```
+
+- **Feature-flag experiments** compose in-cluster CRDs through provider-kubernetes — the OpenFeature Operator's `FeatureFlag` and `FeatureFlagSource`
+  beside the traffic split Darlane already ships. An experiment is a flag variant, a traffic share and a cohort cookie, declared in the claim. The `env`
+  overlay stays for the simple case.
+- **Integration tests** are a composed `Job` (or a Testkube `TestWorkflow`) against the twin, its result in the claim's status and the pull request. What
+  starts a run — a new image on the twin, or a claim an agent creates per run — is decided with the test work; a `WatchOperation` is one option.
+- **What a function must respect:** it runs on every reconcile, so it stays fast and free of side effects — no external API calls, no waiting. Anything
+  one-shot or slow (a test run, an agent step) is a composed `Job`, a Crossplane `Operation` (alpha in v2 — spike first), or runtime tooling.
+- **A provider only for an outside API** that has no Kubernetes CRD and no Terraform provider — a hosted flag or test service called directly. With a
+  Terraform provider, provider-opentofu runs it, as the `scm-*` packages do; with CRDs, provider-kubernetes composes them. `provider-darlane` is decided
+  only when such a system appears.
+- **Darlane's Go code beyond the function is runtime, not reconcile logic:** the CLI, fileSync, mirrord integration, the session-audit sidecar, the tools
+  image and agent tooling — released from the Darlane repository on its own cadence, once it splits from `wxops-core`.
 
 ### Agent access — open, decided with the agent work
 

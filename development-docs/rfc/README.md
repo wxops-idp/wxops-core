@@ -50,3 +50,4 @@ problem statement* → *Motivation*.
 | [007](007-package-layout-by-api-group.md) | Package layout by API group, with a Kustomization per category | Implemented |
 | [008](008-built-in-tools-identity-and-catalog.md) | Built-in tools — one login, persona access and a catalog for Argo CD, Grafana and OpenBao, on their own native objects | Draft |
 | [009](009-scm-personas.md) | SCM Personas — Persona, Binding and Policy: RBAC and ABAC from the SCM login to Kubernetes guardrails | Implemented (Phases 1–3) |
+| [010](010-namespaced-tenant-kinds.md) | Namespaced tenant kinds — `XApp` and `XDatabase` in the tenant's namespace, so the namespace decides who owns them | Draft |
