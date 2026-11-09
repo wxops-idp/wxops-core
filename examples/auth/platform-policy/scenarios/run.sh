@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Plays every XPlatformPolicy template (policies/) against the sandbox in sandbox.yaml and bindings.yaml as SCM users, and compares each row with what it expects.
-# Usage: ./run.sh setup | test | compare | users | session <user> | session-end | teardown; SESSION=<user> ./run.sh test for one real login —
+# Usage: ./run.sh setup | test | mapping | env-gate | compare | users | session <user> | session-end | teardown; SESSION=<user> ./run.sh test for one real login —
 # see docs/api-reference/auth/platform-policy.md#trying-the-templates-on-a-cluster.
 set -uo pipefail
 
@@ -13,6 +13,8 @@ declare -A GROUP=([alice]=wxops-sbx:team-a [bob]=wxops-sbx:team-b [paula]=wxops-
 ALICE=(--as=alice --as-group=wxops-sbx:team-a)  # team-a: wxops:persona-owners in A and B, in sbx-devs
 BOB=(--as=bob --as-group=wxops-sbx:team-b)      # team-b: wxops:persona-owners in A and B, and Namespaces cluster-wide (namespace-editor.yaml)
 PAULA=(--as=paula --as-group=wxops-sbx:platform) # sbx-platform: wxops:persona-platform (admin) in A and B, exempt where a policy names it
+CAROL=(--as=carol --as-group=wxops-sbx:team-a-ops) # mapping only: team-a-ops, mapped to owner team-a (mapping.yaml)
+DAN=(--as=dan --as-group=wxops-sbx:team-b)         # env-gate only: team-b like bob, but not in the persona trusted with prod (env-gate.yaml)
 if [ -n "$SESSION" ]; then
   # The session user plays through the kubeconfig `./run.sh session <user>` logged in; everyone else's rows are skipped.
   declare -n PLAYER=${SESSION^^}
@@ -22,7 +24,7 @@ USERS=(sbx-alice sbx-bob sbx-paula)
 YOU=()                                           # your own kubeconfig, unchanged
 PERSONA=(--as="${SCM_USER:-you}" --as-group="${SCM_GROUP:-wxops-idp:owners}") # compare: you as a member of your real platform persona
 
-POLICIES=(sbx-owner-stamp sbx-owner-seal sbx-secret-readonly sbx-exec-guard sbx-protected sbx-rbac-guard sbx-sa-guard sbx-namespace-guard)
+POLICIES=(sbx-owner-stamp sbx-owner-seal sbx-secret-guard sbx-exec-guard sbx-protected sbx-rbac-guard sbx-sa-guard sbx-namespace-guard)
 BINDINGS=(sbx-teams-owned sbx-teams-both sbx-platform-both)
 PERSONAS=(sbx-teams sbx-devs sbx-platform)
 
@@ -93,6 +95,26 @@ forward() {
   [ $ok -eq 0 ] || cat "$log"
   rm -f "$log"
   return $ok
+}
+
+# within <seconds> <command…> — retries until the command succeeds; Crossplane re-renders on its poll, not on the change
+within() {
+  local deadline=$((SECONDS + $1))
+  shift
+  until "$@" >/dev/null 2>&1; do
+    [ $SECONDS -ge $deadline ] && return 1
+    sleep 3
+  done
+}
+
+# owner-seal's `teams` variable mentions the mapped group — i.e. the policy has re-rendered with the mapping
+seal_maps() {
+  kubectl get validatingpolicy wxops-sbx-owner-seal -o jsonpath='{.spec.variables[?(@.name=="teams")].expression}' | grep -q "wxops-sbx:team-a-ops"
+}
+
+# nudge <policy> — Crossplane re-renders an XR on its poll; an annotation change makes it now
+nudge() {
+  kubectl annotate xplatformpolicy "sbx-$1" wxops.test/nudge="$(date +%s)" --overwrite >/dev/null
 }
 
 ready() {
@@ -208,7 +230,7 @@ test_rows() {
     sh -c "! kubectl auth can-i create serviceaccounts -n $A ${ALICE[*]} >/dev/null && ! kubectl auth can-i create pods -n $A ${ALICE[*]} >/dev/null && ! kubectl auth can-i create rolebindings -n $A ${ALICE[*]} >/dev/null"
   row allow  paula "can still impersonate a ServiceAccount — platform keeps admin" -- kubectl auth can-i impersonate serviceaccounts -n $A "${PAULA[@]}"
 
-  echo "secret-readonly — Secrets come from External Secrets Operator, never by hand"
+  echo "secret-guard — Secrets come from External Secrets Operator, never by hand"
   row rbac   alice "reads a Secret in A — view has none, so RBAC refuses" -- kubectl -n $A get secret sbx-secret "${ALICE[@]}"
   row rbac   alice "creates a Secret in A — no team role writes Secrets" -- kubectl -n $A create secret generic sbx-alice --from-literal=k=v "${ALICE[@]}"
   row policy paula "creates a Secret — admin may, this policy names no exemption" -- kubectl -n $A create secret generic sbx-paula --from-literal=k=v "${PAULA[@]}"
@@ -262,6 +284,109 @@ test_rows() {
   [ $fail -eq 0 ]
 }
 
+# Owner mapping (ADR-006): a second team, team-a-ops, labelled wxops.cloud/owner: team-a, owns what team-a owns — in the persona, the binding and
+# owner-seal alike. Impersonation only; needs `./run.sh setup` first. Removes what it creates.
+mapping() {
+  [ -n "$SESSION" ] && { echo "mapping runs in impersonation mode only — unset SESSION"; exit 2; }
+  kubectl get xplatformpolicy sbx-owner-seal >/dev/null 2>&1 || { echo "run ./run.sh setup first"; exit 1; }
+  echo "a paused team, its persona and bindings…"
+  kubectl apply -f "$DIR/mapping.yaml" >/dev/null || exit 1
+  kubectl patch xscmteam sbx-team-a-ops --subresource=status --type=merge \
+    -p '{"status":{"org":"wxops-sbx","dexTeam":"team-a-ops","oidcGroup":"wxops-sbx:team-a-ops"}}' >/dev/null || exit 1
+  ready xpersona/sbx-mapped xpersona/sbx-carol xpersonabinding/sbx-mapped-owned xpersonabinding/sbx-carol-a || { echo "check: kubectl get xpersona,xpersonabinding"; exit 1; }
+  nudge owner-seal
+
+  echo "owner mapping — team-a-ops, labelled wxops.cloud/owner: team-a, owns what team-a owns"
+  row allow - "the persona publishes it: status.owners maps wxops-sbx:team-a-ops to team-a" -- \
+    within 120 sh -c "kubectl get xpersona sbx-mapped -o jsonpath='{.status.owners}' | grep -q '\"owner\":\"team-a\"'"
+  row allow - "scope owned binds the group in A, which team-a owns" -- \
+    within 120 sh -c "kubectl -n $A get rolebinding -l auth.wxops.cloud/binding=sbx-mapped-owned -o jsonpath='{.items[*].subjects[*].name}' | grep -q wxops-sbx:team-a-ops"
+  row allow - "… and nowhere in B, which team-b owns" -- \
+    test -z "$(kubectl -n $B get rolebinding -l auth.wxops.cloud/binding=sbx-mapped-owned -o name)"
+  row allow - "owner-seal re-renders with the mapping in its teams variable" -- within 180 seal_maps
+  row allow carol "creates a ConfigMap in A — owner team-a is one of her teams, through the mapping" -- \
+    kubectl -n $A create configmap carol-a --from-literal=k=v "${CAROL[@]}"
+  row rbac  carol "creates one in B — no binding there" -- kubectl -n $B create configmap carol-b --from-literal=k=v "${CAROL[@]}"
+
+  echo "… and without it"
+  kubectl label xscmteam sbx-team-a-ops wxops.cloud/owner- >/dev/null
+  nudge owner-seal
+  row allow - "owner-seal re-renders without the mapping" -- within 180 sh -c '! kubectl get validatingpolicy wxops-sbx-owner-seal -o jsonpath="{.spec.variables[?(@.name==\"teams\")].expression}" | grep -q wxops-sbx:team-a-ops'
+  row policy carol "creates a ConfigMap in A — RBAC still allows it (sbx-carol-a); owner-seal refuses: team-a is not her team" -- \
+    kubectl -n $A create configmap carol-c --from-literal=k=v "${CAROL[@]}"
+
+  mapping_teardown
+  echo
+  echo "$pass passed, $fail failed"
+  [ $fail -eq 0 ]
+}
+
+# env-gate: wxops-sbx-b labelled prod; of team-b, only bob (sbx-prod, environments [prod]) may change it by hand. Impersonation only; needs
+# `./run.sh setup` first. Removes what it creates, and the label.
+env_gate() {
+  [ -n "$SESSION" ] && { echo "env-gate runs in impersonation mode only — unset SESSION"; exit 2; }
+  kubectl get xpersona sbx-platform >/dev/null 2>&1 || { echo "run ./run.sh setup first"; exit 1; }
+  echo "B labelled prod, a persona trusted with it, and the gate…"
+  kubectl label namespace $B wxops.cloud/environment=prod --overwrite >/dev/null || exit 1
+  kubectl apply -f "$DIR/env-gate.yaml" >/dev/null || exit 1
+  ready xpersona/sbx-prod || { echo "check: kubectl get xpersona sbx-prod"; exit 1; }
+  kubectl wait --for=jsonpath='{.status.created}'=true --timeout=300s xplatformpolicy/sbx-env-gate >/dev/null &&
+    kubectl wait --for=jsonpath='{.status.conditionStatus.ready}'=true --timeout=120s validatingpolicy/wxops-sbx-env-gate >/dev/null ||
+    { echo "check: kubectl get xplatformpolicy sbx-env-gate; kubectl get validatingpolicy wxops-sbx-env-gate"; exit 1; }
+
+  echo "env-gate — in a prod namespace, only the persona trusted with prod changes it by hand"
+  row policy dan   "creates a ConfigMap in B (prod) — team-b, but not in sbx-prod" -- kubectl -n $B create configmap dan-1 --from-literal=k=v "${DAN[@]}"
+  row allow  bob   "creates one — in sbx-prod, whose environments include prod" -- kubectl -n $B create configmap bob-1 --from-literal=k=v "${BOB[@]}"
+  row allow  paula "creates one — the platform persona is exempt" -- kubectl -n $B create configmap paula-1 --from-literal=k=v "${PAULA[@]}"
+  row allow  you   "creates one — not an SCM user, like Argo CD and every controller" -- kubectl -n $B create configmap you-1 --from-literal=k=v
+  row policy bob   "relabels B's environment to dev — namespace-guard keeps the label the platform team's" -- \
+    kubectl label namespace $B wxops.cloud/environment=dev --overwrite "${BOB[@]}"
+
+  echo "… out of scope, and a persona that no longer reaches prod"
+  kubectl label namespace $B wxops.cloud/environment- >/dev/null
+  row allow  dan   "creates one in B once it is no longer prod — the namespace's labels are read on every request" -- \
+    within 30 kubectl -n $B create configmap dan-2 --from-literal=k=v "${DAN[@]}"
+  kubectl label namespace $B wxops.cloud/environment=prod --overwrite >/dev/null
+  kubectl patch xpersona sbx-prod --type=merge -p '{"spec":{"parameters":{"environments":["staging"]}}}' >/dev/null
+  nudge env-gate
+  row allow  -     "env-gate re-renders: sbx-prod now reaches staging only" -- \
+    within 180 sh -c "kubectl get validatingpolicy wxops-sbx-env-gate -o jsonpath='{.spec.validations[0].expression}' | grep -qF \"nsEnv in ['staging']\""
+  row policy bob   "creates one in B — still in sbx-prod, but its environments no longer include prod" -- \
+    kubectl -n $B create configmap bob-2 --from-literal=k=v "${BOB[@]}"
+
+  echo "… and a persona that does not exist"
+  kubectl patch xplatformpolicy sbx-env-gate --type=merge -p '{"spec":{"parameters":{"personaRef":{"name":"ghost"}}}}' >/dev/null
+  row allow  -     "syncMessage says the gate allows nobody" -- \
+    within 180 sh -c "kubectl get xplatformpolicy sbx-env-gate -o jsonpath='{.status.syncMessage}' | grep -qF \"persona 'ghost' not found\""
+  row allow  -     "… and the rendered gate names no member" -- \
+    within 180 sh -c "kubectl get validatingpolicy wxops-sbx-env-gate -o jsonpath='{.spec.validations[0].expression}' | grep -qF 'g in []'"
+  row policy bob   "creates one in B — a missing persona makes the gate stricter, never looser" -- \
+    kubectl -n $B create configmap bob-3 --from-literal=k=v "${BOB[@]}"
+
+  env_gate_teardown
+  echo
+  echo "$pass passed, $fail failed"
+  [ $fail -eq 0 ]
+}
+
+env_gate_teardown() {
+  kubectl delete xplatformpolicy sbx-env-gate --ignore-not-found >/dev/null
+  kubectl delete xpersona sbx-prod --ignore-not-found >/dev/null
+  kubectl label namespace $B wxops.cloud/environment- >/dev/null 2>&1
+  kubectl -n $B delete configmap bob-1 bob-2 bob-3 paula-1 you-1 dan-1 dan-2 --ignore-not-found >/dev/null 2>&1
+}
+
+mapping_teardown() {
+  kubectl delete xpersonabinding sbx-mapped-owned sbx-carol-a --ignore-not-found >/dev/null
+  kubectl delete xpersona sbx-mapped sbx-carol --ignore-not-found >/dev/null
+  # Deleted while still paused. It never composed anything, so if a finalizer holds it, clearing that orphans nothing.
+  kubectl delete xscmteam sbx-team-a-ops --ignore-not-found --wait=false >/dev/null
+  if ! within 30 sh -c '! kubectl get xscmteam sbx-team-a-ops'; then
+    kubectl patch xscmteam sbx-team-a-ops --type=merge -p '{"metadata":{"finalizers":null}}' >/dev/null 2>&1
+  fi
+  kubectl -n $A delete configmap carol-a carol-c --ignore-not-found >/dev/null
+}
+
 # can <want-persona> <want-you> <what> -- <can-i args…>   read-only: kubectl auth can-i, nothing is written
 can() {
   local wp=$1 wy=$2 what=$3 gp gy mark
@@ -291,7 +416,9 @@ compare() {
 }
 
 teardown() {
-  # The XRs first, so their bindings and policies go with them; then the namespaces.
+  # The XRs first, so their bindings and policies go with them; then the namespaces. The mapping and env-gate scenarios', if interrupted.
+  mapping_teardown
+  env_gate_teardown
   kubectl delete xplatformpolicy "${POLICIES[@]}" --ignore-not-found
   kubectl delete xpersonabinding "${BINDINGS[@]}" --ignore-not-found
   kubectl delete xpersona "${PERSONAS[@]}" --ignore-not-found
@@ -308,7 +435,9 @@ case "${1:-test}" in
   session) session "${2:-}" ;;
   session-end) session_end ;;
   test) test_rows ;;
+  mapping) mapping ;;
+  env-gate) env_gate ;;
   compare) compare ;;
   teardown) teardown ;;
-  *) echo "usage: $0 setup | test | compare | users | session <user> | session-end | teardown"; exit 2 ;;
+  *) echo "usage: $0 setup | test | mapping | env-gate | compare | users | session <user> | session-end | teardown"; exit 2 ;;
 esac

@@ -1,0 +1,87 @@
+# Owner mapping (ADR-006), in the sandbox — applied by `./run.sh mapping`, which checks each step and removes everything afterwards.
+#
+# Owners are team slugs, matched exactly: group `wxops-sbx:team-a` owns `team-a`. A second team that should stand for the same owner — a maintainers or
+# on-call team beside the product team — keeps its own name and carries the owner it also stands for as a label on its XScmTeam. Nothing is renamed and
+# no names collide: `team-a-ops` owns `team-a-ops` and, through the label, `team-a`. Personas, bindings and every policy read that one label.
+#
+# The sandbox has no Git host behind it, so the team is PAUSED from its first apply: Crossplane never composes it, nothing reaches an SCM, and run.sh
+# writes the status a real team would publish (status.oidcGroup). Never remove the annotation — un-paused, it would try to create a real team.
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmTeam
+metadata:
+  name: sbx-team-a-ops
+  annotations:
+    crossplane.io/paused: "true"
+  labels:
+    scm.wxops.cloud/oidc-login: "true"           # a team that can log in — the only teams personas and policies read
+    auth.wxops.cloud/persona-sbx-mapped: "true"  # a member of the persona below
+    wxops.cloud/owner: team-a                    # the mapping: team-a-ops also owns what team-a owns
+spec:
+  parameters:
+    scmRef: {name: sandbox-none}                 # never read: the XR is paused
+    vendor: gitea
+    teamName: team-a-ops
+---
+# Members from labelled teams — publishes the mapping as status.owners.
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPersona
+metadata:
+  name: sbx-mapped
+spec:
+  crossplane:
+    compositionRevisionSelector:
+      matchLabels:
+        channel: nightly
+    compositionUpdatePolicy: Automatic
+  parameters:
+    description: Scenario persona for the owner mapping — its member team is mapped to team-a
+---
+# scope owned: a RoleBinding wherever the group's team, or its mapped owner, owns the namespace — so in wxops-sbx-a, never in wxops-sbx-b.
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPersonaBinding
+metadata:
+  name: sbx-mapped-owned
+spec:
+  crossplane:
+    compositionRevisionSelector:
+      matchLabels:
+        channel: nightly
+    compositionUpdatePolicy: Automatic
+  parameters:
+    personaRef: {name: sbx-mapped}
+    role: wxops:persona-developers
+    scope: owned
+---
+# RBAC for carol in wxops-sbx-a that does NOT depend on the mapping, so that once the mapping is removed she is refused by owner-seal, not by RBAC —
+# the row that proves the policy, not the binding, made the difference.
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPersona
+metadata:
+  name: sbx-carol
+spec:
+  crossplane:
+    compositionRevisionSelector:
+      matchLabels:
+        channel: nightly
+    compositionUpdatePolicy: Automatic
+  parameters:
+    description: carol by group — RBAC independent of the mapping
+    members:
+      teams: false
+      groups: [wxops-sbx:team-a-ops]
+---
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPersonaBinding
+metadata:
+  name: sbx-carol-a
+spec:
+  crossplane:
+    compositionRevisionSelector:
+      matchLabels:
+        channel: nightly
+    compositionUpdatePolicy: Automatic
+  parameters:
+    personaRef: {name: sbx-carol}
+    role: wxops:persona-developers
+    scope: namespaces
+    namespaces: [wxops-sbx-a]
