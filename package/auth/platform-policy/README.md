@@ -1,8 +1,8 @@
 # platform-policy
 
-Renders **one reviewed Kyverno CEL policy per resource** — `owner-stamp`, `owner-seal`, `secret-readonly`, `exec-guard`, `protected`, `rbac-guard`, `sa-guard` or `namespace-guard` — that narrows what
+Renders **one reviewed Kyverno CEL policy per resource** — `owner-stamp`, `owner-seal`, `secret-guard`, `exec-guard`, `protected`, `rbac-guard`, `sa-guard`, `namespace-guard` or `env-gate` — that narrows what
 RBAC already grants. A policy matches **SCM users only** (a caller with a `<org>:<team>` group, never a `system:` username), so controllers, Crossplane, External Secrets
-Operator and Argo CD are never matched. Kyverno refuses; it never grants. Every policy starts in `Audit`. See [RFC-009](../../../development-docs/rfc/009-scm-personas.md)
+Operator and Argo CD are never matched. Kyverno refuses; it never grants. Policies run in `Deny` by default, failing closed; `Audit` is not supported yet. See [RFC-009](../../../development-docs/rfc/009-scm-personas.md)
 and [RFC-005](../../../development-docs/rfc/005-git-mapped-authorization.md).
 
 ## Prerequisites

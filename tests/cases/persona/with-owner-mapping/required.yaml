@@ -1,0 +1,56 @@
+# Fixture for `crossplane composition render --required-resources` — every XScmTeam labelled scm.wxops.cloud/oidc-login: "true".
+#
+# payment             — member, no owner label: owns its own slug only
+# payment-maintainers — member, labelled wxops.cloud/owner: payment — mapped: also owns payment
+# checkout            — member, labelled with its own slug: nothing to map
+# billing-ops         — labelled wxops.cloud/owner: billing but not a member of this persona: not in its status.owners
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmTeam
+metadata:
+  name: payment
+  labels:
+    scm.wxops.cloud/oidc-login: "true"
+    auth.wxops.cloud/persona-developers: "true"
+status:
+  org: wxops-idp
+  dexTeam: payment
+  oidcGroup: wxops-idp:payment
+---
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmTeam
+metadata:
+  name: payment-maintainers
+  labels:
+    scm.wxops.cloud/oidc-login: "true"
+    auth.wxops.cloud/persona-developers: "true"
+    wxops.cloud/owner: payment
+status:
+  org: wxops-idp
+  dexTeam: payment-maintainers
+  oidcGroup: wxops-idp:payment-maintainers
+---
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmTeam
+metadata:
+  name: checkout
+  labels:
+    scm.wxops.cloud/oidc-login: "true"
+    auth.wxops.cloud/persona-developers: "true"
+    wxops.cloud/owner: checkout
+status:
+  org: wxops-idp
+  dexTeam: checkout
+  oidcGroup: wxops-idp:checkout
+---
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmTeam
+metadata:
+  name: billing-ops
+  labels:
+    scm.wxops.cloud/oidc-login: "true"
+    auth.wxops.cloud/persona-owners: "true"
+    wxops.cloud/owner: billing
+status:
+  org: wxops-idp
+  dexTeam: billing-ops
+  oidcGroup: wxops-idp:billing-ops

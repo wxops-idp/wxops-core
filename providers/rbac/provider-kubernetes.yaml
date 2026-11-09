@@ -43,7 +43,6 @@ rules:
     resources: ["clusterroles"]
     verbs: ["bind"]
     resourceNames:
-      - view
       - wxops:persona-viewers
       - wxops:persona-developers
       - wxops:persona-owners

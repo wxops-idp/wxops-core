@@ -23,6 +23,7 @@ status:
   groups:
     - wxops-idp:payment
     - wxops-idp:search
+  owners: []
   ready: true
   subjects:
     - apiGroup: rbac.authorization.k8s.io

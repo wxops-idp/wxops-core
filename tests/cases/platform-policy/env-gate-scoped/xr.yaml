@@ -1,0 +1,17 @@
+# env-gate plus a namespace selector: the user's selector is added to the gate's own environment expression, never replacing it.
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPlatformPolicy
+metadata:
+  name: env-gate-scoped
+spec:
+  parameters:
+    template: env-gate
+    scmOrgs: [wxops-idp]
+    environments: [prod, staging]
+    personaRef:
+      name: owners
+    namespaceSelector:
+      matchLabels:
+        auth.wxops.cloud/tenant-namespace: "true"
+      matchExpressions:
+        - {key: wxops.cloud/sandbox, operator: DoesNotExist}

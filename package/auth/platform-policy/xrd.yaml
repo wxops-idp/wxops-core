@@ -29,8 +29,16 @@ spec:
                   x-kubernetes-validations:
                     - rule: "self.template != 'exec-guard' || self.personaRef.name != ''"
                       message: "template 'exec-guard' needs personaRef — the persona that may exec"
-                    - rule: "self.template == 'exec-guard' || self.personaRef.name == ''"
-                      message: "personaRef is for template 'exec-guard' only"
+                    - rule: "self.template != 'env-gate' || self.personaRef.name != ''"
+                      message: "template 'env-gate' needs personaRef — the persona that may change the guarded environments"
+                    - rule: "self.template in ['exec-guard', 'env-gate'] || self.personaRef.name == ''"
+                      message: "personaRef is for templates 'exec-guard' and 'env-gate' only"
+                    - rule: "self.template != 'env-gate' || (has(self.environments) && size(self.environments) > 0)"
+                      message: "template 'env-gate' needs environments — which namespaces' wxops.cloud/environment it guards"
+                    - rule: "self.template == 'env-gate' || !has(self.environments)"
+                      message: "environments is for template 'env-gate' only"
+                    - rule: "self.temporaryExemptPersonaRef.name == '' || has(self.temporaryExemptPersonaRef.until)"
+                      message: "temporaryExemptPersonaRef needs until — when the exemption ends"
                     - rule: "self.template == 'owner-seal' || (!has(self.ownerPattern) && !self.immutableOwner)"
                       message: "ownerPattern and immutableOwner are options of template 'owner-seal' only"
                   properties:
@@ -44,7 +52,8 @@ spec:
                         `owner-seal` — a ValidatingPolicy: an SCM user creates, updates or deletes an object only if its owner is one of their teams. The owner is the
                         object's `wxops.cloud/owner` label, or — for an unlabelled namespaced object — its namespace's. On update, both the old and the new owner must be theirs.
 
-                        `secret-readonly` — an SCM user cannot create, update or delete a `Secret`; values come from OpenBao through External Secrets Operator.
+                        `secret-guard` — an SCM user cannot create, update or delete a `Secret`: Secrets are written by External Secrets Operator from OpenBao,
+                        where teams also read their values. Reading Secrets in Kubernetes is RBAC's, and team roles do not grant it.
 
                         `exec-guard` — `exec`, `attach` and `port-forward` only for the members of `personaRef`, and only in namespaces one of their teams owns.
 
@@ -56,26 +65,32 @@ spec:
                         `sa-guard` — a Pod, or a workload's pod template, created or updated by an SCM user runs only as `default` or a ServiceAccount whose
                         `wxops.cloud/owner` is one of their teams — no one runs a workload as another team's, or the platform's, ServiceAccount.
 
-                        `namespace-guard` — an SCM user cannot create or delete a Namespace, nor change its `wxops.cloud/owner` or
-                        `auth.wxops.cloud/tenant-namespace` label: the labels every other rule trusts.
+                        `namespace-guard` — an SCM user cannot create or delete a Namespace, nor change its `wxops.cloud/owner`,
+                        `auth.wxops.cloud/tenant-namespace` or `wxops.cloud/environment` label: the labels every other rule trusts.
+
+                        `env-gate` — in a namespace whose `wxops.cloud/environment` is one of `environments`, an SCM user creates, updates, deletes or
+                        exec/attach/port-forwards only as a member of `personaRef` whose own `environments` include that namespace's. Everyone else goes
+                        through Git — Argo CD is never matched.
                       enum:
                         - owner-stamp
                         - owner-seal
-                        - secret-readonly
+                        - secret-guard
                         - exec-guard
                         - protected
                         - rbac-guard
                         - sa-guard
                         - namespace-guard
+                        - env-gate
                     mode:
                       type: string
                       description: |
-                        `Audit` records what the policy would refuse as a PolicyReport and lets the request through; `Deny` refuses it. Every policy starts in `Audit`,
-                        and moves to `Deny` once its reports are clean. Ignored by `owner-stamp`, which only mutates.
+                        `Deny` refuses a request that breaks the rule and, with `failurePolicy: Fail`, one Kyverno cannot check — the supported mode. `Audit` lets
+                        it through and records a PolicyReport; not supported by W'xOps yet, which runs no reports controller, so an `Audit` policy neither blocks nor
+                        records. Ignored by `owner-stamp`, which only mutates.
                       enum:
                         - Audit
                         - Deny
-                      default: Audit
+                      default: Deny
                     scmOrgs:
                       type: array
                       description: |
@@ -88,8 +103,9 @@ spec:
                     personaRef:
                       type: object
                       description: |
-                        The persona `exec-guard` lets exec. Read for its groups and users. Empty means none — the composition looks the persona up by this name at every
-                        reconcile, so the field is always present.
+                        The persona `exec-guard` lets exec, or `env-gate` lets change the guarded environments. Read for its groups and users (and, for
+                        `env-gate`, its `environments`). Empty means none — the composition looks the persona up by this name at every reconcile, so the field is
+                        always present.
                       default: {name: ""}
                       required:
                         - name
@@ -100,8 +116,9 @@ spec:
                     exemptPersonaRef:
                       type: object
                       description: |
-                        A persona the policy does not apply to — the platform team, for `owner-seal` on Core XRs, `rbac-guard`, `protected`, `sa-guard` and `namespace-guard`. Empty, nobody is exempt.
-                        If the persona cannot be found the policy is rendered with no exemption, and `syncMessage` says so: a missing persona makes a policy stricter, never looser.
+                        A persona the policy does not apply to, for good — the platform team — on any validating template. Empty, nobody is exempt. Its requests never
+                        reach Kyverno. If the persona cannot be found the policy is rendered with no exemption, and `syncMessage` says so: a missing persona makes a
+                        policy stricter, never looser. For a while instead, use `temporaryExemptPersonaRef`.
                       default: {name: ""}
                       required:
                         - name
@@ -109,6 +126,68 @@ spec:
                         name:
                           type: string
                           default: ""
+                    temporaryExemptPersonaRef:
+                      type: object
+                      description: |
+                        A second persona the policy does not apply to, until `until` — someone let past a rule while they debug, beside the standing
+                        `exemptPersonaRef`. Checked by Kyverno on every request (its clock), so it ends without a recompose; past `until` the policy applies to the
+                        persona like everyone else. While it lasts the persona's requests reach Kyverno, and wait on it. A missing persona, or a name without
+                        `until`, exempts nobody. An exemption only gets past the policy: RBAC still decides first.
+                      default: {name: ""}
+                      required:
+                        - name
+                      properties:
+                        name:
+                          type: string
+                          default: ""
+                        until:
+                          type: string
+                          format: date-time
+                          pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$'
+                          description: |
+                            Required with a name. UTC, RFC 3339 with `Z`, e.g. `2026-11-06T18:00:00Z`. Generate it with
+                            `date -u -d '+2 hours' +%Y-%m-%dT%H:%M:%SZ` (macOS: `date -u -v+2H +%Y-%m-%dT%H:%M:%SZ`).
+                    environments:
+                      type: array
+                      description: |
+                        For `env-gate`: the environments it guards — namespaces whose `wxops.cloud/environment` label is one of these, for example `[prod]`.
+                      minItems: 1
+                      items:
+                        type: string
+                        pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+                    namespaceSelector:
+                      type: object
+                      description: |
+                        Optional. The policy applies only in namespaces whose labels match — a standard label selector, for example `exec-guard` only where
+                        `wxops.cloud/environment: prod`. A namespaced object is matched by its namespace's labels, a `Namespace` by its own; a cluster-scoped object is
+                        never skipped by a namespace selector, so `owner-seal` on Core XRs and `rbac-guard`'s cluster bindings still apply everywhere. `owner-stamp`
+                        keeps its `auth.wxops.cloud/tenant-namespace` label on top of this one. Absent: every namespace.
+                      properties:
+                        matchLabels:
+                          type: object
+                          additionalProperties:
+                            type: string
+                        matchExpressions:
+                          type: array
+                          items:
+                            type: object
+                            required:
+                              - key
+                              - operator
+                            properties:
+                              key:
+                                type: string
+                              operator:
+                                type: string
+                                enum:
+                                  - In
+                                  - NotIn
+                                  - Exists
+                                  - DoesNotExist
+                              values:
+                                type: array
+                                items:
+                                  type: string
                     ownerPattern:
                       type: string
                       description: |

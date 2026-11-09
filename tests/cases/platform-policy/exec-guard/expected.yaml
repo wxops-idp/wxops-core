@@ -55,7 +55,7 @@ spec:
         evaluation:
           background:
             enabled: false
-        failurePolicy: Ignore
+        failurePolicy: Fail
         matchConditions:
           - expression: '!request.userInfo.username.startsWith(''system:'') && request.userInfo.groups.exists(g, [''wxops-idp:''].exists(p, g.startsWith(p)))'
             name: scm-user
@@ -74,7 +74,7 @@ spec:
                 - pods/attach
                 - pods/portforward
         validationActions:
-          - Audit
+          - Deny
         validations:
           - expression: (request.userInfo.groups.exists(g, g in ['wxops-idp:owners']) || request.userInfo.username in ['alice']) && variables.nsOwner in variables.teams
             message: 'auth.wxops.cloud: exec, attach and port-forward are for the members of persona ''owners'', in a namespace one of their teams owns'

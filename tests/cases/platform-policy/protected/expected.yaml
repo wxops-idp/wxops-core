@@ -55,7 +55,7 @@ spec:
         evaluation:
           background:
             enabled: false
-        failurePolicy: Ignore
+        failurePolicy: Fail
         matchConditions:
           - expression: '!(request.resource.group in [''authentication.k8s.io'', ''authorization.k8s.io'', ''login.concierge.pinniped.dev'', ''identity.concierge.pinniped.dev'']) && !(request.resource.resource in [''events'', ''leases''])'
             name: not-excluded
@@ -104,7 +104,7 @@ spec:
               resources:
                 - '*'
         validationActions:
-          - Audit
+          - Deny
         validations:
           - expression: '!(has(oldObject.metadata.labels) && ''wxops.cloud/protected'' in oldObject.metadata.labels && oldObject.metadata.labels[''wxops.cloud/protected''] == ''true'')'
             message: "auth.wxops.cloud: this object is protected (wxops.cloud/protected) \u2014 the platform team changes it"

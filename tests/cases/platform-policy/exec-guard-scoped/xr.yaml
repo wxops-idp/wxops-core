@@ -1,0 +1,18 @@
+# Scope per template: exec-guard only in production namespaces — a namespace selector with matchLabels and matchExpressions.
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPlatformPolicy
+metadata:
+  name: exec-guard-scoped
+spec:
+  parameters:
+    template: exec-guard
+    scmOrgs: [wxops-idp]
+    personaRef:
+      name: owners
+    exemptPersonaRef:
+      name: platform
+    namespaceSelector:
+      matchLabels:
+        wxops.cloud/environment: prod
+      matchExpressions:
+        - {key: wxops.cloud/sandbox, operator: DoesNotExist}

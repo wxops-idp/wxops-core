@@ -65,13 +65,14 @@ spec:
 
             Inputs (via option("params").oxr.spec.parameters):
               personaRef.name  string    The XPersona whose status.subjects are bound.
-              role             string    A ClusterRole: view | edit | admin | wxops:persona-* | wxops:platform-*.
+              role             string    A ClusterRole: wxops:persona-* | wxops:platform-*. Never the built-in view, edit or admin.
               scope            string    owned (default) | namespaces | platform.
               namespaces       [string]  For scope "namespaces".
 
             Design:
               scope owned      Every Namespace labelled `auth.wxops.cloud/tenant-namespace: "true"` gets a RoleBinding for the persona's GROUPS whose team is the
-                               namespace's `wxops.cloud/owner` — group "<org>:<team>" belongs to owner "<team>", matched exactly (no case folding). Users and
+                               namespace's `wxops.cloud/owner` — group "<org>:<team>" belongs to owner "<team>", matched exactly (no case folding), and to the
+                               second owner the persona maps it to in `status.owners` (a team labelled `wxops.cloud/owner`, ADR-006). Users and
                                ServiceAccounts have no team, so they are bound by scope "namespaces", never here. A namespace with no matching group renders nothing.
               scope namespaces A RoleBinding in each listed namespace, for every subject.
               scope platform   One ClusterRoleBinding, for every subject. Only with a wxops:platform-* role.
@@ -104,6 +105,7 @@ spec:
             _personas = _ctxExtras.personas or []
             _persona = _personas[0] if _personas else {}
             _subjects = _get(_get(_persona, "status", {}), "subjects", [])
+            _mappedOwners = _get(_get(_persona, "status", {}), "owners", [])
             _namespaces = _ctxExtras.namespaces or []
 
             _rbacGroup = "rbac.authorization.k8s.io"
@@ -126,9 +128,13 @@ spec:
             _ownerOf = lambda ns: any -> str {
                 _get(_get(_get(ns, "metadata", {}), "labels", {}), "wxops.cloud/owner", "")
             }
+            # Every owner a group stands for: its own team, plus the one the persona maps it to.
+            _ownersOfGroup = lambda group: str -> [str] {
+                [_teamOf(group)] + [_get(m, "owner", "") for m in _mappedOwners if _get(m, "group", "") == group]
+            }
 
             # [{namespace, subjects}] — one RoleBinding each
-            _roleBindings = [{namespace = _get(_get(ns, "metadata", {}), "name", ""), subjects = [s for s in _subjects if s.kind == "Group" and _teamOf(s.name) == _ownerOf(ns)]} for ns in _namespaces if _ownerOf(ns) != ""] if scope == "owned" else [{namespace = n, subjects = _subjects} for n in listedNamespaces] if scope == "namespaces" else []
+            _roleBindings = [{namespace = _get(_get(ns, "metadata", {}), "name", ""), subjects = [s for s in _subjects if s.kind == "Group" and _ownerOf(ns) in _ownersOfGroup(s.name)]} for ns in _namespaces if _ownerOf(ns) != ""] if scope == "owned" else [{namespace = n, subjects = _subjects} for n in listedNamespaces] if scope == "namespaces" else []
             _roleBindings = [b for b in _roleBindings if len(b.subjects) > 0] if not _problems else []
             _clusterBindings = [{subjects = _subjects}] if scope == "platform" and len(_subjects) > 0 and not _problems else []
 

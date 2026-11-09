@@ -1,0 +1,9 @@
+# Owner mapping (ADR-006): the teams variable also maps payment-maintainers' group to owner payment, so its members pass the seal on payment's objects.
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPlatformPolicy
+metadata:
+  name: owner-seal-mapped
+spec:
+  parameters:
+    template: owner-seal
+    scmOrgs: [wxops-idp]

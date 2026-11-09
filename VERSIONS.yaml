@@ -199,7 +199,7 @@ packages:
     api:
       served: [v1alpha1]
       storage: v1alpha1
-    description: One reviewed Kyverno CEL policy per resource — owner-stamp, owner-seal, secret-readonly, exec-guard, protected or rbac-guard — matching SCM users only, Audit first. Kyverno refuses; it never grants.
+    description: One reviewed Kyverno CEL policy per resource — owner-stamp, owner-seal, secret-guard, exec-guard, protected, rbac-guard, sa-guard, namespace-guard or env-gate — matching SCM users only, Deny by default. Kyverno refuses; it never grants.
 
 # Utility compositions — not yet published as standalone OCI packages.
 utilities:

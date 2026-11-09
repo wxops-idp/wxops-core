@@ -33,8 +33,8 @@ spec:
                     environments:
                       type: array
                       description: |
-                        The environments (a cluster's `wxops.cloud/environment`) this persona's bindings and rules apply on.
-                        Echoed to `status.environments`; the environment gate itself arrives with the multi-cluster feature.
+                        The environments this persona's bindings and rules apply on. Echoed to `status.environments`, and enforced per namespace by the
+                        optional `env-gate` policy template (a namespace's `wxops.cloud/environment`); the per-cluster gate arrives with the multi-cluster feature.
                       items:
                         type: string
                         pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
@@ -144,3 +144,20 @@ spec:
                         type: string
                       namespace:
                         type: string
+                owners:
+                  type: array
+                  description: |
+                    Member teams mapped to a second owner by the `wxops.cloud/owner` label on their `XScmTeam` (ADR-006). A team always owns its own slug;
+                    each entry adds one more. XPersonaBinding's `scope: owned` and every XPlatformPolicy read the same mapping.
+                  items:
+                    type: object
+                    required:
+                      - group
+                      - owner
+                    properties:
+                      group:
+                        type: string
+                        description: The team's group, `<org>:<team>`.
+                      owner:
+                        type: string
+                        description: The owner it also stands for — a team slug, matched exactly.

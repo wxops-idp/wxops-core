@@ -39,7 +39,7 @@ kind: XScmTeam
 metadata:
   name: rocket-team-developers
   labels:
-    wxops.cloud/owner: rocket-team
+    wxops.cloud/owner: rocket-team        # these developers also own rocket-team's objects (ADR-006)
     # Admits this team's members through Dex once an XOIDCConnector lists the connection's org —
     # see package/auth/oidc-connector. Optional; has no effect without one.
     scm.wxops.cloud/oidc-login: "true"

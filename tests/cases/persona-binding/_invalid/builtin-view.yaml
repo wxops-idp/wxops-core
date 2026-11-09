@@ -1,0 +1,14 @@
+# expect: role
+# expect: 'view' is not one of
+#
+# The built-in view is not bindable: wxops:persona-viewers is view plus the pieces the platform adds for viewers. Bind that instead.
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPersonaBinding
+metadata:
+  name: nope
+spec:
+  parameters:
+    personaRef:
+      name: viewers
+    role: view
+    scope: owned

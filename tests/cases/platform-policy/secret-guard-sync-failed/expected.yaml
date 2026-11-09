@@ -1,13 +1,13 @@
 apiVersion: auth.wxops.cloud/v1alpha1
 kind: XPlatformPolicy
 metadata:
-  name: secret-readonly
+  name: secret-guard
 spec:
   crossplane:
     resourceRefs:
       - apiVersion: kubernetes.crossplane.io/v1alpha2
         kind: Object
-        name: 9c1d4fa7-policy
+        name: 6867a401-policy
 status:
   conditions:
     - reason: WatchCircuitClosed
@@ -16,32 +16,32 @@ status:
     - reason: ReconcileSuccess
       status: 'True'
       type: Synced
-    - message: 'Unready resources: 9c1d4fa7-policy'
+    - message: 'Unready resources: 6867a401-policy'
       reason: Creating
       status: 'False'
       type: Ready
   created: true
   policyKind: ValidatingPolicy
-  policyName: wxops-secret-readonly
+  policyName: wxops-secret-guard
   ready: false
-  syncMessage: '9c1d4fa7-policy: apply failed: cannot apply the manifest'
+  syncMessage: '6867a401-policy: apply failed: cannot apply the manifest'
   synced: false
 ---
 apiVersion: kubernetes.crossplane.io/v1alpha2
 kind: Object
 metadata:
   annotations:
-    crossplane.io/composition-resource-name: 9c1d4fa7-policy
+    crossplane.io/composition-resource-name: 6867a401-policy
   labels:
-    crossplane.io/composite: secret-readonly
-  name: 9c1d4fa7-policy
+    crossplane.io/composite: secret-guard
+  name: 6867a401-policy
   ownerReferences:
     - apiVersion: auth.wxops.cloud/v1alpha1
       blockOwnerDeletion: true
       controller: true
       kind: XPlatformPolicy
-      name: secret-readonly
-      uid: 9c1d4fa7-450d-57bc-9a95-fc704a4f75b7
+      name: secret-guard
+      uid: 6867a401-57c8-5dff-b52d-94f97031f419
 spec:
   forProvider:
     manifest:
@@ -49,10 +49,10 @@ spec:
       kind: ValidatingPolicy
       metadata:
         labels:
-          auth.wxops.cloud/policy: secret-readonly
-          auth.wxops.cloud/template: secret-readonly
+          auth.wxops.cloud/policy: secret-guard
+          auth.wxops.cloud/template: secret-guard
           wxops.cloud/managed-by: platform-policy
-        name: wxops-secret-readonly
+        name: wxops-secret-guard
       spec:
         evaluation:
           background:

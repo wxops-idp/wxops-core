@@ -1,0 +1,116 @@
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPlatformPolicy
+metadata:
+  name: owner-stamp-scoped
+spec:
+  crossplane:
+    resourceRefs:
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: b2d02c2a-policy
+status:
+  conditions:
+    - reason: WatchCircuitClosed
+      status: 'True'
+      type: Responsive
+    - reason: ReconcileSuccess
+      status: 'True'
+      type: Synced
+    - message: 'Unready resources: b2d02c2a-policy'
+      reason: Creating
+      status: 'False'
+      type: Ready
+  created: false
+  policyKind: MutatingPolicy
+  policyName: wxops-owner-stamp-scoped
+  ready: false
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: b2d02c2a-policy
+  labels:
+    crossplane.io/composite: owner-stamp-scoped
+  name: b2d02c2a-policy
+  ownerReferences:
+    - apiVersion: auth.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XPlatformPolicy
+      name: owner-stamp-scoped
+      uid: b2d02c2a-1c24-53e8-bf79-5b1b51d6acb6
+spec:
+  forProvider:
+    manifest:
+      apiVersion: policies.kyverno.io/v1
+      kind: MutatingPolicy
+      metadata:
+        labels:
+          auth.wxops.cloud/policy: owner-stamp-scoped
+          auth.wxops.cloud/template: owner-stamp
+          wxops.cloud/managed-by: platform-policy
+        name: wxops-owner-stamp-scoped
+      spec:
+        evaluation:
+          background:
+            enabled: false
+        failurePolicy: Ignore
+        matchConditions:
+          - expression: '!(request.resource.group in [''authentication.k8s.io'', ''authorization.k8s.io'', ''login.concierge.pinniped.dev'', ''identity.concierge.pinniped.dev'']) && !(request.resource.resource in [''events'', ''leases''])'
+            name: not-excluded
+          - expression: namespaceObject != null && has(namespaceObject.metadata.labels) && 'wxops.cloud/owner' in namespaceObject.metadata.labels
+            name: namespace-has-owner
+          - expression: '!(has(object.metadata.labels) && ''wxops.cloud/owner'' in object.metadata.labels)'
+            name: object-has-no-owner
+        matchConstraints:
+          excludeResourceRules:
+            - apiGroups:
+                - authentication.k8s.io
+                - authorization.k8s.io
+                - login.concierge.pinniped.dev
+                - identity.concierge.pinniped.dev
+              apiVersions:
+                - '*'
+              operations:
+                - '*'
+              resources:
+                - '*'
+            - apiGroups:
+                - ''
+                - events.k8s.io
+              apiVersions:
+                - '*'
+              operations:
+                - '*'
+              resources:
+                - events
+            - apiGroups:
+                - coordination.k8s.io
+              apiVersions:
+                - '*'
+              operations:
+                - '*'
+              resources:
+                - leases
+          namespaceSelector:
+            matchLabels:
+              auth.wxops.cloud/tenant-namespace: 'true'
+              wxops.cloud/environment: prod
+          resourceRules:
+            - apiGroups:
+                - '*'
+              apiVersions:
+                - '*'
+              operations:
+                - CREATE
+                - UPDATE
+              resources:
+                - '*'
+              scope: Namespaced
+        mutations:
+          - applyConfiguration:
+              expression: 'Object{metadata: Object.metadata{labels: {''wxops.cloud/owner'': namespaceObject.metadata.labels[''wxops.cloud/owner'']}}}'
+            patchType: ApplyConfiguration
+  providerConfigRef:
+    name: default

@@ -6,6 +6,6 @@ metadata:
   name: nope
 spec:
   parameters:
-    template: secret-readonly
+    template: secret-guard
     scmOrgs: [wxops-idp]
     mode: Warn
