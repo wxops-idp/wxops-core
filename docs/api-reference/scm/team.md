@@ -91,6 +91,14 @@ apply set.
 | `members[].role` | `string` (`member`, `maintainer`) | | `member` | GitHub only; a `maintainer` can edit most team settings and membership from GitHub's own UI. Fails the apply on Gitea if not `member`. |
 | `retain` | `boolean` | | `true` | Keep the team when the XR is deleted (orphans the `Workspace`). |
 
+## Labels W'xOps reads
+
+| Label | Value | What it does |
+|---|---|---|
+| `scm.wxops.cloud/oidc-login` | `"true"` | The team's members can sign in through Dex, and the team counts for personas and policies |
+| `auth.wxops.cloud/persona-<name>` | `"true"` | The team is a member of the [`XPersona`](../auth/persona.md) `<name>` |
+| `wxops.cloud/owner` | `<owner>` | The team also owns `<owner>`'s objects, besides its own slug — `payment-maintainers` labelled `payment` ([ADR-006](../../../development-docs/adr/006-team-owner-mapping.md)). Only the platform team writes `XScmTeam`s, so only it can map a team |
+
 ## Members and the org
 
 `members[]` places existing host users in this team. The two hosts differ on what that does to a user who is not in the org yet:

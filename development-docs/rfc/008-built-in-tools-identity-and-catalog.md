@@ -1,37 +1,38 @@
-# RFC-008: Built-in tools — one login, persona access and a catalog for Argo CD, Grafana and OpenBao, on their own native objects
+# RFC-008: Built-in tools — one login, a tenant workspace per namespace, and a catalog for Argo CD, Grafana and OpenBao
 
 ## Status
 <!-- Draft | In review | Accepted | Declined | Withdrawn | Implemented — and the GitHub issue that carries the discussion, e.g. "Draft · #42" -->
-Draft — rewritten 2026-10-24: W'xOps no longer defines a kind per tool. Each tool is configured with its own objects; W'xOps adds identity, persona access
-and a catalog. Replaces the "platform tools as APIs" draft (`XSecret*`, `XMonitoring*`, `XGitOpsProject`).
+Draft — rewritten 2026-11-08: one tenant kind, `XWorkspace`, renders each tool's **native** objects for a tenant namespace from a platform-owned
+`XWorkspaceClass`, instead of the platform team writing them by hand per team. The 2026-10-24 draft's rule "no W'xOps kind per tool" holds in its intent —
+no tool's fields are mirrored on the tenant's claim — and its tool-by-tool facts (logins, defaults, OpenBao bootstrap, the catalog) carry over below. That
+draft replaced the first one, "platform tools as APIs" (`XSecret*`, `XMonitoring*`, `XGitOpsProject`). Needs the `tenant.wxops.cloud` group, shared with
+[RFC-010](010-namespaced-tenant-kinds.md) Q1, and an ADR for it.
 
 ## Summary
 
-The platform ships three built-in tools: **Argo CD** (GitOps), **Grafana** (monitoring) and **OpenBao** (secrets). Each already has a way to be configured
-declaratively: Argo CD's `AppProject` and `argocd-rbac-cm`, Grafana's `grafana.ini` and the grafana-operator's resources, and OpenBao through Crossplane's
-`provider-vault`. W'xOps does **not** wrap any of them in a kind of its own. Mirroring a tool's concepts doubles the API, lags upstream, and hides the
-documentation people already know.
-
-What W'xOps adds is what no single tool can:
+The platform ships three built-in tools: **Argo CD** (GitOps), **Grafana** (monitoring) and **OpenBao** (secrets). Each is configured through its own
+objects — an `AppProject`, a grafana-operator `GrafanaFolder`, `provider-vault`'s managed resources for OpenBao — and those native objects stay the truth.
+What W'xOps adds:
 
 | W'xOps adds | How | Where it is defined |
 |---|---|---|
 | **One login** | An `XOIDCClient` per tool, against the platform's Dex | [RFC-004](004-dex-identity-and-portal-authentication.md) — built |
-| **Persona access** | Each tool's native grant names the SCM groups (`<org>:<team>`) of the persona that should reach it | [RFC-009](009-scm-personas.md) |
-| **A catalog** | Native objects carry `wxops.cloud/owner` and `wxops.cloud/tool`; the catalog reads them from the cluster and from Git | this RFC |
-| **A default setup** | Documented, tested bootstrap values per tool, so every installation starts the same way | this RFC, `docs/user-guide/setup.md` |
+| **A workspace per tenant** | An `XWorkspace` in the tenant's namespace renders its slice of each tool — the `AppProject`, the `GrafanaFolder`, the OpenBao policy, group and alias — from a platform `XWorkspaceClass` | this RFC |
+| **Persona access, derived** | Each native grant names the SCM groups of the teams that own the namespace, in the role of their persona — read from teams, personas and the owner mapping, never typed | [RFC-009](009-scm-personas.md), [ADR-006](../adr/006-team-owner-mapping.md) |
+| **A catalog** | Every rendered object carries `wxops.cloud/owner` and `wxops.cloud/tool`; the catalog reads them from the cluster and from Git | this RFC |
+| **A default setup** | Documented bootstrap values per tool — login, default roles — so every installation starts the same way | this RFC, `docs/user-guide/setup.md` |
 
 ## Motivation
 
-1. **Reproducing a tool's concepts is a second API to keep in step.** The first draft wrapped `AppProject` in an `XGitOpsProject` and Grafana folders in an
-   `XMonitoringFolder`. Every new upstream field would need a new W'xOps field, and users would learn two shapes for one thing.
-2. **The platform team owns each tool from bootstrap to provisioning anyway.** Grafana's `generic_oauth`, Argo CD's OIDC and RBAC config, OpenBao's init and
-   auth backends are installation decisions, made once by the people who run the platform. A W'xOps kind in front of them adds a layer, not a capability.
-3. **What is actually missing is identity, authorization and visibility.** One login exists (RFC-004). Who may do what is the persona (RFC-009). What does not
-   exist yet is a single view of *what was created in each tool, who owns it and which persona reaches it* — whether it came from GitOps or straight from the
-   cluster.
-4. **OpenBao is the one tool without native objects.** It is configured only through its HTTP API. Crossplane's `provider-vault` already gives it managed
-   resources. Its 200-odd CRDs are a cost paid once, on the hub only — spokes never configure OpenBao, they only read secrets through ESO.
+1. **Hand-written grants drift.** The previous draft had the platform team write one `AppProject`, one `GrafanaFolder` and a set of OpenBao objects per team.
+   A persona change was a hand edit in each tool (its first drawback), and three tools held three slightly different ideas of who a team is.
+2. **Access is already decided elsewhere.** Who owns a namespace (`wxops.cloud/owner`, guarded by `namespace-guard`), which teams stand for that owner (the
+   team slug, plus ADR-006's mapping) and which persona each team is in (`auth.wxops.cloud/persona-<name>`) are all in the cluster. The tool grants should
+   follow from them, the way `XPersonaBinding` follows from them for Kubernetes.
+3. **A tenant needs an isolated workspace in each tool,** and teams that cross — a maintainer team beside its product team — need the same slice without a
+   second set of hand edits.
+4. **Tenants are bootstrapped from GitOps already.** A team's `tenants/<name>/` directory holds its namespace and defaults
+   ([access model](../core-ideas/access-model.md#namespace-defaults-come-from-gitops--decided-2026-11-08)); one more object there gives it its tools.
 
 ## Detailed Design
 
@@ -39,81 +40,115 @@ What W'xOps adds is what no single tool can:
 
 | In this RFC | Not in this RFC |
 |---|---|
-| Each tool's login, default roles and default grants, as a documented setup | A W'xOps kind per tool — none |
-| How persona groups reach each tool's native grant | Who is in which persona — [RFC-009](009-scm-personas.md) |
+| `XWorkspaceClass` and `XWorkspace`, and the native objects they render | Who is in which persona — [RFC-009](009-scm-personas.md) |
+| Each tool's login, default roles and bootstrap, as a documented setup | A tool's own API surface — never mirrored |
 | The catalog: labels and what it reads | The Portal's UI — [portal integration](../../docs/user-guide/portal-integration.md) |
-| OpenBao through `provider-vault`, on the hub | Secret **values** — External Secrets Operator's alone, as today |
+| OpenBao configuration through `provider-vault`, on the hub | Secret **values** — External Secrets Operator's alone, as today |
 
 ### Principles
 
 | Rule | Why |
 |---|---|
-| **Native first.** A tool is configured with its own objects; W'xOps adds no kind that mirrors one | Upstream documentation stays the documentation; no W'xOps field lags an upstream one |
-| **One login.** Every tool logs in through Dex with an `XOIDCClient`; the `groups` claim is `<org>:<team>` | One identity, the same strings in every tool |
-| **Personas decide who.** A native grant lists the SCM groups of the persona that reaches it, never a person | Leaving a Git team removes the access in every tool at the next login |
-| **No access by default.** A new login sees nothing until a persona's groups are granted | The safe failure for a missing grant is "cannot see", not "can see everything" |
-| **Capture, don't wrap.** Native objects carry two labels; the catalog reads them | Nothing to keep in sync, and objects created outside GitOps still show up |
-| **The platform team owns each tool's bootstrap.** Login, default roles and admin credentials are installation values in GitOps | One owner for the decisions that shape every tenant's access |
+| **Native objects are the truth.** W'xOps renders them; it adds no kind that mirrors a tool | Upstream documentation stays the documentation |
+| **The tenant's claim carries no tool fields.** Tool configuration — roles, permission levels, capabilities — lives in the platform's class | The claim cannot drift into a second API, and cannot ask for more than the class offers |
+| **Groups are derived, never typed.** From the namespace's owner, the teams that stand for it (slug or ADR-006 mapping) and their personas | A tenant cannot name another team's group; leaving a Git team removes the access in every tool |
+| **No access by default.** A new login sees nothing until a workspace or the platform's defaults grant it | The safe failure for a missing grant is "cannot see" |
+| **Capture, don't wrap.** Rendered objects carry two labels; the catalog reads them | Objects made outside W'xOps still show up, as not in Git |
+| **The platform team owns each tool's bootstrap** — login, default roles, admin credentials | One owner for the decisions that shape every tenant's access |
 
-### Argo CD
+### `XWorkspaceClass` — the platform's template configuration
 
-| Concern | Native object | Default setup |
-|---|---|---|
-| Login | `argocd-cm` `oidc.config` → Dex | an `XOIDCClient` named `argocd`; `requestedScopes` include `groups` |
-| Default access | `argocd-rbac-cm` | `policy.default: ""` — no role on login; `scopes: "[groups]"`; `g, <org>:platform, role:admin` for the `platform` persona |
-| A team's deployments | one `AppProject` per team | `sourceRepos` limited to the team's repositories; `destinations` to its namespaces; **no cluster-resource allow-list** — a team that could deploy RBAC through Argo CD would step around every Kubernetes rule; never the `argocd` namespace |
-| Who may act on them | the project's `spec.roles[]` | one role per persona — `owners`, `developers`, `viewers` — each with project-scoped `policies` (`proj:<team>:<role>`) and `groups: [<org>:<team>]` on the role matching the team's persona |
-| Shared defaults | `argocd-cm` `globalProjects` | sync windows and resource deny-lists inherited by label selector, so team projects stay short |
+Cluster-scoped, in `platform.wxops.cloud`, written by the platform team only. One class per way of serving tenants (`standard`, `regulated`, …); the
+`platform` persona's own access is not here — it is each tool's bootstrap default.
 
-Persona access in Argo CD is the role a team's group sits in. A project role's `groups` is a static list — Argo CD has no selector for it — so a team that
-changes persona has its group moved to another role in its `AppProject`: a one-line change in GitOps, reviewed like any other.
+```yaml
+apiVersion: platform.wxops.cloud/v1alpha1
+kind: XWorkspaceClass
+metadata:
+  name: standard
+spec:
+  parameters:
+    argocd:
+      namespace: argocd                                   # where Argo CD runs — every tenant's AppProject is rendered here
+      sourceRepos: ["https://git.example.com/wxops-idp/{owner}-*"]   # {owner} is the workspace's owner
+      roles:                                              # per persona: project-scoped actions on applications
+        owners:     [get, sync, override, delete]
+        developers: [get, sync]
+        viewers:    [get]
+    grafana:
+      instanceSelector: {matchLabels: {dashboards: grafana}}
+      permissions: {owners: Admin, developers: Edit, viewers: View}
+    openbao:
+      mount: tenants                                      # the Vault path convention's tenant mount
+      capabilities: {owners: [read, list], developers: [read]}
+```
 
-Argo CD stays out of Kyverno ([RFC-009](009-scm-personas.md#xplatformpolicy--on-which-objects)): what it deploys is bounded by its projects and by review on
-merge.
+### `XWorkspace` — the tenant's claim
 
-### Grafana
+Namespaced, in `tenant.wxops.cloud`, one per tenant namespace, committed in the team's `tenants/<name>/` directory beside the namespace defaults. Written by
+the platform team today; tenant-writable later, bounded by the class ([open question 2](#open-questions)).
 
-| Concern | Native object | Default setup |
-|---|---|---|
-| Login | `grafana.ini` `[auth.generic_oauth]` → Dex | an `XOIDCClient` named `grafana`; the `groups` scope requested |
-| Org role | `role_attribute_path` | the `platform` group maps to `Admin`; everyone else to the lowest role, so nothing beyond what a folder grants |
-| Folders and their permissions | grafana-operator `GrafanaFolder` (`spec.permissions`) | one folder per team, permissions by role |
-| Dashboards, data sources, alerting | grafana-operator `GrafanaDashboard`, `GrafanaDatasource`, `GrafanaAlertRuleGroup`, … | as the team or platform writes them |
+```yaml
+apiVersion: tenant.wxops.cloud/v1alpha1
+kind: XWorkspace
+metadata:
+  name: payment
+  namespace: payment            # owner = this namespace's wxops.cloud/owner
+spec:
+  parameters:
+    classRef: {name: standard}
+    tools: [openbao, grafana, argocd]   # opt in per tool
+    # no owner, no groups, no roles: all derived
+```
 
-- **The login is bootstrap, not grafana-operator.** For an operator-deployed Grafana, `[auth.generic_oauth]` can go into the `Grafana` resource's `spec.config`;
-  for an external Grafana the operator cannot write `grafana.ini`, so it stays in the Helm values. Either way it is set once by the platform team.
-- **Per-team permissions are the open part.** grafana-operator has no team kind, and `GrafanaFolder.spec.permissions` is raw JSON the Grafana API interprets.
-  Filling Grafana teams from the `groups` claim (Team Sync) is listed as an Enterprise feature. Whether open source Grafana can give `wxops-idp:payment` edit on
-  the `payment` folder and nothing else — by teams managed some other way, or by one org per team — is a spike before the Grafana phase.
+**Who the workspace is for.** Its owner is its namespace's `wxops.cloud/owner`. The teams that count are every `XScmTeam` that can log in
+(`scm.wxops.cloud/oidc-login: "true"`) whose slug is that owner, or whose `wxops.cloud/owner` label maps it there (ADR-006). Each team takes the role of its
+persona (`auth.wxops.cloud/persona-<name>`) as the class names it; a team in a persona the class does not list gets nothing. The owner's namespaces are every
+namespace labelled `auth.wxops.cloud/tenant-namespace: "true"` with the same owner. A namespace with no owner renders nothing and says so.
 
-### OpenBao
+### What renders, per tool
 
-OpenBao has no Kubernetes objects of its own, so it is configured through **`provider-vault`'s managed resources**, written directly in GitOps by the platform
-team — not composed by a W'xOps package.
+All objects carry `wxops.cloud/owner: <owner>` and `wxops.cloud/tool: <tool>`, and are named after the owner.
 
-| Concern | Managed resource (`provider-vault`) | Default setup |
-|---|---|---|
-| Human login | JWT/OIDC auth backend + role | `groups_claim: groups`, through an `XOIDCClient` named `openbao` |
-| Machine login | Kubernetes auth backend per cluster + roles | `auth/kubernetes-<cluster>`, created when a cluster joins; token reviews reach the spoke's API by mesh name over mTLS ([multi-cluster](../core-ideas/multi-cluster.md#secrets-across-clusters--eso-to-openbao-over-the-mesh)); one role per consumer ServiceAccount, ESO's first. JWT/OIDC is for people only |
-| Stores | KV v2 mounts | `platform/` and `tenants/` — the [Vault path convention](../../CLAUDE.md#vault-path-convention) |
-| Persona access | ACL policy + identity group (`external`) + group alias | alias name = the SCM group string; verified by hand on 2026-10-21 |
-| ESO's way in | `ClusterSecretStore`, one per mount | written beside the mount, as today |
+| Tool | Native object | Where it lives | Content |
+|---|---|---|---|
+| **OpenBao** | `provider-vault` `Policy` per persona; external `Group` and `GroupAlias` per team | the tenant namespace — `provider-vault` v4's namespaced managed resources, through the hub's `ClusterProviderConfig` | `path "<mount>/data/<owner>/*"` and `metadata/` with the class's capabilities; the alias is the team's group string, exactly |
+| **Grafana** | grafana-operator `GrafanaFolder` `<owner>` | the tenant namespace, reaching the Grafana instance with `allowCrossNamespaceImport` | folder permissions per persona, from the class |
+| **Argo CD** | `AppProject` `<owner>` | **the class's `argocd.namespace`** — where Argo CD is deployed | `sourceRepos` from the class pattern; `destinations` = the owner's namespaces; `clusterResourceWhitelist: []`; one role per persona with its teams' groups and the class's actions as `proj:<owner>:<persona>` policies |
 
-- **On the hub only.** OpenBao's configuration is written once, where the platform runs. Spokes install no `provider-vault`; workloads there read secrets
-  through ESO, which needs only a `ClusterSecretStore`.
-- **Only the needed kinds are used** — auth, mount, policy and identity resources, a handful of the provider's 200-odd. Installing fewer is an optimisation, not
-  a prerequisite: Crossplane v2 can keep unused managed resources inactive (managed resource definitions with an activation policy) where a provider supports
-  it.
-- **Configuration, never values.** No KV-writing managed resource is used; values stay ESO's.
-- **Examples** that validate against the installed v4.1.0 CRDs: [`providers/config/examples/openbao/`](../../providers/config/examples/openbao) — mounts and a policy, OIDC login with an external group and its
-  alias, and Kubernetes auth per cluster. The provider installs all 129 of its CRDs without trouble; keeping unused ones inactive stays an optimisation.
-- **Adopting what exists.** The mounts, auth backends, groups and aliases made by hand are imported by external name, observed first, then managed.
-- **Out of band, documented as such:** `operator init`, unsealing, and the configuration credential the provider uses. The first credential of a secret store
-  cannot come from the store.
+The `AppProject` is the one object outside the tenant namespace. A namespaced XR composes only into its own namespace, so it is rendered as a namespaced
+provider-kubernetes `Object` in the tenant namespace whose manifest targets Argo CD's — the same cross-namespace write [RFC-010](010-namespaced-tenant-kinds.md)
+needs for `XDatabase`, read in the provider's code and **not yet tested** (Phase 0). If it does not hold, only this piece moves to a small cluster-scoped
+kind; OpenBao and Grafana stay in the tenant namespace.
+
+### Persona → tool access
+
+What the `standard` class gives; another class may differ. The `platform` persona is each tool's bootstrap default, not part of any workspace.
+
+| Persona | Kubernetes ([RFC-009](009-scm-personas.md)) | Argo CD (`AppProject` role) | Grafana (folder) | OpenBao (`<mount>/<owner>/`) |
+|---|---|---|---|---|
+| `viewers` | `wxops:persona-viewers` | `get` | View | — |
+| `developers` | `wxops:persona-developers` | `get`, `sync` | Edit | `read` |
+| `owners` | `wxops:persona-owners` | `get`, `sync`, `override`, `delete` | Admin | `read`, `list` |
+| `platform` | `wxops:persona-platform` | `role:admin` in `argocd-rbac-cm` | org `Admin` | admin policy |
+
+Values stay External Secrets Operator's: no rendered policy writes a secret, and the persona roles never read Secrets in Kubernetes.
+
+### Logins and bootstrap — unchanged from the previous draft
+
+| Tool | Login | Default access | Bootstrap that stays the platform team's |
+|---|---|---|---|
+| **Argo CD** | `argocd-cm` `oidc.config` → Dex; an `XOIDCClient` named `argocd`, `requestedScopes` with `groups` | `argocd-rbac-cm`: `policy.default: ""` (no role on login), `scopes: "[groups]"`, `g, <org>:platform, role:admin`; `globalProjects` for sync windows and deny-lists shared by every project | Argo CD's install and its `argocd-rbac-cm` |
+| **Grafana** | `grafana.ini` `[auth.generic_oauth]` → Dex; an `XOIDCClient` named `grafana`, the `groups` scope | `role_attribute_path`: the `platform` group → `Admin`, everyone else the lowest role — nothing beyond what a folder grants | `generic_oauth` in the `Grafana` resource's `spec.config` (operator-deployed) or Helm values (external) |
+| **OpenBao** | JWT/OIDC auth backend + role, `groups_claim: groups`, an `XOIDCClient` named `openbao`; Kubernetes auth per cluster for machines, ESO's role first | KV v2 mounts `platform/` and `tenants/` (the [Vault path convention](../../CLAUDE.md#vault-path-convention)); one `ClusterSecretStore` per mount for ESO | `operator init`, unsealing, and the configuration credential `provider-vault` uses — the first credential of a store cannot come from the store |
+
+OpenBao is configured **on the hub only**: spokes install no `provider-vault` and read secrets through ESO. Only the needed `provider-vault` kinds are used —
+auth, mount, policy and identity — and the hand-made mounts, backends, groups and aliases are adopted by external name, observed first, then managed. The
+validated examples are in [`providers/config/examples/openbao/`](../../providers/config/examples/openbao).
 
 ### The catalog
 
-Every native object a tool's grant lives in carries two labels:
+Every rendered object — and any native object made by hand that should show up — carries two labels:
 
 | Label | Value | Example |
 |---|---|---|
@@ -121,80 +156,97 @@ Every native object a tool's grant lives in carries two labels:
 | `wxops.cloud/tool` | `argocd`, `grafana`, `openbao` | `argocd` |
 
 The catalog lists them **straight from the Kubernetes API** (live state, each object's own status) and **from the GitOps repository** (desired state), joined
-on kind, name and owner. It shows, per team: what exists in each tool, whether it is in Git, in the cluster or both, its health from the object's own status,
-and which persona's groups reach it. It writes nothing back: nothing to keep in sync, and an object created by hand still appears — as one that is not in Git.
+on kind, name and owner. Per team it shows what exists in each tool, whether it is in Git, in the cluster or both, its health, and which persona's groups
+reach it. It writes nothing back; an object made by hand still appears — as one that is not in Git.
 
 ### Who writes what
 
 | Writer | Writes |
 |---|---|
 | Platform team, at bootstrap | each tool's login and default access; `provider-vault`'s credential; Argo CD's global projects |
-| Platform team, in GitOps | team `AppProject`s, `GrafanaFolder`s, OpenBao policies and groups — naming persona groups |
-| Teams, in their own repositories | dashboards, alert rules and Argo CD `Application`s, inside what their project and folder allow |
-| W'xOps Core | `XOIDCClient`s (built), personas (RFC-009) |
+| Platform team, in GitOps | `XWorkspaceClass`es; each tenant's `XWorkspace` in `tenants/<name>/`, with its namespace and defaults |
+| W'xOps Core | the rendered `AppProject`s, `GrafanaFolder`s and OpenBao objects; `XOIDCClient`s (built); personas and bindings (RFC-009) |
+| Teams, in their own repositories | Argo CD `Application`s, dashboards and alert rules, inside what their project and folder allow |
+
+### RBAC
+
+- **provider-kubernetes** gains write on `appprojects` in Argo CD's namespace only, and on `grafanafolders` — named narrowly in
+  `providers/rbac/provider-kubernetes.yaml`. These are tool grants, not Kubernetes RBAC: the rule that compositions never emit RBAC stands.
+- **provider-vault** keeps its hub `ProviderConfig` and gains the namespaced `ClusterProviderConfig` its namespaced resources reference.
+- **Nobody but the platform** writes `XWorkspaceClass` (cluster-scoped, platform group). `XWorkspace` is not in any persona role until tenants may write it.
 
 ### Compatibility and change tier
 
-No Core package and no XRD. One new Crossplane provider, `provider-vault`, installed on the hub from `providers/` — added to the reference stack, with its licence checked when pinned, as [RFC-002](002-migrate-terraform-to-opentofu.md) requires. The `appprojects` grant the first draft
-needed for `provider-kubernetes` is no longer needed.
+Two new packages — `workspace-class` (`XWorkspaceClass`, `platform.wxops.cloud`) and `workspace` (`XWorkspace`, `tenant.wxops.cloud`) — at `v1alpha1`:
+additive, `safe`. The new `tenant.wxops.cloud` group needs an ADR beside [ADR-002](../adr/002-three-api-groups.md) (three groups → four), shared with
+RFC-010. Names follow [ADR-005](../adr/005-kind-naming-x-prefix.md). `provider-vault` stays on the reference stack as today.
 
 ### Testing
 
-- **The default setup is tested as manifests:** the example `AppProject`, `argocd-rbac-cm`, `GrafanaFolder` and `provider-vault` resources are linted and
-  schema-checked like the rest of `examples/`.
-- **Not covered offline:** whether OpenBao accepts each `provider-vault` resource (it targets Vault's API), and Grafana open source's per-team permissions —
-  spikes.
+- **Golden renders** per tool and per persona mix: owners, developers and viewers teams; a team mapped by ADR-006; a team in a persona the class does not
+  list (nothing); a tool not opted in (nothing); a namespace with no owner, or a missing class (nothing rendered, `syncMessage` says why).
+- **Invariants:** every rendered object carries both catalog labels; no rendered object names a group that is not one of the owner's teams.
+- **Not covered offline:** whether OpenBao accepts each `provider-vault` resource, Grafana open source's per-team permissions, and the cross-namespace
+  `AppProject` write — the Phase 0 spikes.
 
 ## Drawbacks
 
-- **A persona change is a hand edit in Argo CD.** Project roles take a static `groups` list, so moving a team between personas moves its group in its
-  `AppProject`. Reviewed, but not generated.
+- **It partly reverses "no W'xOps kind per tool".** Bounded — the claim has no tool fields and one kind serves every tool — but the class's schema grows
+  with every tool and every role it can express.
+- **One cross-namespace write** (`AppProject` into Argo CD's namespace), resting on a spike.
 - **Grafana's per-team permissions may need Enterprise** or a workaround; until the spike settles it, folder permissions are by role.
 - **`provider-vault` targets Vault.** OpenBao is a fork; each resource used is verified against it, not assumed.
-- **One more provider to upgrade**, with 200-odd CRDs on the hub of which a handful are used.
-- **The catalog sees only labelled objects.** An unlabelled grant made by hand in a tool's UI is invisible to it.
-- **Some steps remain manual** — OpenBao init and unseal, the first admin credentials — so "all of it is GitOps" would be false.
+- **Access converges, it does not switch** — a team or persona change reaches the tools at the workspace's next reconcile.
+- **Some steps stay manual** — OpenBao init and unseal, the first admin credentials.
 
 ## Alternatives
 
-- **A W'xOps kind per tool** — `XSecret*`, `XMonitoring*`, `XGitOpsProject` (this RFC's first draft). Uniform status and one pattern, but a second API for
-  concepts every tool already has.
-- **OpenBao through OpenTofu Workspaces** (the first draft's engine). The same Terraform provider without new CRDs, but every grant is a module behind a W'xOps
-  kind, and status is per Workspace, not per object.
-- **`redhat-cop/vault-config-operator`.** About a hundred CRDs and per-namespace credentials, but another controller, it also writes secret values, and OpenBao
-  is not named.
-- **Grafana's Terraform provider** instead of grafana-operator. Covers teams, but brings back the Workspace layer for a tool that has Kubernetes resources.
-- **Role mapping in the identity provider** (Keycloak, Zitadel). Moves the mapping into a database instead of Git, and replaces Dex.
+- **The platform team writes the native objects by hand** (the 2026-10-24 draft). Nothing new to build, but every persona change is an edit in three tools,
+  and nothing keeps the three consistent.
+- **A GitOps team template** (a Kustomize component or Helm chart rendering the same objects from values). No new kind, but persona membership is written
+  twice — once on the `XScmTeam`, once in the values — and nothing reconciles them.
+- **A kind per tool** (`XGitOpsProject`, `XMonitoringFolder`, `XSecret*` — the first draft). Rejected again: each mirrors its tool's fields.
+- **A cluster-scoped `XWorkspace`.** Avoids the cross-namespace write, but the claim no longer sits in the namespace it is for, and its owner must be typed
+  instead of read from the namespace. Kept as the fallback for the Argo CD piece only.
 
 ## Rollout Plan
 
 - [x] **Spike — OpenBao OIDC login through Dex with an external group alias.** Verified 2026-10-21: the `groups` claim binds to the external group's alias.
 - [ ] **Now: document the default setup** per tool in `docs/user-guide/setup.md` — login, default access, the bootstrap steps that stay manual.
-- [ ] **Spikes.** `provider-vault`: each needed resource against OpenBao, and whether unused resources can stay inactive. Grafana's per-team folder access
-  is tried when the Grafana phase starts.
-- [ ] **Phase 1 — OpenBao** on `provider-vault`: adopt the existing mounts, auth backends, groups and aliases; replace the hand-made setup.
-- [ ] **Phase 2 — Argo CD:** `argocd-rbac-cm` defaults; the team `AppProject` template with persona roles.
-- [ ] **Phase 3 — Grafana:** `generic_oauth` defaults; grafana-operator folders per team.
-- [ ] **Phase 4 — the catalog:** the two labels on every object above; the Portal lists them from the cluster and the GitOps repository.
-- [ ] **Later** — OpenBao audit devices; OpenBao namespaces per environment, if the multi-cluster feature needs them.
+- [ ] **Phase 0 — decide and spike.** The `tenant.wxops.cloud` ADR (with RFC-010). Spikes: each `provider-vault` namespaced resource against OpenBao;
+  `GrafanaFolder` with `allowCrossNamespaceImport`; a namespaced provider-kubernetes `Object` writing an `AppProject` into Argo CD's namespace; Grafana
+  open source per-team folder access.
+- [ ] **Phase 1 — `XWorkspaceClass` and `XWorkspace` with OpenBao:** adopt the existing mounts and backends; render each tenant's policy, groups and aliases.
+- [ ] **Phase 2 — Grafana:** `generic_oauth` defaults; the `GrafanaFolder` per workspace.
+- [ ] **Phase 3 — Argo CD:** `argocd-rbac-cm` defaults; the `AppProject` per workspace, in Argo CD's namespace.
+- [ ] **Phase 4 — the catalog:** the two labels on every object; the Portal lists them from the cluster and the GitOps repository.
+- [ ] **Later** — tenant-writable workspaces; OpenBao audit devices; OpenBao namespaces per environment, if the multi-cluster feature needs them.
 
-On acceptance, an ADR: built-in tools are configured on their own native objects (and `provider-vault` for OpenBao), with no W'xOps kind per tool; W'xOps
-provides login, persona access and the catalog.
+On acceptance, an ADR: built-in tools are configured on their own native objects, rendered per tenant by one workspace kind from a platform class — no
+kind mirrors a tool.
 
 ## Open Questions
 
-Settled 2026-10-24:
+Settled 2026-10-24, still holding:
 
 1. **OpenBao namespaces — settled:** one root namespace, with the `platform/` and `tenants/` mounts and per-team prefixes. One login, one alias per group,
-   one ESO store per mount, and the Vault path convention unchanged. A namespace per environment or cluster is revisited with the multi-cluster feature, not
-   per team.
-2. **`provider-vault` — settled:** installed on the hub only; spokes read secrets through ESO. Keeping unused resources inactive is an optimisation to learn,
-   not a blocker.
-3. **Argo CD — settled:** its own `AppProject` roles and `argocd-rbac-cm`, one role per persona; no W'xOps layer over them.
+   one ESO store per mount, and the Vault path convention unchanged. A namespace per environment or cluster is revisited with the multi-cluster feature.
+2. **`provider-vault` — settled:** installed on the hub only; spokes read secrets through ESO.
 
-Still open:
+Superseded 2026-11-08:
+
+3. **Argo CD — was "its own `AppProject` roles and `argocd-rbac-cm`, one role per persona; no W'xOps layer over them".** The roles stay one per persona, but
+   the `AppProject` is now rendered by `XWorkspace`; `argocd-rbac-cm` stays the platform's bootstrap.
+
+Open:
 
 4. **Grafana per-team access** in open source — folder permissions are the goal; how far the free edition goes (teams managed outside the operator, one org
-   per team, or permissions by role only) is tried when the Grafana phase starts.
+   per team, or permissions by role only) is the Phase 0 spike.
 5. **Vault as well as OpenBao?** `provider-vault` drives both. Is an adopter on HashiCorp Vault supported, or is OpenBao the only store this repository claims?
 6. **Argo CD on another cluster** than its projects' targets — covered by the multi-cluster feature (Argo CD Agent), not here.
+7. **One OpenBao group per team, many workspaces.** An external group's alias is unique per auth mount, so a team that counts in two workspaces (its own and
+   a mapped one) needs one group with policies from both. Lean: the team's own workspace creates its group and alias; any other attaches policies through a
+   non-exclusive group-policies resource — to verify in Phase 0.
+8. **Tenant-writable workspaces** — when teams may write their own `XWorkspace`, bounded by the class, and which persona role grants it.
+9. **How a class change rolls out** — every workspace on the class re-renders at its next reconcile; whether a class needs versions (`standard-v2`) so a
+   change can be staged.

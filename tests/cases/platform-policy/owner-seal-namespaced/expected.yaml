@@ -55,7 +55,7 @@ spec:
         evaluation:
           background:
             enabled: false
-        failurePolicy: Ignore
+        failurePolicy: Fail
         matchConditions:
           - expression: '!(request.resource.group in [''authentication.k8s.io'', ''authorization.k8s.io'', ''login.concierge.pinniped.dev'', ''identity.concierge.pinniped.dev'']) && !(request.resource.resource in [''events'', ''leases''])'
             name: not-excluded
@@ -103,7 +103,7 @@ spec:
               resources:
                 - '*'
         validationActions:
-          - Audit
+          - Deny
         validations:
           - expression: (request.operation == 'DELETE' || variables.newOwner in variables.teams) && (request.operation == 'CREATE' || variables.oldOwner in variables.teams)
             messageExpression: '''auth.wxops.cloud: owner '' + (request.operation == ''DELETE'' ? variables.oldOwner : variables.newOwner) + '' is not one of your teams ['' + variables.teams.join('', '') + '']'''

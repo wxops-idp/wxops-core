@@ -9,10 +9,10 @@ apiVersion: kubernetes.crossplane.io/v1alpha2
 kind: Object
 metadata:
   annotations:
-    crossplane.io/composition-resource-name: 9c1d4fa7-policy
+    crossplane.io/composition-resource-name: 6867a401-policy
   labels:
-    crossplane.io/composite: secret-readonly
-  name: 9c1d4fa7-policy
+    crossplane.io/composite: secret-guard
+  name: 6867a401-policy
 status:
   conditions:
     - reason: Available

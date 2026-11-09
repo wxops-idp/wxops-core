@@ -78,7 +78,7 @@ spec:
         validations:
           - expression: request.operation == 'UPDATE'
             message: 'auth.wxops.cloud: Namespaces are created and deleted by the platform team'
-          - expression: 'request.operation != ''UPDATE'' || [''wxops.cloud/owner'', ''auth.wxops.cloud/tenant-namespace''].all(k, (has(object.metadata.labels) && k in object.metadata.labels ? object.metadata.labels[k] : '''') == (has(oldObject.metadata.labels) && k in oldObject.metadata.labels ? oldObject.metadata.labels[k] : ''''))'
-            message: 'auth.wxops.cloud: a Namespace''s wxops.cloud/owner and auth.wxops.cloud/tenant-namespace labels change only by the platform team'
+          - expression: 'request.operation != ''UPDATE'' || [''wxops.cloud/owner'', ''auth.wxops.cloud/tenant-namespace'', ''wxops.cloud/environment''].all(k, (has(object.metadata.labels) && k in object.metadata.labels ? object.metadata.labels[k] : '''') == (has(oldObject.metadata.labels) && k in oldObject.metadata.labels ? oldObject.metadata.labels[k] : ''''))'
+            message: 'auth.wxops.cloud: a Namespace''s wxops.cloud/owner, auth.wxops.cloud/tenant-namespace and wxops.cloud/environment labels change only by the platform team'
   providerConfigRef:
     name: default

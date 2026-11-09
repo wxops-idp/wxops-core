@@ -103,6 +103,7 @@ spec:
                 - '*'
               operations:
                 - CREATE
+                - UPDATE
               resources:
                 - '*'
               scope: Namespaced

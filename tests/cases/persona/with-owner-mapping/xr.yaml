@@ -1,0 +1,8 @@
+# Owner mapping (ADR-006): a member team labelled wxops.cloud/owner also owns that owner, published as status.owners.
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPersona
+metadata:
+  name: developers
+spec:
+  parameters:
+    description: Builds and deploys outside production

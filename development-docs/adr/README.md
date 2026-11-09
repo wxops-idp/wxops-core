@@ -28,3 +28,4 @@ RFC often produces an ADR as its residue.
 | [003](003-opentofu-workspace-engine.md) | OpenTofu as the Workspace engine, not Terraform — licensing, and why `gitea-*` was archived rather than migrated |
 | [004](004-scm-repository-vendor-field.md) | `XScmRepository` repeats `vendor` to pick a Terraform provider — providers can't be conditional in HCL |
 | [005](005-kind-naming-x-prefix.md) | Kind names are `X` plus a noun, never repeating the API group (`XPolicy`, `XApp`, `XDatabase`) — `X` marks what W'xOps defines; renames only by replacement |
+| [006](006-team-owner-mapping.md) | Owner mapping: a team owns its slug plus the owner its `XScmTeam`'s `wxops.cloud/owner` label names — read by personas, bindings and every policy |

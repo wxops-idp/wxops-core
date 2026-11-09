@@ -17,27 +17,40 @@ Design: [RFC-009](../../../development-docs/rfc/009-scm-personas.md), [RFC-005](
 
 **SCM users, and nobody else.** A caller is an SCM user when their username does not start with `system:` and they carry a group `<org>:...` for one of `scmOrgs`.
 Controllers, Crossplane, External Secrets Operator and Argo CD are never matched — they answer to their own RBAC, and Argo CD to its AppProjects and merge review.
-`exemptPersonaRef` additionally exempts a persona (the platform team).
+`exemptPersonaRef` additionally exempts a persona for good — the platform team — and `temporaryExemptPersonaRef` a second one until a set time
+([time-bound exemption](#time-bound-exemption)). A policy can carry both.
+
+**Who owns what.** An object's owner is its `wxops.cloud/owner` label, or its namespace's. A caller owns their teams' slugs — group `<org>:payment` owns
+`payment` — plus the owner each of their teams is mapped to by a `wxops.cloud/owner` label on its `XScmTeam`
+([ADR-006](../../../development-docs/adr/006-team-owner-mapping.md)). Every team that can log in is read for that mapping, in a listed org only.
+
+**Which owner label wins** (`owner-stamp`): an explicit `wxops.cloud/owner`, whoever wrote it — a person, Argo CD, Crossplane — is kept. A missing one is
+filled from the namespace, on create and on update, so an object made before the policy, or while Kyverno was down, is labelled on its next update. A
+person's explicit label must still be one of their teams (`owner-seal`); Argo CD and Crossplane are not matched by it.
 
 Background scanning is off: these policies read `request.userInfo`, which a background scan does not have. Any PolicyReports come from admission — and only
 while Kyverno's reports controller runs.
 
 > [!IMPORTANT]
-> **`mode: Audit` reports only if Kyverno's reports controller runs.** Without it, an `Audit` policy neither blocks nor visibly records anything — use `Deny`,
-> as every template was proven in. Whether the reports controller runs at all is an open question ([RFC-009 question 9](../../../development-docs/rfc/009-scm-personas.md#open-questions)).
+> **Use `mode: Deny` — the supported mode.** Admission is the third layer after login and RBAC: `Deny` refuses a write that breaks the rule, and with
+> `failurePolicy: Fail` a write Kyverno cannot check is refused too, so nothing unchecked reaches etcd. Every template was proven in `Deny`.
+> **`mode: Audit` stays available but is not supported yet**: it records only into PolicyReports, which W'xOps does not run, so an `Audit` policy neither
+> blocks nor records anything. `mode` defaults to `Deny`; `release-2026-11-04` defaulted to `Audit`, so an XR that left `mode` out starts refusing on
+> upgrade ([decision](../../../development-docs/rfc/009-scm-personas.md#deny-by-default-audit-by-choice--decided-2026-11-06)).
 
 ## Templates
 
 | `template` | Kyverno kind | Rule |
 |---|---|---|
-| `owner-stamp` | `MutatingPolicy` | A new object in a tenant namespace (`auth.wxops.cloud/tenant-namespace: "true"`) gets that namespace's `wxops.cloud/owner` label if it has none. Copies a fact, never decides one; never blocks |
+| `owner-stamp` | `MutatingPolicy` | An object created or updated in a tenant namespace (`auth.wxops.cloud/tenant-namespace: "true"`) gets that namespace's `wxops.cloud/owner` label if it has none. Copies a fact, never decides one; never blocks |
 | `owner-seal` | `ValidatingPolicy` | Create, update and delete only where the object's owner is one of the caller's teams. The owner is the object's `wxops.cloud/owner` label, or — for an unlabelled **namespaced** object — its namespace's. On update, **both** the old and the new owner must be the caller's, so nothing can be relabelled away from its team. Options: `ownerPattern`, `immutableOwner` |
-| `secret-readonly` | `ValidatingPolicy` | No create, update or delete of a `Secret`. Values come from OpenBao through External Secrets Operator. Reading is RBAC's — admission never sees a read |
+| `secret-guard` | `ValidatingPolicy` | No create, update or delete of a `Secret` by a person: Secrets are written by External Secrets Operator from OpenBao, where teams read their values. Reading Secrets in Kubernetes is RBAC's — team roles do not grant it, and admission never sees a read. Named `secret-readonly` until this release |
 | `exec-guard` | `ValidatingPolicy` | `exec`, `attach` and `port-forward` (`CONNECT`) only for the members of `personaRef`, and only in a namespace one of their teams owns |
 | `protected` | `ValidatingPolicy` | No update or delete of an object labelled `wxops.cloud/protected: "true"` |
 | `rbac-guard` | `ValidatingPolicy` | No write to a `Role`, `RoleBinding`, `ClusterRole`, `ClusterRoleBinding` or any `auth.wxops.cloud` kind. Team persona roles grant no RBAC writes; this is the second layer, for anyone holding `admin` (the platform persona, unless exempt) or a role added later |
 | `sa-guard` | `ValidatingPolicy` | A `Pod`, or a workload's pod template (Deployment, StatefulSet, DaemonSet, ReplicaSet, Job, CronJob), runs only as `default` or a ServiceAccount whose `wxops.cloud/owner` is one of the caller's teams. Reads the namespace's ServiceAccounts at admission (Kyverno's `resource.List`), so it stays a Kyverno webhook policy |
-| `namespace-guard` | `ValidatingPolicy` | No create or delete of a `Namespace`, and no change to its `wxops.cloud/owner` or `auth.wxops.cloud/tenant-namespace` label — the labels every other template trusts. Team roles cannot write Namespaces at all; this holds against any wider grant |
+| `namespace-guard` | `ValidatingPolicy` | No create or delete of a `Namespace`, and no change to its `wxops.cloud/owner`, `auth.wxops.cloud/tenant-namespace` or `wxops.cloud/environment` label — the labels every other template trusts. Team roles cannot write Namespaces at all; this holds against any wider grant |
+| `env-gate` | `ValidatingPolicy` | **Optional.** In a namespace whose `wxops.cloud/environment` is one of `environments` (say `prod`), create, update, delete, `exec`, `attach` and `port-forward` only for members of `personaRef` whose own `environments` include it. Everyone else changes that namespace through Git |
 
 Access and token reviews, Pinniped's login APIs, events and leases are never sealed — `kubectl auth can-i` and every login must keep working, so they are
 excluded twice: `excludeResourceRules`, and the `not-excluded` match condition the API server evaluates before calling Kyverno.
@@ -45,11 +58,12 @@ excluded twice: `excludeResourceRules`, and the `not-excluded` match condition t
 ### What each policy does in practice
 
 The same small cast in every example. **alice** is in team `payment`, persona `developers`. **carol** is in team `checkout`, persona `owners`. The namespace `payment-api` is owned by
-`payment`, `checkout-web` by `checkout`. ✓ goes through, ✗ is refused by the policy (in `Audit` it goes through too, and a PolicyReport records the same
-message while Kyverno's reports controller runs), ✗ (RBAC) is refused before any policy runs — the persona roles ([`XPersonaBinding`](persona-binding.md#roles)) do not grant it at all. A policy only
+`payment`, `checkout-web` by `checkout`. ✓ goes through, ✗ is refused by the policy in `Deny` (in `Audit`, not supported yet, it would go through and a PolicyReport would record the same
+message), ✗ (RBAC) is refused before any policy runs — the persona roles ([`XPersonaBinding`](persona-binding.md#roles)) do not grant it at all. A policy only
 narrows what RBAC allowed.
 
-**`owner-stamp`** — copies the namespace's owner onto what is created in it, so the label is there to compare later. Never refuses anything.
+**`owner-stamp`** — copies the namespace's owner onto what is created or updated in it without one, so the label is there to compare later. An explicit label
+is never overwritten. Never refuses anything.
 - alice creates a ConfigMap in `payment-api` with no labels → stored with `wxops.cloud/owner: payment`.
 
 **`owner-seal`** — "edit" means "edit your own". Compares the object's owner with the caller's teams.
@@ -58,7 +72,7 @@ narrows what RBAC allowed.
 - ✗ alice relabels her own Deployment `wxops.cloud/owner: checkout` — handing it to another team is refused, because the new *and* the old owner must both be hers.
 - With `ownerPattern` and `immutableOwner` (Core XRs, which have no namespace): ✗ creating an `XTenantApp` with no owner label, ✗ changing its owner later.
 
-**`secret-readonly`** — people do not write Secrets; External Secrets Operator does, from OpenBao.
+**`secret-guard`** — people do not write Secrets; External Secrets Operator does, from OpenBao. Teams write `ExternalSecret`s and read values in OpenBao.
 - ✗ alice runs `kubectl create secret generic db --from-literal=password=…` → `Secrets are written by External Secrets Operator from OpenBao, not by hand`.
 - ✓ alice creates an `ExternalSecret` that pulls it. ✗ (RBAC) alice reads a Secret: team personas read through `view`, which has none.
 - With the persona roles, no team role writes Secrets anyway — this policy is the second layer, for `admin` (the platform persona) and any role added later.
@@ -84,10 +98,17 @@ narrows what RBAC allowed.
   `ServiceAccount platform-sync is not owned by one of your teams [payment]`. Same for a Pod, StatefulSet, Job or CronJob.
 - With the persona roles, alice also cannot impersonate a ServiceAccount or request its token (RBAC) — the two together close acting as another identity.
 
+**`env-gate`** — production is changed through Git, or by the persona trusted with it. With `environments: [prod]` and `personaRef: owners`
+(`owners.environments` includes `prod`), in `payment-prod` (labelled `wxops.cloud/environment: prod`):
+- ✗ bob (`developers`) applies a Deployment, deletes a pod or runs `kubectl exec` there. ✓ the same in `payment-dev` (`dev` is not guarded).
+- ✓ alice (`owners`) applies a hotfix there — and still passes every other template: `owner-seal`, `exec-guard`, `sa-guard`.
+- ✓ Argo CD syncs the same change from Git — controllers are never matched.
+
 **`namespace-guard`** — the labels every rule trusts stay the platform team's.
 - ✗ (RBAC) alice creates a Namespace or relabels one — team roles are bound per namespace and cannot touch Namespaces.
-- ✗ anyone given Namespace rights outside the platform persona changes `payment-api`'s `wxops.cloud/owner`, removes its `auth.wxops.cloud/tenant-namespace`, or
-  creates or deletes a Namespace. ✓ the same person adds an unrelated label.
+- ✗ anyone given Namespace rights outside the platform persona changes `payment-api`'s `wxops.cloud/owner`, removes its `auth.wxops.cloud/tenant-namespace`,
+  creates or deletes a Namespace, or relabels its `wxops.cloud/environment` from `prod` to `dev` to slip past `env-gate`. ✓ the same person adds an unrelated
+  label.
 
 ### What each template generates
 
@@ -174,7 +195,7 @@ spec:
     namespaceSelector:
       matchLabels: {auth.wxops.cloud/tenant-namespace: 'true'}
     resourceRules:                     # namespaced only — a namespace selector does not apply to cluster-scoped objects
-      - {apiGroups: ['*'], apiVersions: ['*'], operations: [CREATE], resources: ['*'], scope: Namespaced}
+      - {apiGroups: ['*'], apiVersions: ['*'], operations: [CREATE, UPDATE], resources: ['*'], scope: Namespaced}  # update: labels what predates the policy
   mutations:
     - patchType: ApplyConfiguration
       applyConfiguration:
@@ -233,7 +254,7 @@ Reads as: a create needs the new owner to be yours, a delete the old one, an upd
 **With `ownerPattern` and `immutableOwner`**, for cluster-scoped Core XRs:
 
 ```yaml
-# Core XRs (RFC-005): cluster-scoped, so they must carry the owner label, may never change owner, and the label must be a team slug. Move to Deny after the audit.
+# Core XRs (RFC-005): cluster-scoped, so they must carry the owner label, may never change owner, and the label must be a team slug. Label existing Core XRs before applying it.
 apiVersion: auth.wxops.cloud/v1alpha1
 kind: XPlatformPolicy
 metadata:
@@ -260,7 +281,7 @@ the same policy gains two validations:
         auth.wxops.cloud: the wxops.cloud/owner label is immutable
 ```
 
-#### `secret-readonly`
+#### `secret-guard`
 
 The XR:
 
@@ -269,10 +290,10 @@ The XR:
 apiVersion: auth.wxops.cloud/v1alpha1
 kind: XPlatformPolicy
 metadata:
-  name: secret-readonly
+  name: secret-guard
 spec:
   parameters:
-    template: secret-readonly
+    template: secret-guard
     scmOrgs: [wxops-idp]
 ```
 
@@ -281,7 +302,7 @@ Renders:
 ```yaml
 apiVersion: policies.kyverno.io/v1
 kind: ValidatingPolicy
-metadata: {name: wxops-secret-readonly}
+metadata: {name: wxops-secret-guard}
 spec:
   # … evaluation, failurePolicy, validationActions, matchConditions (scm-user)
   matchConstraints:
@@ -466,8 +487,8 @@ spec:
 
 #### `namespace-guard`
 
-Two validations: the first refuses any create or delete, the second compares the two guarded labels before and after an update — a missing label counts as
-`''`, so removing one is a change too.
+Two validations: the first refuses any create or delete, the second compares the three guarded labels before and after an update — a missing label counts
+as `''`, so removing one is a change too.
 
 The XR:
 
@@ -500,24 +521,155 @@ spec:
     - expression: request.operation == 'UPDATE'
       message: 'auth.wxops.cloud: Namespaces are created and deleted by the platform team'
     - expression: |-
-        request.operation != 'UPDATE' || ['wxops.cloud/owner', 'auth.wxops.cloud/tenant-namespace'].all(k, (has(object.metadata.labels) && k in object.metadata.labels ? object.metadata.labels[k] : '') == (has(oldObject.metadata.labels) && k in oldObject.metadata.labels ? oldObject.metadata.labels[k] : ''))
+        request.operation != 'UPDATE' || ['wxops.cloud/owner', 'auth.wxops.cloud/tenant-namespace', 'wxops.cloud/environment'].all(k, (has(object.metadata.labels) && k in object.metadata.labels ? object.metadata.labels[k] : '') == (has(oldObject.metadata.labels) && k in oldObject.metadata.labels ? oldObject.metadata.labels[k] : ''))
       message: |-
-        auth.wxops.cloud: a Namespace's wxops.cloud/owner and auth.wxops.cloud/tenant-namespace labels change only by the platform team
+        auth.wxops.cloud: a Namespace's wxops.cloud/owner, auth.wxops.cloud/tenant-namespace and wxops.cloud/environment labels change only by the platform team
+```
+
+#### `env-gate`
+
+**Optional** — apply it only where an environment needs protecting. The API server skips every namespace whose `wxops.cloud/environment` is not listed, so
+Kyverno is called only for the guarded ones. Inside them, one validation: the caller is a member of `personaRef`, and the namespace's environment is in
+that persona's `status.environments`. A persona with no `environments` may act nowhere guarded; a missing persona lets nobody, and `syncMessage` says so.
+Add a `namespaceSelector` to narrow it further — it is added to the environment rule, never replaces it.
+
+The XR:
+
+```yaml
+# Production namespaces change through Git, or by members of `owners` (whose environments include prod).
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPlatformPolicy
+metadata:
+  name: env-gate
+spec:
+  parameters:
+    template: env-gate
+    scmOrgs: [wxops-idp]
+    environments: [prod]
+    personaRef:
+      name: owners
+    exemptPersonaRef:
+      name: platform
+```
+
+Renders:
+
+```yaml
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata: {name: wxops-env-gate}
+spec:
+  # … evaluation, failurePolicy, validationActions, matchConditions (not-excluded, scm-user, not-exempt), excludeResourceRules
+  matchConstraints:
+    namespaceSelector:
+      matchExpressions:
+        - {key: wxops.cloud/environment, operator: In, values: [prod]}
+    resourceRules:
+      - {apiGroups: ['*'], apiVersions: ['*'], operations: [CREATE, UPDATE, DELETE], resources: ['*'], scope: Namespaced}
+      - {apiGroups: [''], apiVersions: ['*'], operations: [CONNECT], resources: [pods/exec, pods/attach, pods/portforward], scope: Namespaced}
+  variables:
+    - name: nsEnv                      # the namespace's wxops.cloud/environment
+  validations:
+    - expression: |-
+        (request.userInfo.groups.exists(g, g in ['wxops-idp:owners']) || request.userInfo.username in ['alice']) && variables.nsEnv in ['staging', 'prod']
+      messageExpression: "'auth.wxops.cloud: ' + variables.nsEnv + ' is a guarded environment — changes here are for members of persona owners …'"
 ```
 
 ## spec.parameters
 
 | Field | Type | Default | Notes |
 |---|---|---|---|
-| `template` | enum | — (required) | One of the eight above |
-| `mode` | `Audit` \| `Deny` | `Audit` | `Deny` refuses. `Audit` lets the request through and records a PolicyReport — only while Kyverno's reports controller runs. Ignored by `owner-stamp` |
+| `template` | enum | — (required) | One of the nine above |
+| `mode` | `Deny` \| `Audit` | `Deny` | `Deny`, the supported mode, refuses and fails closed. `Audit` lets the request through and records a PolicyReport — not supported yet, since W'xOps runs no reports controller. Ignored by `owner-stamp` |
 | `scmOrgs` | `[string]` | — (required, non-empty) | The orgs whose groups make a caller an SCM user — the same as the `XOIDCConnector`'s |
-| `personaRef.name` | `string` | `""` | `exec-guard` only, and required there: the persona that may exec |
-| `exemptPersonaRef.name` | `string` | `""` | A persona the policy does not apply to. Empty: nobody is exempt |
+| `personaRef.name` | `string` | `""` | `exec-guard` and `env-gate` only, and required there: the persona that may exec, or change a guarded environment |
+| `environments` | `[string]` | — | `env-gate` only, and required there: the environments it guards — namespaces whose `wxops.cloud/environment` is one of these |
+| `exemptPersonaRef.name` | `string` | `""` | A persona the policy does not apply to, for good, on any validating template — never reaches Kyverno. Empty: nobody is exempt |
+| `temporaryExemptPersonaRef.name` | `string` | `""` | A second persona exempt until `until`, beside the standing one — someone let past the rule while they debug. A missing persona, or a name without `until`, exempts nobody |
+| `temporaryExemptPersonaRef.until` | `string` (RFC 3339, UTC) | — | Required with a name: when the exemption ends, e.g. `2026-11-06T18:00:00Z`. See [Time-bound exemption](#time-bound-exemption) |
+| `namespaceSelector` | label selector | — | The policy applies only in matching namespaces — see [Scope per template](#scope-per-template) |
 | `ownerPattern` | `string` | — | `owner-seal` only: the owner label must match this RE2 pattern — the team-slug pattern for Core XRs |
 | `immutableOwner` | `boolean` | `false` | `owner-seal` only: the owner may not change on update, not even between the caller's own teams |
 
-`failurePolicy` is `Fail` in `Deny` mode and `Ignore` in `Audit`, so a Kyverno outage never blocks anything while a policy is only being watched.
+`failurePolicy` is `Fail` in `Deny` mode and `Ignore` in `Audit`: a `Deny` policy refuses what Kyverno cannot check, so run Kyverno in high availability
+([Kyverno's guide](https://kyverno.io/docs/guides/high-availability/) — at least three admission-controller replicas). `owner-stamp` is always `Ignore`.
+
+### Scope per template
+
+A policy is cluster-wide unless it carries a `namespaceSelector` — a standard label selector:
+
+```yaml
+spec:
+  parameters:
+    template: exec-guard
+    scmOrgs: [wxops-idp]
+    personaRef: {name: owners}
+    namespaceSelector:
+      matchLabels: {wxops.cloud/environment: prod}
+      matchExpressions:
+        - {key: wxops.cloud/sandbox, operator: DoesNotExist}
+```
+
+- A namespaced object is matched by its namespace's labels, a `Namespace` by its own.
+- **A cluster-scoped object is never skipped** by a namespace selector, so `owner-seal` on Core XRs and `rbac-guard`'s `ClusterRoleBinding`s still apply
+  everywhere.
+- `owner-stamp` keeps `auth.wxops.cloud/tenant-namespace: "true"` on top of the selector — a selector narrows it, never widens it past tenant namespaces.
+- Kyverno itself skips `kube-system` and `kyverno` for every policy, whatever the selector says.
+
+### Time-bound exemption
+
+To let someone past a policy while they debug, put them in a small persona and name it in `temporaryExemptPersonaRef` with `until`. It sits beside the
+standing `exemptPersonaRef`, so the platform team keeps its exemption meanwhile. It ends on its own — Kyverno compares `until` with `time.now()` on every
+request, so nothing is recomposed, and past it the policy applies to the persona like everyone else:
+
+```yaml
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPlatformPolicy
+metadata:
+  name: protected
+spec:
+  parameters:
+    template: protected
+    scmOrgs: [wxops-idp]
+    exemptPersonaRef:
+      name: platform                   # for good
+    temporaryExemptPersonaRef:
+      name: debug-payment              # an XPersona holding only who needs it
+      until: "2026-11-06T18:00:00Z"    # UTC; after this, refused like everyone else
+```
+
+**The exemption only gets past the policy — RBAC still decides first.** Pick a template whose refused action the persona's role allows: `protected`
+blocks edits to labelled ConfigMaps a team may otherwise change. Exempting a team persona from `secret-guard` does nothing — team roles cannot write
+Secrets at all, so RBAC refuses before Kyverno is asked (`secrets is forbidden: …`, not a policy message).
+
+**Generating `until`.** RFC 3339 in UTC, ending in `Z`, without fractions — the format the field's pattern accepts:
+
+| Where | Command | Prints |
+|---|---|---|
+| Linux (GNU `date`), from now | `date -u -d '+2 hours' +%Y-%m-%dT%H:%M:%SZ` | `2026-11-06T18:00:00Z` |
+| Linux, a fixed time | `date -u -d '2026-11-06 18:00' +%Y-%m-%dT%H:%M:%SZ` | `2026-11-06T18:00:00Z` |
+| macOS (BSD `date`) | `date -u -v+2H +%Y-%m-%dT%H:%M:%SZ` | `2026-11-06T18:00:00Z` |
+| Anywhere with Python | `python3 -c "from datetime import *; print((datetime.now(timezone.utc)+timedelta(hours=2)).strftime('%Y-%m-%dT%H:%M:%SZ'))"` | `2026-11-06T18:00:00Z` |
+
+Two forms look right and are refused: `date -Iseconds` prints `…+00:00` instead of `Z`, and a local time with an offset (`2026-11-07T01:00:00+07:00`) is
+valid RFC 3339 but not UTC. Policies live in Git, so set the value in the manifest and merge it — a `kubectl patch` is undone by Argo CD's self-heal:
+
+```bash
+until=$(date -u -d '+2 hours' +%Y-%m-%dT%H:%M:%SZ)
+yq -i ".spec.parameters.temporaryExemptPersonaRef = {\"name\": \"debug-payment\", \"until\": \"$until\"}" policies/protected.yaml
+git commit -am "chore: debug exemption for payment until $until"
+```
+
+Past `until` the exemption simply stops applying; the stale entry in Git is harmless — remove it in the next change.
+
+**Add the timed exemption to the policy that refuses — never as a second policy.** Every matching policy must allow a request: a second `protected` with
+the debug persona exempt does not loosen the first, which still refuses. That is what the second slot is for.
+
+**How the two differ:** the standing exemption is a match condition — the persona's requests never reach Kyverno. The temporary one cannot be — match
+conditions run in the API server, which has no clock function — so the composition wraps each validation instead:
+`((<the temporary persona's groups or users>) && time.now() < timestamp('<until>')) || (<the rule>)`. While it lasts, that persona's requests reach Kyverno
+and, under `failurePolicy: Fail`, wait on it. An exemption only gets past a rule; it grants no RBAC — more verbs come from
+[`XPersonaBinding`](persona-binding.md).
 
 A **missing persona makes a policy stricter, never looser**: `exec-guard` then allows nobody and an exemption disappears. The policy is still rendered, with `synced: false`
 and the reason in `syncMessage`.
@@ -561,6 +713,8 @@ kubeconfig that may impersonate (cluster-admin does), the three `auth` packages 
 cd examples/auth/platform-policy/scenarios
 ./run.sh setup      # in stages: namespaces + personas, bindings, then each template in Deny one at a time — then nginx in each namespace
 ./run.sh test       # 50 rows: allow, refused by a policy, or refused by RBAC first
+./run.sh mapping    # owner mapping end to end: a team mapped to team-a gets its binding and passes owner-seal, then loses both — cleans up after
+./run.sh env-gate   # B labelled prod: only the persona trusted with prod changes it by hand; out of scope, persona narrowed, persona missing — cleans up after
 ./run.sh compare    # your platform persona vs your own kubeconfig, by `kubectl auth can-i` — writes nothing
 ./run.sh teardown   # the sandbox, the Dex users and any open session
 
@@ -586,6 +740,18 @@ SESSION=alice ./run.sh test       # alice's rows only
   [`namespace-editor.yaml`](../../../examples/auth/platform-policy/scenarios/namespace-editor.yaml) gives team-b Namespace writes (test-only RBAC, created and removed
   as you), so `namespace-guard` is what stops bob. Other rows check what the persona roles no longer grant: impersonating a ServiceAccount, requesting its
   token, creating ServiceAccounts, Pods, RoleBindings or Secrets, reading Secrets.
+- **The owner mapping** ([ADR-006](../../../development-docs/adr/006-team-owner-mapping.md)) has its own command, `mapping`, against
+  [`mapping.yaml`](../../../examples/auth/platform-policy/scenarios/mapping.yaml): a team `team-a-ops` labelled `wxops.cloud/owner: team-a`, played by
+  `carol`. The sandbox has no Git host, so the team is **paused** from its first apply — Crossplane never composes it — and the script writes the
+  `status.oidcGroup` a real team would publish. Rows: the persona's `status.owners`, the RoleBinding in A and none in B, `owner-seal` re-rendered with the map,
+  carol allowed in A; then the label removed and carol refused in A **by `owner-seal`** — she keeps RBAC there through a second binding, so the refusal is
+  the policy's. Each step waits for the re-render; the mapping converges, it does not switch.
+- **`env-gate`** has its own command too, against [`env-gate.yaml`](../../../examples/auth/platform-policy/scenarios/env-gate.yaml): `wxops-sbx-b`
+  labelled `wxops.cloud/environment: prod`, a persona `sbx-prod` holding only bob, and the gate on `prod`. B is team-b's, so `owner-seal` lets team-b write
+  there and every refusal is the gate's: `dan` (team-b, not in `sbx-prod`) is refused, bob, paula (exempt) and *you* pass, and bob cannot relabel B to
+  `dev` (`namespace-guard`). Then three edges: with the label removed dan passes at once — the API server reads the namespace's labels on every request;
+  with `sbx-prod` narrowed to `staging` bob is refused after the re-render; with a persona that does not exist nobody passes, and `syncMessage` says so.
+  `exec` is left out: `exec-guard` already refuses both in B, so it would not tell the two policies apart.
 - **A row that fails is a finding**, not a script error: it prints the first line of what the API server answered. `exec-guard`'s rows are the ones to
   watch: they exec into nginx and port-forward to its Service, fetching the page through the tunnel, and whether Kyverno sees `CONNECT` for
   `pods/exec` and `pods/portforward` is still an [RFC-009 spike](../../../development-docs/rfc/009-scm-personas.md#acceptance-matrix).

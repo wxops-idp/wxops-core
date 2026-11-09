@@ -1,0 +1,15 @@
+# Both exemptions on one policy: the platform team for good (a match condition, never reaches Kyverno) and debug-alice until `until`
+# (checked inside each validation with Kyverno's time.now()). Without the second slot, a timed grant would have to replace the standing one.
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPlatformPolicy
+metadata:
+  name: temporary-exempt
+spec:
+  parameters:
+    template: protected
+    scmOrgs: [wxops-idp]
+    exemptPersonaRef:
+      name: platform
+    temporaryExemptPersonaRef:
+      name: debug-alice
+      until: "2026-12-01T00:00:00Z"

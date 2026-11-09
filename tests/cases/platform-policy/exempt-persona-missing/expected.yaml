@@ -57,7 +57,7 @@ spec:
         evaluation:
           background:
             enabled: false
-        failurePolicy: Ignore
+        failurePolicy: Fail
         matchConditions:
           - expression: '!request.userInfo.username.startsWith(''system:'') && request.userInfo.groups.exists(g, [''wxops-idp:''].exists(p, g.startsWith(p)))'
             name: scm-user
@@ -87,7 +87,7 @@ spec:
               resources:
                 - '*'
         validationActions:
-          - Audit
+          - Deny
         validations:
           - expression: 'false'
             message: 'auth.wxops.cloud: bindings are written by XPersonaBinding and personas and policies by the platform team, not by hand'

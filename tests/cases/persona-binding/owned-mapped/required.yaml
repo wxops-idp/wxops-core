@@ -1,0 +1,36 @@
+# Fixture for `crossplane composition render --required-resources`: the XPersona and the tenant Namespaces. See kcl/persona-binding/main.k.
+#
+# payment-api  — owned by payment: bound for wxops-idp:payment (its slug) AND wxops-idp:payment-maintainers (mapped to payment)
+# checkout-web — owned by checkout: bound for wxops-idp:checkout only — payment-maintainers is mapped to payment, not to checkout
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPersona
+metadata:
+  name: developers
+  labels:
+    crossplane.io/composite: developers
+spec:
+  parameters:
+    description: Builds and deploys outside production
+status:
+  subjects:
+    - {kind: Group, name: "wxops-idp:checkout", apiGroup: rbac.authorization.k8s.io}
+    - {kind: Group, name: "wxops-idp:payment", apiGroup: rbac.authorization.k8s.io}
+    - {kind: Group, name: "wxops-idp:payment-maintainers", apiGroup: rbac.authorization.k8s.io}
+  owners:
+    - {group: "wxops-idp:payment-maintainers", owner: payment}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: payment-api
+  labels:
+    auth.wxops.cloud/tenant-namespace: "true"
+    wxops.cloud/owner: payment
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: checkout-web
+  labels:
+    auth.wxops.cloud/tenant-namespace: "true"
+    wxops.cloud/owner: checkout

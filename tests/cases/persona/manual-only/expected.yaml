@@ -20,6 +20,7 @@ status:
   environments: []
   groups:
     - wxops-idp:platform
+  owners: []
   ready: true
   subjects:
     - apiGroup: rbac.authorization.k8s.io

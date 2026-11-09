@@ -14,4 +14,31 @@
 # An entry without a reason is ignored. `make release` requires release notes
 # while any entry is in use and clears this list in the release commit — an
 # allowance covers one release, never a standing exemption.
-allow: []
+allow:
+  - package: persona-binding
+    rule: enum-narrowed
+    path: v1alpha1.spec.parameters.role
+    reason: >-
+      The built-in `view` is no longer bindable — `wxops:persona-viewers` is `view` plus the pieces the platform adds for viewers, so it replaces it.
+      No example, test or doc binds `view`; check live clusters before upgrading (an XPersonaBinding with `role: view` stops validating):
+      kubectl get xpersonabindings -o jsonpath='{range .items[*]}{.metadata.name} {.spec.parameters.role}{"\n"}{end}' | grep -w view
+  - package: platform-policy
+    rule: enum-narrowed
+    path: v1alpha1.spec.parameters.template
+    reason: >-
+      Template renamed secret-readonly → secret-guard: the old name read as "people may read Secrets", while the rule only refuses writes (Secrets come from External Secrets Operator; teams read values in OpenBao). The rendered Kyverno policy is named after the XR, so enforcement is not interrupted. Before upgrading, switch every XPlatformPolicy using it: kubectl get xplatformpolicies -o jsonpath='{range .items[*]}{.metadata.name} {.spec.parameters.template}{"\n"}{end}' | grep -w secret-readonly
+  - package: platform-policy
+    rule: replay-invalid
+    path: tests/cases/platform-policy/secret-readonly/xr.yaml
+    reason: >-
+      Template renamed secret-readonly → secret-guard: the old name read as "people may read Secrets", while the rule only refuses writes (Secrets come from External Secrets Operator; teams read values in OpenBao). The rendered Kyverno policy is named after the XR, so enforcement is not interrupted. Before upgrading, switch every XPlatformPolicy using it: kubectl get xplatformpolicies -o jsonpath='{range .items[*]}{.metadata.name} {.spec.parameters.template}{"\n"}{end}' | grep -w secret-readonly
+  - package: platform-policy
+    rule: replay-invalid
+    path: tests/cases/platform-policy/secret-readonly-ready/xr.yaml
+    reason: >-
+      Template renamed secret-readonly → secret-guard: the old name read as "people may read Secrets", while the rule only refuses writes (Secrets come from External Secrets Operator; teams read values in OpenBao). The rendered Kyverno policy is named after the XR, so enforcement is not interrupted. Before upgrading, switch every XPlatformPolicy using it: kubectl get xplatformpolicies -o jsonpath='{range .items[*]}{.metadata.name} {.spec.parameters.template}{"\n"}{end}' | grep -w secret-readonly
+  - package: platform-policy
+    rule: replay-invalid
+    path: tests/cases/platform-policy/secret-readonly-sync-failed/xr.yaml
+    reason: >-
+      Template renamed secret-readonly → secret-guard: the old name read as "people may read Secrets", while the rule only refuses writes (Secrets come from External Secrets Operator; teams read values in OpenBao). The rendered Kyverno policy is named after the XR, so enforcement is not interrupted. Before upgrading, switch every XPlatformPolicy using it: kubectl get xplatformpolicies -o jsonpath='{range .items[*]}{.metadata.name} {.spec.parameters.template}{"\n"}{end}' | grep -w secret-readonly

@@ -1,0 +1,27 @@
+# Fixture for `crossplane composition render --required-resources`: the standing exempt persona and the temporary one, each a single named lookup via
+# the "crossplane.io/composite" label. See kcl/platform-policy/main.k.
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPersona
+metadata:
+  name: platform
+  labels:
+    crossplane.io/composite: platform
+spec:
+  parameters:
+    description: Takes responsibility across every org, team and cluster
+status:
+  subjects:
+    - {kind: Group, name: "wxops-idp:platform", apiGroup: rbac.authorization.k8s.io}
+---
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPersona
+metadata:
+  name: debug-alice
+  labels:
+    crossplane.io/composite: debug-alice
+spec:
+  parameters:
+    description: alice, while she debugs the payment checkout
+status:
+  subjects:
+    - {kind: User, name: alice, apiGroup: rbac.authorization.k8s.io}

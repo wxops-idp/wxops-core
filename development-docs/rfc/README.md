@@ -48,6 +48,6 @@ problem statement* → *Motivation*.
 | [005](005-git-mapped-authorization.md) | Authorization mapped one-to-one to Git — who owns each Core XR, and the rules that seal it | Implemented (Phase 1) |
 | [006](006-cloudflare-r2-object-storage-and-backup.md) | Cloudflare R2 as the first third-party service — provisioned backup and object storage | Draft |
 | [007](007-package-layout-by-api-group.md) | Package layout by API group, with a Kustomization per category | Implemented |
-| [008](008-built-in-tools-identity-and-catalog.md) | Built-in tools — one login, persona access and a catalog for Argo CD, Grafana and OpenBao, on their own native objects | Draft |
+| [008](008-built-in-tools-identity-and-catalog.md) | Built-in tools — one login, a tenant workspace per namespace, and a catalog for Argo CD, Grafana and OpenBao | Draft (rewritten 2026-11-08) |
 | [009](009-scm-personas.md) | SCM Personas — Persona, Binding and Policy: RBAC and ABAC from the SCM login to Kubernetes guardrails | Implemented (Phases 1–3) |
 | [010](010-namespaced-tenant-kinds.md) | Namespaced tenant kinds — `XApp` and `XDatabase` in the tenant's namespace, so the namespace decides who owns them | Draft |

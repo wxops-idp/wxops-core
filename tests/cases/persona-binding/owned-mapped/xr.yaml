@@ -1,0 +1,10 @@
+# Owner mapping (ADR-006): payment-maintainers is mapped to owner payment, so it is bound in payment's namespace beside payment itself.
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPersonaBinding
+metadata:
+  name: developers-edit
+spec:
+  parameters:
+    personaRef:
+      name: developers
+    role: wxops:persona-developers
