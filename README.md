@@ -53,9 +53,9 @@ actually executes underneath (HCL run in-cluster against a Gitea or GitHub provi
 | [`oidc-static-password`](package/auth/oidc-static-password/) | `XOIDCStaticPassword` | `auth.wxops.cloud` | `v1alpha1` | `release-2026-10-16` |
 | [`oidc-client`](package/auth/oidc-client/) | `XOIDCClient` | `auth.wxops.cloud` | `v1alpha1` | `release-2026-10-16` |
 | [`oidc-connector`](package/auth/oidc-connector/) | `XOIDCConnector` | `auth.wxops.cloud` | `v1alpha1` | `release-2026-10-16` |
-| [`persona`](package/auth/persona/) | `XPersona` | `auth.wxops.cloud` | `v1alpha1` | `release-2026-11-04` |
-| [`persona-binding`](package/auth/persona-binding/) | `XPersonaBinding` | `auth.wxops.cloud` | `v1alpha1` | `release-2026-11-04` |
-| [`platform-policy`](package/auth/platform-policy/) | `XPlatformPolicy` | `auth.wxops.cloud` | `v1alpha1` | `release-2026-11-04` |
+| [`persona`](package/auth/persona/) | `XPersona` | `auth.wxops.cloud` | `v1alpha1` | `release-2026-11-09` |
+| [`persona-binding`](package/auth/persona-binding/) | `XPersonaBinding` | `auth.wxops.cloud` | `v1alpha1` | `release-2026-11-09` |
+| [`platform-policy`](package/auth/platform-policy/) | `XPlatformPolicy` | `auth.wxops.cloud` | `v1alpha1` | `release-2026-11-09` |
 <!-- packages-table-end -->
 
 > [!NOTE]

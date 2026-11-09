@@ -19,6 +19,28 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 > latest state.
 
 ---
+## [release-2026-11-09] — 2026-11-09
+
+### Breaking Changes
+
+- **auth**: Deny by default, owner mapping, policy scope, env-gate and temporary exemptions; secret-guard, no bindable view ⚠️ **BREAKING** ([`e891dd2`](https://github.com/wxops-idp/wxops-core/commit/e891dd2d97c06bc3afae81e764fba445f640b688))
+
+
+### Documentation
+
+- **rfc**: Rewrite RFC-008 — a tenant workspace per namespace ([`57c6f9b`](https://github.com/wxops-idp/wxops-core/commit/57c6f9bf43925c5b6dc6e0a491db52e67f23e5d6))
+- **auth**: Deny by default, Kyverno HA setup, owner mapping (ADR-006), GitOps namespace defaults and onboarding labels ([`71d130d`](https://github.com/wxops-idp/wxops-core/commit/71d130d9ed186fa656a6da879cf6ca38439c0f75))
+- Add ADR-005 kind naming and RFC-010 namespace tenant kind ([`fe0d946`](https://github.com/wxops-idp/wxops-core/commit/fe0d9466edf5d21c3ecd59a2b36240ecc10a94aa))
+
+
+### Testing
+
+- Sandbox scenarios for owner mapping and env-gate ([`4db86fc`](https://github.com/wxops-idp/wxops-core/commit/4db86fc147b65ec12c9ec679db7ed59a738751c3))
+
+
+
+📖 [API reference](https://github.com/wxops-idp/wxops-core/tree/release-2026-11-09/docs) · [`VERSIONS.yaml`](https://github.com/wxops-idp/wxops-core/blob/release-2026-11-09/VERSIONS.yaml)
+🔍 [Diff vs release-2026-11-04](https://github.com/wxops-idp/wxops-core/compare/release-2026-11-04...release-2026-11-09)
 ## [release-2026-11-04] — 2026-11-04
 
 ### Documentation
@@ -353,6 +375,7 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 
 📖 [API reference](https://github.com/wxops-idp/wxops-core/tree/v0.1.0/docs) · [`VERSIONS.yaml`](https://github.com/wxops-idp/wxops-core/blob/v0.1.0/VERSIONS.yaml)
 ---
+[release-2026-11-09]: https://github.com/wxops-idp/wxops-core/releases/tag/release-2026-11-09
 [release-2026-11-04]: https://github.com/wxops-idp/wxops-core/releases/tag/release-2026-11-04
 [release-2026-10-16]: https://github.com/wxops-idp/wxops-core/releases/tag/release-2026-10-16
 [release-2026-10-09]: https://github.com/wxops-idp/wxops-core/releases/tag/release-2026-10-09
@@ -373,5 +396,5 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 [0.2.0]: https://github.com/wxops-idp/wxops-core/releases/tag/v0.2.0
 [0.1.1]: https://github.com/wxops-idp/wxops-core/releases/tag/v0.1.1
 [0.1.0]: https://github.com/wxops-idp/wxops-core/releases/tag/v0.1.0
-[Unreleased]: https://github.com/wxops-idp/wxops-core/compare/release-2026-11-04...HEAD
+[Unreleased]: https://github.com/wxops-idp/wxops-core/compare/release-2026-11-09...HEAD
 

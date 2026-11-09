@@ -134,8 +134,13 @@ read it.
 
 ### Rollout safety
 
-- **Label first.** Existing XRs carry no owner label; label them — a one-time change — before a rule moves to `Deny`. `Audit` shows what would be refused only
-  while Kyverno's reports controller runs ([RFC-009 open question 9](009-scm-personas.md#open-questions)).
+- **Label first.** Existing XRs carry no owner label; label them — a one-time change — before a rule moves to `Deny`.
+- **No audit phase — 2026-11-09.** This RFC's rollout was "audit first": run a rule in `Audit`, read the PolicyReports, then enforce. W'xOps runs no
+  PolicyReports and `Audit` is not supported ([RFC-009 decision](009-scm-personas.md#deny-by-default-audit-by-choice--decided-2026-11-06)), so that step
+  shows nothing. It is replaced by an **inventory**: list what a rule would refuse before enabling it — for the owner label,
+  `kubectl get xtenantapps,xtenantdatabases -L wxops.cloud/owner` shows every Core XR still unlabelled — label at the source (Git or the Portal), and only
+  then apply the rule, in `Deny`. A namespace selector cannot stage it either: Core XRs are cluster-scoped, and a selector never skips a cluster-scoped
+  object. For one person who must keep working meanwhile, a `temporaryExemptPersonaRef` on the rule, with `until`, is the bridge.
 - **`failurePolicy: Fail`** for rules 1–4: if Kyverno is down, people's writes to Core kinds are refused — the correct failure for an authorization control.
   System writes stay unaffected, proven by RFC-009's failure spike; a graceful Kyverno shutdown deletes its webhooks instead, so Kyverno runs in high
   availability ([results](009-scm-personas.md#spike-and-acceptance-results-2026-11-04)).
@@ -143,8 +148,8 @@ read it.
 
 ### Compatibility and change tier
 
-No XRD changes. The required label is a behaviour change to how existing XRs are admitted, so it ships with hand-written release notes and the audit-first
-rollout above. The rules ship in RFC-009's `platform-policy` package; `environment-gate` and `oidc-redirect-domains` are added to its template set.
+No XRD changes. The required label is a behaviour change to how existing XRs are admitted, so it ships with hand-written release notes and the
+label-first rollout above. The rules ship in RFC-009's `platform-policy` package; `environment-gate` and `oidc-redirect-domains` are added to its template set.
 
 ### Testing
 
@@ -205,10 +210,14 @@ Each phase rides on an [RFC-009 phase](009-scm-personas.md#rollout-plan):
   three W'xOps groups (`providers/rbac/aggregate-platform.yaml`) — read every kind, write the tenant kinds, write the platform-only kinds — and bound by
   `XPersonaBinding` with `scope: platform` (RFC-009 Phase 2). Live on the hub as the `platform` persona's `wxops:platform-admin` binding.
 - [ ] **Phase 2 — the label.** `owner-seal`'s Core options are built — `ownerPattern` and `immutableOwner`, with a golden case (`owner-seal-core`) and an
-  example on the [API page](../../docs/api-reference/auth/platform-policy.md#owner-seal) (RFC-009 Phase 3). Still to do: label the existing Core XRs, then
-  apply it in `Deny` — `Audit` reports only while Kyverno's reports controller runs (RFC-009 open question 9).
+  example on the [API page](../../docs/api-reference/auth/platform-policy.md#owner-seal) (RFC-009 Phase 3). Still to do: the inventory, label the existing Core XRs, then
+  apply it in `Deny` — no `Audit` step ([rollout safety](#rollout-safety)). For the tenant kinds this phase may shrink to nothing:
+  [RFC-010](010-namespaced-tenant-kinds.md)'s namespaced `XApp` and `XDatabase` take their owner from the namespace, so only the platform-run Core XRs
+  would still need a label.
 - [ ] **Phase 3 — the Portal.** Impersonation, so the Portal's writes are the person's.
-- [ ] **Phase 4 — environments and OIDC redirects.** `environment-gate` and `oidc-redirect-domains`, audit first.
+- [ ] **Phase 4 — environments and OIDC redirects.** `environment-gate` and `oidc-redirect-domains`, inventory first, then `Deny` (no audit phase). The
+  per-namespace environment gate now exists as `env-gate` (RFC-009, `release-2026-11-09`); what is left here is the gate on a Core XR's own
+  `environment` field.
 - [ ] **The Argo path, outside Kyverno** — team `AppProject`s and CODEOWNERS, per [RFC-008](008-built-in-tools-identity-and-catalog.md#argo-cd).
 
 On acceptance, ADRs for: the Git team slug as the tenant identifier, and cluster-scoped Core kinds sealed by owner.
@@ -223,7 +232,8 @@ Settled:
 4. **Who may label? — settled.** Rule 3 makes the first write safe: a person can only label with one of their own teams. Onboarding — creating a team's
    `XScmTeam` and its first XRs — is the `platform` persona's.
 5. **`gitea-*` kinds — settled.** Archived, never run; they take no label.
-6. **Audit — settled** by [RFC-009](009-scm-personas.md#audit): the API server audit log, shipped to Loki, is the record; PolicyReports are optional
+6. **Audit — settled** by [RFC-009](009-scm-personas.md#audit): the API server audit log, shipped to Loki, is the record; PolicyReports are not
+   supported yet, so rules are rolled out by inventory and labelling, never by an `Audit` phase
    ([RFC-009 open question 9](009-scm-personas.md#open-questions)).
 7. **Tenant = org or team? — settled.** A tenant is a **team inside** the platform's org, so the owner label is a team slug
    ([RFC-003](003-scm-connections-and-resources.md)); `XScmTeam` is created by platform onboarding, not by the tenant it names.

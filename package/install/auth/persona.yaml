@@ -3,6 +3,6 @@ kind: Configuration
 metadata:
   name: wxops-core-persona
 spec:
-  package: ghcr.io/wxops-idp/wxops-core/persona:release-2026-11-04
+  package: ghcr.io/wxops-idp/wxops-core/persona:release-2026-11-09
   packagePullPolicy: IfNotPresent
   revisionActivationPolicy: Automatic

@@ -175,7 +175,7 @@ packages:
     group: auth
     path: package/auth/persona
     package:
-      current: release-2026-11-04
+      current: release-2026-11-09
     api:
       served: [v1alpha1]
       storage: v1alpha1
@@ -185,7 +185,7 @@ packages:
     group: auth
     path: package/auth/persona-binding
     package:
-      current: release-2026-11-04
+      current: release-2026-11-09
     api:
       served: [v1alpha1]
       storage: v1alpha1
@@ -195,7 +195,7 @@ packages:
     group: auth
     path: package/auth/platform-policy
     package:
-      current: release-2026-11-04
+      current: release-2026-11-09
     api:
       served: [v1alpha1]
       storage: v1alpha1

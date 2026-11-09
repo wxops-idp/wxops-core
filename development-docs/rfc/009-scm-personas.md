@@ -2,8 +2,9 @@
 
 ## Status
 <!-- Draft | In review | Accepted | Declined | Withdrawn | Implemented — and the GitHub issue that carries the discussion, e.g. "Draft · #42" -->
-Implemented (Phases 1–3, with 2b) — shipping in `release-2026-11-04`, after the [acceptance run](#spike-and-acceptance-results-2026-11-04) of 2026-11-04.
-Rewritten 2026-10-24: the persona file and its CI compiler are replaced by three `auth.wxops.cloud` kinds. Open: Phases 4–7, the ADRs. Kyverno's high
+Implemented (Phases 1–4, with 2b) — Phases 1–3 shipped in `release-2026-11-04` after the [acceptance run](#spike-and-acceptance-results-2026-11-04);
+Phase 4 (`Deny` by default, owner mapping, scope per template, `env-gate`, temporary exemptions) ships in `release-2026-11-09`, proven in the sandbox.
+Rewritten 2026-10-24: the persona file and its CI compiler are replaced by three `auth.wxops.cloud` kinds. Open: Phases 5–7, the ADRs. Kyverno's high
 availability and the optional Kyverno-required guard are bootstrap setup, not a package phase (2026-11-06)
 
 ## Summary
@@ -604,7 +605,8 @@ run had one failure, the kit misreading an RBAC refusal as a policy refusal (fix
 - [x] **Phase 3 — `XPlatformPolicy`.** Built: eight templates, all proven in `Deny` by the acceptance run
   ([results](#spike-and-acceptance-results-2026-11-04)). `Audit` is an option W'xOps does not support yet — it needs PolicyReports
   ([question 9](#open-questions)); label existing namespaces and objects before a template runs on a cluster that already has workloads.
-- [ ] **Phase 4 — `Deny` by default.** Built 2026-11-06, ships next release: `XPlatformPolicy`'s `mode` defaults to `Deny` — validating templates in
+- [x] **Phase 4 — `Deny` by default.** Shipped in `release-2026-11-09`, proven in the sandbox (impersonation; `./run.sh mapping` and `./run.sh env-gate`
+  replay the new pieces). `XPlatformPolicy`'s `mode` defaults to `Deny` — validating templates in
   `Deny` with `failurePolicy: Fail` ([decision](#deny-by-default-audit-by-choice--decided-2026-11-06)) — and `temporaryExemptPersonaRef` (with `until`) makes an exemption
   time-bound. `XPolicy` ([ADR-005](../adr/005-kind-naming-x-prefix.md)) inherits both. On a cluster with workloads, owner labels come first.
   Built 2026-11-07 beside it: **scope per template** (`namespaceSelector`; cluster-scoped objects never skipped), the **owner mapping** — a team's
@@ -647,4 +649,5 @@ Still open:
 9. **PolicyReports — settled 2026-11-06: not supported by W'xOps today.** Every policy runs in `Deny` with `failurePolicy: Fail`, and the API server audit
    log is the record ([decision](#deny-by-default-audit-by-choice--decided-2026-11-06)). `mode: Audit` stays in the API but has an effect only where an
    operator runs Kyverno's reports controller themselves. Support returns with the events-and-audit agent work (Phase 7) — then behind a low-priority API
-   Priority and Fairness `FlowSchema`, so a write loop cannot starve the API server.
+   Priority and Fairness `FlowSchema`, so a write loop cannot starve the API server. **Affects other plans:** any rollout written as "audit first" —
+   [RFC-005](005-git-mapped-authorization.md#rollout-safety) Phases 2 and 4 — becomes inventory, label, then `Deny`.

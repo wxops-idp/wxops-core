@@ -574,7 +574,7 @@ worth a store when sharing outgrows labels, or the Portal must explain every gra
 | Where you are | [RFC-003](../rfc/003-scm-connections-and-resources.md) | implemented |
 | Who you are | [RFC-004](../rfc/004-dex-identity-and-portal-authentication.md) | implemented |
 | Built-in tools | [RFC-008](../rfc/008-built-in-tools-identity-and-catalog.md) — one login, a tenant `XWorkspace` rendering each tool's native objects from a platform `XWorkspaceClass`, a catalog; `provider-vault` for OpenBao | draft, rewritten 2026-11-08 |
-| Personas, bindings, guardrails | [RFC-009](../rfc/009-scm-personas.md) — `XPersona`, `XPersonaBinding`, `XPlatformPolicy`, aggregation, agents, audit | draft, rewritten |
+| Personas, bindings, guardrails | [RFC-009](../rfc/009-scm-personas.md) — `XPersona`, `XPersonaBinding`, `XPlatformPolicy`, aggregation, agents, audit | implemented (Phases 1–4) |
 | Core XR ownership | [RFC-005](../rfc/005-git-mapped-authorization.md), narrowed — the owner label on Core XRs, the three writers, its rules as `XPlatformPolicy` templates | draft |
 
 **Spikes — Kubernetes ones run 2026-11-04** ([results](../rfc/009-scm-personas.md#spike-and-acceptance-results-2026-11-04)): identity through Pinniped's
