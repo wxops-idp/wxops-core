@@ -66,6 +66,9 @@ in step 8.
 Once the repo exists and CI has produced an image, the portal creates the [`XTenantApp`](../api-reference/platform/tenant-app.md) claim:
 
 ```yaml
+metadata:
+  labels:
+    wxops.cloud/owner: <team>                 # the owning team's slug — see Labels below
 spec:
   parameters:
     appName: <appName>
@@ -77,11 +80,77 @@ spec:
     image: <repository:tag built by CI from step 7>
 ```
 
+The namespace the app lands in already has its defaults from the team's `tenants/<name>/` directory — see
+[Namespace defaults](#namespace-defaults--from-gitops). The claim itself goes in the app's environment overlay.
+
 ## 9. (Optional) Wire database secrets
 
 If the app needs a database, create a [`tenant-database`](../api-reference/platform/tenant-database.md) claim first (or alongside), then set
 `secretsFrom.database.enabled: true` on the `tenant-app` claim — see [tenant-app's go-live ordering
 contract](../api-reference/platform/tenant-app.md#vault-secrets--databases) for why the database/secret claim must exist before (or alongside) `tenant-app`.
+
+## Labels the platform reads
+
+A handful of labels decide who owns an application, who may change it, and how the Portal and catalog show it as platform-managed. Owners are team slugs,
+matched exactly: group `<org>:<team>` owns `<team>`.
+
+**Set by the platform team, once per namespace** — only the platform team may change them (`namespace-guard`):
+
+| Label | On | Value | What reads it |
+|---|---|---|---|
+| `auth.wxops.cloud/tenant-namespace` | `Namespace` | `"true"` | [`XPersonaBinding`](../api-reference/auth/persona-binding.md) `scope: owned` finds the team's namespaces by it; `owner-stamp` runs only there |
+| `wxops.cloud/owner` | `Namespace` | `<team>` | The namespace's owner — every object inside inherits it, and the team's persona binding lands only here |
+| `wxops.cloud/environment` | `Namespace` | `dev`, `staging`, `prod`, … | The namespace's environment. Where an [`env-gate`](../api-reference/auth/platform-policy.md) guards it, only the persona trusted with that environment changes it by hand; everyone else deploys through Git |
+
+**Set by you, in Git:**
+
+| Label | On | Value | Why |
+|---|---|---|---|
+| `wxops.cloud/owner` | The `XTenantApp` and `XTenantDatabase` XRs | `<team>` | They are cluster-scoped, so there is no namespace to inherit from: without the label, [`owner-seal`](../api-reference/auth/platform-policy.md) refuses every person's change to them. Must be one of your own teams |
+| `wxops.cloud/owner` | Every manifest you keep in a tenant namespace | `<team>` | `owner-stamp` adds it on create if it is missing, but then the live object carries a label Git does not — keep it in Git so Argo CD and the cluster agree |
+| `wxops.cloud/protected` | Objects only the platform team may change or delete | `"true"` | The `protected` template refuses everyone else's update and delete. Argo CD is not matched — add `Prune=false` to keep its sync from deleting them |
+
+**Set by `tenant-app` itself** on every composed resource — don't set them, read them:
+
+| Label or annotation | Value | Shows |
+|---|---|---|
+| `app.kubernetes.io/managed-by` | `crossplane` | The resource is managed by the platform — change it through the XR, never with `kubectl edit` or `kubectl scale` |
+| `app.kubernetes.io/name`, `app.kubernetes.io/instance` | `<appName>` | Which application a resource belongs to |
+| `wxops.cloud/environment` | `dev`, `staging` or `prod` | The environment, for dashboards, cost reports and policies |
+| `wxops.cloud/app-flavor` | `webapp`, `ai`, … | The category, for platform automation (database extensions, generated policies) |
+| `wxops.cloud/template-id`, `wxops.cloud/repo-url` (annotations) | from steps 2–3 | The catalog link — which template it was scaffolded from, where its source lives |
+
+User `labels` on `tenant-app` cannot override these. Within a tenant namespace, ServiceAccounts carry `wxops.cloud/owner` too (stamped on create):
+`sa-guard` lets a person's workload run only as `default` or a ServiceAccount their team owns.
+
+## Namespace defaults — from GitOps
+
+A tenant namespace's defaults — quota, limits, network policy and registry credentials — come from the **GitOps repository**, not from `wxops-core` and not
+from a Kyverno generate rule ([decided 2026-11-08](../../development-docs/core-ideas/access-model.md#namespace-defaults-come-from-gitops--decided-2026-11-08)).
+Argo CD syncs a team's namespace and its apps as separate Applications, from ApplicationSets with git directory generators:
+
+```
+├── tenants                      ApplicationSet → git directory generator
+│   └── tenant-<name>            one per tenants/<name>/ directory — the namespace's defaults live here
+└── tenants-apps                 two ApplicationSets in one file
+    ├── tenants-apps             git dir: overlays/dev — auto-sync, prune + selfHeal
+    │   └── <team>-<app>-dev
+    └── tenants-apps-stable      git dir: overlays/staging + production — manual sync gate
+        └── <team>-<app>-staging / <team>-<app>-production
+```
+
+- **`tenants/<name>/`** holds the namespace's `ResourceQuota`, `LimitRange`, `NetworkPolicy` (default-deny, plus same-namespace, the ingress controller and
+  DNS) and registry credentials. A team that needs more changes its own directory by pull request.
+- **The app's overlays** hold its `XTenantApp` claim (step 8): `dev` syncs on merge; `staging` and `production` wait for a manual sync — the same line
+  [`env-gate`](../api-reference/auth/platform-policy.md) draws for people changing a guarded namespace by hand.
+
+| Concern | How |
+|---|---|
+| Owner label | Set `wxops.cloud/owner: <team>` on the defaults in `tenants/<name>/`, so Argo CD and the cluster agree |
+| Teams changing defaults by hand | Label them `wxops.cloud/protected: "true"`: the `protected` policy refuses people's edits and deletes — changes go through the PR |
+| A sync removing one | Argo CD is not checked by `protected`; add `argocd.argoproj.io/sync-options: Prune=false` to defaults that must never disappear |
+| Registry credentials | An ESO `ExternalSecret` (`kubernetes.io/dockerconfigjson`) from OpenBao, never a Secret in Git — or one ESO `ClusterExternalSecret` selecting `auth.wxops.cloud/tenant-namespace: "true"`. The app names it in `imagePullSecrets` |
+| Production stricter than dev | Separate tenant directories per environment's namespace, each with its own defaults |
 
 ## Templates catalog
 
@@ -100,5 +169,5 @@ subfolder name.
 | 5 | Render placeholders | external (portal) |
 | 6 | Commit + push initial commit | external (portal) |
 | 7 | CI builds image | external (skeleton's CI config) |
-| 8 | Application workload | [`tenant-app`](../api-reference/platform/tenant-app.md) |
+| 8 | Application workload, in the app's environment overlay | [`tenant-app`](../api-reference/platform/tenant-app.md); namespace defaults from `tenants/<name>/` (GitOps) |
 | 9 | Database + secrets (optional) | [`tenant-database`](../api-reference/platform/tenant-database.md) + platform `ExternalSecret`/`PushSecret` |

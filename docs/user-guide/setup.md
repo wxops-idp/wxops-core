@@ -12,6 +12,7 @@
   - [1 — Install providers once per cluster](#1--install-providers-once-per-cluster)
   - [2 — Seed a connection token](#2--seed-a-connection-token)
   - [3 — Install packages](#3--install-packages)
+  - [(Optional) Kyverno-required guard — before any platform policy](#optional-kyverno-required-guard--before-any-platform-policy)
   - [4 — Apply a first resource](#4--apply-a-first-resource)
   - [Uninstalling](#uninstalling)
     - [Removing one category](#removing-one-category)
@@ -36,7 +37,8 @@
 - Identity (Authentication): **(Supported)** [`DexiDP`](https://dexidp.io/) (Explore and install with [Charts](https://github.com/wxops-idp/charts/tree/main/dexidp)), [`Pinniped`](https://pinniped.dev/) (Explore and install with [Charts](https://github.com/wxops-idp/charts/tree/main/pinniped))
 - Secrets Management: **(Supported)** `OpenBao` (Recommended) or `Hashicorp Vault`
 - Supply Chain Utilities: **(Supported)** [`CertManager`](https://cert-manager.io/), [`Stakater Reloader`](https://github.com/stakater/reloader), and [`External Secrets Operator`](https://external-secrets.io/latest/)
-- Policies Management (Policies as Code): **(Supported)** [`Kyverno`](https://kyverno.io/docs/introduction/)
+- Policies Management (Policies as Code): **(Supported)** [`Kyverno`](https://kyverno.io/docs/introduction/) v1.19 or later, in
+  [high availability](https://kyverno.io/docs/guides/high-availability/) — see the [optional Kyverno-required guard](#optional-kyverno-required-guard--before-any-platform-policy)
 - Database Managment (Created and Migration): **(Supported)** [`CNPG`](https://cloudnative-pg.io/)
 - **(Option)** Gitops: **(Supported)** [`ArgoCD`](https://argo-cd.readthedocs.io/en/stable/)
 - **(Option)** Observability: **(Supported)** `Grafana-CE Ecosystem (Grafana, Prometheus, Loki, Tempo, Pyroscope, and Alloy)`
@@ -116,6 +118,91 @@ make install-dev
 `make install-dev` is for a disposable development cluster only. Against a cluster that already runs the packages, it overwrites package-managed XRDs and
 Compositions and skips every release gate. Everything it applies carries `channel: nightly` (production packages ship `channel: stable`) — see
 [Channels](../../development-docs/development/releasing.md#channels) for how an XR opts into either.
+
+## (Optional) Kyverno-required guard — before any platform policy
+
+> [!NOTE]
+> **Optional — not required, and not shipped by W'xOps.** No package installs it or depends on it, and W'xOps does not test it. Apply it only if you want
+> the extra assurance described below; every platform policy works without it.
+
+Platform policies (`XPlatformPolicy`, and `XPolicy` after it) run inside Kyverno, in `Deny` with `failurePolicy: Fail`. While Kyverno serves, a write that
+breaks a rule is refused, and a write Kyverno cannot check is refused too. One case slips through: when Kyverno shuts down **gracefully** — scaled to zero,
+uninstalled, or its last admission replica stopped — it **deletes its own webhook configurations**, and until it serves again people's writes pass
+unchecked (about two minutes in the [failure spike](../../development-docs/rfc/009-scm-personas.md#spike-and-acceptance-results-2026-11-04)).
+
+**The first answer is Kyverno in high availability**, following Kyverno's [High Availability guide](https://kyverno.io/docs/guides/high-availability/) —
+at least three admission-controller replicas, plus a PodDisruptionBudget so a drain never takes the last one:
+
+```yaml
+# Kyverno Helm values
+admissionController:
+  replicas: 3          # the minimum the HA guide supports; every platform policy runs here
+backgroundController:
+  replicas: 2
+cleanupController:
+  replicas: 2
+reportsController:
+  replicas: 0          # PolicyReports are not supported by W'xOps yet, so `mode: Audit` is not either
+```
+
+**The guard covers what HA cannot:** a deliberate scale-down or uninstall. It is one native `ValidatingAdmissionPolicy` — run by the API server itself, not
+by Kyverno — whose parameter is Kyverno's own webhook configuration. While that configuration exists, the guard allows everything. When it disappears,
+`parameterNotFoundAction: Deny` refuses **people's** writes until Kyverno is back: they pause instead of passing unchecked. Controllers, Crossplane, Argo
+CD, Helm and cluster-admin are never matched — the same `scm-user` rule the platform policies use — so Kyverno can always be reinstalled.
+
+Apply it **after Kyverno is running and before the first platform policy**:
+
+```yaml
+# Optional: pause SCM users' writes while Kyverno's webhooks are gone. Not shipped or required by W'xOps.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: wxops-kyverno-required
+spec:
+  failurePolicy: Fail
+  paramKind:
+    apiVersion: admissionregistration.k8s.io/v1
+    kind: ValidatingWebhookConfiguration
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["*"]
+        apiVersions: ["*"]
+        operations: ["CREATE", "UPDATE", "DELETE", "CONNECT"]
+        resources: ["*", "*/*"]
+  matchConditions:
+    # SCM users only — the same rule as the platform policies; list every org in your XPlatformPolicy `scmOrgs`
+    - name: scm-user
+      expression: "!request.userInfo.username.startsWith('system:') && request.userInfo.groups.exists(g, g.startsWith('<org>:'))"
+    # never on access reviews, Pinniped's login APIs, events or leases — the platform policies' exclusions
+    - name: not-excluded
+      expression: >-
+        !(request.resource.group in ['authentication.k8s.io', 'authorization.k8s.io', 'login.concierge.pinniped.dev', 'identity.concierge.pinniped.dev'])
+        && !(request.resource.resource in ['events', 'leases'])
+  validations:
+    - expression: "true"
+      message: "Kyverno is unavailable: writes by people are paused until it serves again"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: wxops-kyverno-required
+spec:
+  policyName: wxops-kyverno-required
+  validationActions: [Deny]
+  paramRef:
+    name: <kyverno-validating-webhook-configuration>   # the one that serves policies.kyverno.io ValidatingPolicies
+    parameterNotFoundAction: Deny
+```
+
+Before you rely on it, on a test cluster:
+
+1. **Fill in `paramRef.name`.** List `kubectl get validatingwebhookconfigurations` and pick Kyverno's configuration that serves the `policies.kyverno.io`
+   ValidatingPolicies; scale Kyverno's admission controller to zero and confirm that exact one disappears.
+2. **Check that the API server accepts a `ValidatingWebhookConfiguration` as `paramKind`** — this guard is not yet verified on a cluster.
+3. **Try both sides.** With Kyverno scaled to zero, an SCM user's write is refused with the guard's message, while a controller's or cluster-admin's write
+   passes. Scale Kyverno back and the same user's write is decided by the platform policies again.
+
+To remove it: `kubectl delete validatingadmissionpolicybinding wxops-kyverno-required` and `kubectl delete validatingadmissionpolicy wxops-kyverno-required`.
 
 ## 4 — Apply a first resource
 

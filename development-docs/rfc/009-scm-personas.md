@@ -3,7 +3,8 @@
 ## Status
 <!-- Draft | In review | Accepted | Declined | Withdrawn | Implemented — and the GitHub issue that carries the discussion, e.g. "Draft · #42" -->
 Implemented (Phases 1–3, with 2b) — shipping in `release-2026-11-04`, after the [acceptance run](#spike-and-acceptance-results-2026-11-04) of 2026-11-04.
-Rewritten 2026-10-24: the persona file and its CI compiler are replaced by three `auth.wxops.cloud` kinds. Open: the HA spike, Phases 4–7, the ADRs
+Rewritten 2026-10-24: the persona file and its CI compiler are replaced by three `auth.wxops.cloud` kinds. Open: Phases 4–7, the ADRs. Kyverno's high
+availability and the optional Kyverno-required guard are bootstrap setup, not a package phase (2026-11-06)
 
 ## Summary
 
@@ -14,7 +15,7 @@ A person signs in once through their SCM and arrives at every cluster with the s
 | Kind | Layer | Answers | Renders |
 |---|---|---|---|
 | **`XPersona`** | identity | *who* — a title (`owners`, `developers`, `viewers`, `platform`) that collects SCM teams, users and agents, and the environments they reach | nothing in Kubernetes; its resolved subjects in status |
-| **`XPersonaBinding`** | coarse RBAC | *what kinds* — a persona bound to `view`, a `wxops:persona-*` role, a `wxops:platform-*` role or another `wxops:*` role, in its owned namespaces or on the Platform API | `RoleBinding`s / `ClusterRoleBinding`s |
+| **`XPersonaBinding`** | coarse RBAC | *what kinds* — a persona bound to a `wxops:persona-*` role, a `wxops:platform-*` role or another `wxops:*` role, in its owned namespaces or on the Platform API | `RoleBinding`s / `ClusterRoleBinding`s |
 | **`XPlatformPolicy`** | fine-grained ABAC | *on which objects* — owner sealing, read-only secrets, exec, protected resources | Kyverno CEL `ValidatingPolicy` / `MutatingPolicy` |
 
 RBAC grants; Kyverno narrows. Both are rendered by Crossplane from XRs in Git, so every access change is a reviewed diff, the same objects go to every
@@ -147,8 +148,8 @@ Shipped as examples on the [`XPersona` API page](../../docs/api-reference/auth/p
 
 | Persona | Environments | Bindings | Guardrails |
 |---|---|---|---|
-| **`viewers`** | all | `view` (`owned`) · `wxops:platform-view` (`platform`) | none needed — read-only |
-| **`developers`** | `dev`, `staging` | `wxops:persona-developers` (`owned`) · `wxops:platform-edit` (`platform`) | `owner-seal`, `secret-readonly`, `protected`, `rbac-guard`, `sa-guard`, `namespace-guard` |
+| **`viewers`** | all | `wxops:persona-viewers` (`owned`) · `wxops:platform-view` (`platform`) | none needed — read-only |
+| **`developers`** | `dev`, `staging` | `wxops:persona-developers` (`owned`) · `wxops:platform-edit` (`platform`) | `owner-seal`, `secret-guard`, `protected`, `rbac-guard`, `sa-guard`, `namespace-guard` |
 | **`owners`** | all, `prod` included | `wxops:persona-owners` (`owned`) · `wxops:platform-edit` (`platform`) | as `developers`, plus `exec-guard` allowing `prod` |
 | **`platform`** | all | `wxops:persona-platform` (`admin`) in every owned namespace (`namespaces`, by selector) · `wxops:platform-admin` (`platform`) | exempt from `rbac-guard`, `protected`, and `owner-seal` on Core XRs ([RFC-005](005-git-mapped-authorization.md#policy-set)) |
 
@@ -165,7 +166,7 @@ metadata:
 spec:
   parameters:
     personaRef: {name: developers}
-    role: wxops:persona-developers                  # view | wxops:persona-* | wxops:platform-* | another wxops:* ClusterRole
+    role: wxops:persona-developers                  # wxops:persona-* | wxops:platform-* | another wxops:* ClusterRole
     scope: owned                                    # owned | namespaces | platform
 ```
 
@@ -265,7 +266,7 @@ ServiceAccount (`XTenantApp`, Darlane) stamp their owner on it.
 | What happens to `edit` and `admin` in `XPersonaBinding`'s role list? | Removed, with the matching `bind` grants — the persona roles replace them. Unreleased, so the change costs nothing now |
 | May developers create Pods directly? | No — workloads only, and `pods` `delete` to restart. A debug pod is Darlane's job |
 | May anyone but `platform` write ServiceAccounts? | No. They come from compositions (`XTenantApp`'s, Darlane's) or the platform team |
-| Secret writes? | Gone from the developer and owner roles; `secret-readonly` stays as a second layer, and for the `platform` persona |
+| Secret writes? | Gone from the developer and owner roles; `secret-guard` stays as a second layer, and for the `platform` persona |
 | A team needs a kind no piece covers? | A new piece, reviewed — the same change as adding a permission today |
 | ConfigMap reads through `view`? | Accepted, as today. Credentials belong in OpenBao, not ConfigMaps |
 
@@ -281,7 +282,7 @@ would need RBAC-writing power. This RFC narrows the rule instead of dropping it:
 | Allowed | Not allowed |
 |---|---|
 | The `XPersonaBinding` composition, and only it, emits `RoleBinding` and `ClusterRoleBinding` | Any other composition emitting `rbac.authorization.k8s.io` — enforced by `tests/invariants.py` |
-| provider-kubernetes holds `bind` on `clusterroles`, restricted by `resourceNames` to `view`, the four `wxops:persona-*` roles, the three `wxops:platform-*` roles and each listed `wxops:*` role — granted in `providers/rbac/provider-kubernetes.yaml` | `escalate`; any write to `Role` or `ClusterRole`; `bind` on `cluster-admin` |
+| provider-kubernetes holds `bind` on `clusterroles`, restricted by `resourceNames` to the four `wxops:persona-*` roles, the three `wxops:platform-*` roles and each listed `wxops:*` role — granted in `providers/rbac/provider-kubernetes.yaml` | `escalate`; any write to `Role` or `ClusterRole`; `bind` on `cluster-admin` |
 | The platform writes `XPersona`, `XPersonaBinding`, `XPlatformPolicy` | Tenants writing any `auth.wxops.cloud` kind — no role aggregates them, and an `XPlatformPolicy` guard refuses it |
 
 `bind` lets the provider create a binding to a role without holding the role's permissions, so the provider does not become `admin` everywhere to grant
@@ -305,7 +306,7 @@ spec:
     scmOrgs: [wxops-idp]                            # the orgs whose "<org>:<team>" groups make a caller an SCM user
     personaRef: {name: owners}                      # exec-guard only: the persona that may exec
     exemptPersonaRef: {name: platform}              # optional: a persona the policy does not apply to
-    mode: Deny                                      # Audit | Deny — Audit reports only while Kyverno's reports controller runs
+    mode: Deny                                      # Deny (Fail), the default | Audit — not supported yet: needs PolicyReports
 ```
 
 A policy is a **template** with parameters, not free-form CEL: the template's logic is reviewed once in this package; an `XPlatformPolicy` only chooses its
@@ -317,7 +318,7 @@ ServiceAccount usernames their personas list. Controllers, Crossplane and Extern
 Kyverno entirely:** it has its own permission model — `AppProject`s (source repositories, destinations, kinds), project roles bound to SCM groups, sync
 impersonation — and review on merge.
 
-**A persona list only where the rule differs per persona.** `owner-seal`, `secret-readonly`, `protected` and `rbac-guard` hold for every SCM user, so they
+**A persona list only where the rule differs per persona.** `owner-seal`, `secret-guard`, `protected` and `rbac-guard` hold for every SCM user, so they
 carry no persona list: membership changes never re-render them, and a stale list cannot open a gap. Only a template like `exec-guard`, where `owners` may do
 what `developers` may not, names personas — its composition inlines their `status.subjects`, so a persona change re-renders that one policy.
 
@@ -325,7 +326,7 @@ what `developers` may not, names personas — its composition inlines their `sta
 |---|---|---|
 | **`owner-stamp`** | `MutatingPolicy` | On create in a namespace labelled `wxops.cloud/owner`, set that label on the object if absent. The only mutation, and it copies, never decides |
 | **`owner-seal`** | `ValidatingPolicy` | Create, update and delete only where the object's owner is one of the caller's teams — on update, **both** the old and the new owner, so a resource cannot be relabelled away from its team |
-| **`secret-readonly`** | `ValidatingPolicy` | SCM users may not create, update or delete `Secret`s. Values come from OpenBao through External Secrets Operator, whose controller is the writer. Reading stays as RBAC grants it |
+| **`secret-guard`** (named `secret-readonly` until 2026-11-09 — it never meant people could read Secrets) | `ValidatingPolicy` | SCM users may not create, update or delete `Secret`s. Values come from OpenBao through External Secrets Operator, whose controller is the writer. Reading stays as RBAC grants it |
 | **`exec-guard`** | `ValidatingPolicy` | `CONNECT` on `pods/exec`, `pods/attach`, `pods/portforward` only in the listed environments and only in owned namespaces |
 | **`protected`** | `ValidatingPolicy` | Objects labelled `wxops.cloud/protected: "true"` cannot be updated or deleted by SCM users outside the `platform` persona — shared, collaborative or platform objects inside a team's namespace |
 | **`rbac-guard`** | `ValidatingPolicy` | Refuses writes to `auth.wxops.cloud` kinds, `RoleBinding`s and `ClusterRoleBinding`s by any SCM user outside the `platform` persona. Team persona roles grant no RBAC writes, so this is the second layer — for `admin` held outside the exemption, and any role added later |
@@ -393,7 +394,7 @@ access, so only the `platform` persona (`admin`) reads Secret values in a namesp
 |---|---|---|
 | `kubectl get secret` | RBAC — `platform` only; team personas have no read | no — cannot be |
 | `kubectl exec` into a pod that holds it | RBAC + `exec-guard` | yes |
-| writing a `Secret` | RBAC + `secret-readonly` | yes — OpenBao is the source, ESO the writer |
+| writing a `Secret` | RBAC + `secret-guard` | yes — OpenBao is the source, ESO the writer |
 | writing an `ExternalSecret` / `PushSecret` | RBAC + `owner-seal` | yes — only for its own owner |
 
 Values reach a team through the workload (an `ExternalSecret` writing the `Secret` its pods mount) and through OpenBao, never through `kubectl get secret`.
@@ -402,8 +403,8 @@ Values reach a team through the workload (an `ExternalSecret` writing the `Secre
 
 | Agent task | Persona member | Bindings |
 |---|---|---|
-| Debug | its `ServiceAccount` in `members.serviceAccounts` | `view` (no Secrets) plus a `wxops:agent-debug` role for `pods/log` and events |
-| Audit | its `ServiceAccount` | `view` and a role for `policyreports` |
+| Debug | its `ServiceAccount` in `members.serviceAccounts` | `wxops:persona-viewers` (no Secrets) plus a `wxops:agent-debug` role for `pods/log` and events |
+| Audit | its `ServiceAccount` | `wxops:persona-viewers` and a role for `policyreports` |
 | Deploy | an SCM bot account in an `XScmTeam` | **no Kubernetes write** — it opens pull requests |
 
 Until Phase 7 an agent's boundary is RBAC alone — read-only roles, no `Secret`s, no writes. Phase 7 brings agents under `XPlatformPolicy`: templates also match the
@@ -416,10 +417,35 @@ Every decision leaves a record a person can be named in:
 - **The API server audit log** — a bootstrap setting like Pinniped. Through the impersonation proxy the event's `user` is the proxy and `impersonatedUser`
   carries the person and their groups. Level: `Metadata` for `Secret`s (never request or response bodies), `RequestResponse` for `auth.wxops.cloud` kinds and
   RBAC objects, `Metadata` for `exec`.
-- **Kyverno `PolicyReport`s — open ([question 9](#open-questions)).** They give every rule result, the picture of an `Audit`-mode policy before it
-  enforces; but Kyverno's reports controller writes them back through the API server, and on v1.19 it has been seen throttling CPU — a loop there can slow
-  the API server Pinniped and the webhooks depend on. Not relied on for now: the policies run in `Deny`.
+- **Kyverno `PolicyReport`s — not supported by W'xOps today** ([question 9](#open-questions), settled 2026-11-06). They give every rule result, the
+  picture of an `Audit`-mode policy; but Kyverno's reports controller writes them back through the API server, and on v1.19 it has been seen throttling CPU
+  — a loop there can slow the API server Pinniped and the webhooks depend on. The policies run in `Deny`, and the API server audit log is the record.
 - The audit log ships to Loki and joins on `username` and `groups` with Dex and Pinniped's login records.
+
+### `Deny` by default, `Audit` by choice — decided 2026-11-06
+
+Admission is the third layer, after authentication (Dex → Pinniped) and authorization (RBAC from `XPersonaBinding`): it checks what RBAC cannot — owner,
+labels, exec target, ServiceAccount — before a write reaches etcd. So every validating template defaults to **`Deny` with `failurePolicy: Fail`**: a write
+that breaks the rule, or that cannot be checked because Kyverno is down, never lands.
+
+| `mode` | The request that breaks the rule | `failurePolicy` | The record | W'xOps support |
+|---|---|---|---|---|
+| **`Deny`** (default) | Refused | `Fail` | The API server audit log | ✅ every template, proven in the [acceptance run](#spike-and-acceptance-results-2026-11-04) |
+| `Audit` (option) | Let through | `Ignore` | A `PolicyReport` — only if Kyverno's reports controller runs | ⛔ not supported today: the option stays in the API, but W'xOps runs no PolicyReports, so on a W'xOps cluster an `Audit` policy neither blocks nor records |
+
+- **Only validating templates have a mode.** `owner-stamp` is a `MutatingPolicy` that adds a missing label and never refuses; it keeps
+  `failurePolicy: Ignore`, so a Kyverno outage never blocks a create.
+- **`mode` never grants access.** Switching a policy to `Audit` opens it for every SCM user, cluster-wide, with no expiry. Debugging access is a
+  time-bound exemption — `temporaryExemptPersonaRef` with `until`, beside the standing `exemptPersonaRef`, checked by Kyverno's `time.now()`, no `break-glass` template — and RBAC elevation separately.
+- **Where the default lands.** `XPlatformPolicy`'s `mode` defaults to `Deny` from the release after `release-2026-11-04` (a `careful` change: an XR that
+  left `mode` out starts refusing on upgrade); `XPolicy`, the successor kind ([ADR-005](../adr/005-kind-naming-x-prefix.md)), inherits it.
+- **Why `Audit` was the first default, and why it is not now.** It guarded unproven templates (now proven), unlabelled objects that would lock their owners
+  out (a rollout order — label first, or [RFC-010](010-namespaced-tenant-kinds.md)'s namespaced tenant kinds), and assumed PolicyReports would show what it
+  caught (they were not running).
+- **When `Audit` returns.** With the work that handles Kubernetes events and audit through AI agents ([Phase 7](#rollout-plan)): PolicyReports enabled,
+  events, reports and the API server audit log read by an audit agent that explains what a template would refuse, proposes owner labels or an exemption,
+  and opens a pull request — never changing a policy itself, and reading on in-cluster inference
+  ([data boundary](../core-ideas/access-model.md#data-boundary-and-audit)). Until then, `Deny` only.
 
 ### What this changes elsewhere
 
@@ -438,8 +464,9 @@ Where the first implementation chose differently from the sketches above:
 - **An unlabelled namespaced object takes its namespace's owner.** `owner-seal` reads the object's `wxops.cloud/owner`, else the namespace's — so objects that
   predate the label stay sealed. A cluster-scoped object has no namespace, so Core XRs must carry the label. `owner-seal` also has the Core options RFC-005 asks for:
   `ownerPattern` and `immutableOwner`.
-- **`environments` is declared, not yet enforced** — on `XPersona` it is echoed to status; `exec-guard` takes no `environments` until the multi-cluster feature gives
-  clusters an environment.
+- **`environments` is enforced per namespace, not yet per cluster** — the optional `env-gate` template (built 2026-11-08) reads a namespace's
+  `wxops.cloud/environment` and lets only a persona whose `environments` include it change that namespace; the cluster-level gate on bindings still waits for
+  the multi-cluster feature to give clusters an environment.
 - **Persona refs are always present** (`personaRef`, `exemptPersonaRef` default to an empty name), because `function-extra-resources` fails on a missing optional field
   path. A missing persona renders the policy stricter and says so in `syncMessage`.
 - **Access reviews, events and leases are excluded** from `owner-seal` and `protected`, or `kubectl auth can-i` would be refused — and, since 2026-11-04,
@@ -455,8 +482,8 @@ Where the first implementation chose differently from the sketches above:
 ### Compatibility and change tier
 
 Three new packages under `package/auth/` with new XRDs at `v1alpha1`, `scope: Cluster` like the rest of `auth.wxops.cloud`. No existing XRD changes. The
-policy layer is a behaviour change to admission for every SCM user, so it ships in `Audit` mode with hand-written release notes, and moves to `Deny`
-per template.
+policy layer is a behaviour change to admission for every SCM user, so it shipped (`release-2026-11-04`) with `mode` defaulting to `Audit` and
+hand-written release notes. The default becomes `Deny` with `XPolicy` ([decided 2026-11-06](#deny-by-default-audit-by-choice--decided-2026-11-06)).
 
 ### Testing
 
@@ -509,11 +536,21 @@ run had one failure, the kit misreading an RBAC refusal as a policy refusal (fix
 **What the findings decide:**
 
 - **Kyverno only, run in high availability** (decided 2026-11-04) — several replicas, so an upgrade or restart never removes the last one and its webhooks
-  with it; native `ValidatingAdmissionPolicy` generation is deferred. A spike on a rolling restart with three replicas confirms the webhooks survive.
+  with it; native `ValidatingAdmissionPolicy` generation is deferred. Kyverno is installed at bootstrap, not by W'xOps, so its HA is the operator's setup,
+  documented in [setup](../../docs/user-guide/setup.md), and no `wxops-core` package or phase waits on it (2026-11-06). The reference is Kyverno's own
+  [High Availability guide](https://kyverno.io/docs/guides/high-availability/):
+  - **The admission controller needs at least three replicas** — "the minimum supported replica count for a highly-available admission controller
+    deployment is three". Every replica serves webhook requests; only certificate and webhook management is leader-elected. It is the controller every
+    `XPlatformPolicy` runs in.
+  - **The background, reports and cleanup controllers** elect a leader for their work, so extra replicas there add availability, not throughput (cleanup
+    also scales its handler). The reports controller matters only while a policy runs in `Audit`.
+  - **What W'xOps adds on top of the guide**, from the failure spike: a PodDisruptionBudget, so a drain or upgrade never takes the last admission replica —
+    a graceful shutdown of the last one removes the webhook configurations, which the guide does not describe.
 - **High availability is the primary answer** — nothing on a person's request path is a single point of failure: Kyverno, the Pinniped Concierge, the
   Supervisor and Dex all run with several replicas. HA covers failures (a crashed pod, a lost node, a rolling upgrade), not operations that remove Kyverno's
   webhooks on purpose or by mistake (scaling it to zero, uninstalling it). For those, a **Kyverno-required guard** is optional: one static
   `ValidatingAdmissionPolicy` whose parameter is Kyverno's webhook configuration, so people's writes pause — instead of passing unchecked — while it is gone.
+  It is bootstrap setup too: a note in [setup](../../docs/user-guide/setup.md) for operators who want it, matching SCM users only, never a package.
 - **Nothing may sit on access reviews:** every template matching broad resources keeps its exclusions as a match condition, and namespace-only rules say
   `scope: Namespaced` — see [As built](#as-built-2026-10-26).
 - **Kyverno's namespace selector** (`kube-system`, `kyverno` skipped) is accepted: no team persona holds RBAC there; only `platform`, which is trusted.
@@ -527,8 +564,8 @@ run had one failure, the kit misreading an RBAC refusal as a policy refusal (fix
 - **Owners are flat slugs.** Two orgs with a team of the same slug own the same label value; teams across orgs need distinct slugs.
 - **Gitea keeps team-name case** (`wxops:Owners`) while GitHub groups are slugs (`wxops:owners`), and RBAC matches groups exactly. How owners, bindings and
   rules handle it is [RFC-005 open question 11](005-git-mapped-authorization.md#open-questions).
-- **Kyverno is an availability dependency** for every write by an SCM user under `failurePolicy: Fail` — and, until the failure spike proves otherwise,
-  possibly for system writes too.
+- **Kyverno is an availability dependency** for every write by an SCM user under `failurePolicy: Fail`. System writes are not: the failure spike showed
+  controllers, Crossplane and cluster-admin never blocked. How available it is depends on the operator's Kyverno setup, not on W'xOps.
 - **Argo CD's writes are not sealed by owner — by design.** They are bounded by Argo CD's own projects and merge review; a cluster-scoped Core XR in a
   tenant's path is only as safe as that path's review.
 - **Reads are not sealed.** Within its namespaces a team reads everything `view` allows — ConfigMaps included, Secrets not.
@@ -555,7 +592,9 @@ run had one failure, the kit misreading an RBAC refusal as a policy refusal (fix
   reading `namespaceObject` ✓; `bind` without escalation ✓; Kyverno carries `matchConditions` into its webhook ✓. Kyverno unavailable: controllers and
   Argo CD-like writes never blocked ✓, but a graceful shutdown opens a ~2-minute unchecked window for SCM users — answered by Kyverno in HA and a
   Kyverno-required guard (next). The run also found and fixed a webhook sitting on access reviews.
-- [ ] **HA spike** — three Kyverno replicas, a rolling restart; the webhook configurations must never disappear.
+- **Kyverno HA — moved to bootstrap setup (2026-11-06).** Three or more admission-controller replicas per Kyverno's
+  [High Availability guide](https://kyverno.io/docs/guides/high-availability/), a PodDisruptionBudget, and a rolling restart that never removes the webhook
+  configurations, plus the optional Kyverno-required guard, are the operator's setup ([setup](../../docs/user-guide/setup.md)). Not a phase of this RFC.
 - [x] **Phase 1 — `XPersona`.** Built (2026-10-26): `package/auth/persona`; proven on the cluster 2026-11-04, with `system:` members refused.
 - [x] **Phase 2 — `XPersonaBinding`,** built: `owned`, `namespaces` and `platform`, the aggregated roles under `providers/rbac/aggregate-*.yaml`, `provider-kubernetes`'s
   `bind` grant, and the narrowed invariant. Proven on the cluster 2026-11-04 (`bind` without escalation); the ADR follows acceptance. **`rbac-guard` ships with this phase, in `Deny`**, and `admin` is not bound to anyone before
@@ -563,11 +602,18 @@ run had one failure, the kit misreading an RBAC refusal as a policy refusal (fix
 - [x] **Phase 2b — persona roles without `edit`/`admin`, `sa-guard` and `namespace-guard`.** Built 2026-11-03
   ([design](#persona-roles-built-from-wxops-pieces-not-editadmin--built-2026-11-03)); offline tests green, cluster proof through the scenario kit pending.
 - [x] **Phase 3 — `XPlatformPolicy`.** Built: eight templates, all proven in `Deny` by the acceptance run
-  ([results](#spike-and-acceptance-results-2026-11-04)). `Audit` reports only while Kyverno's reports controller runs ([question 9](#open-questions)); label
-  existing namespaces and objects before a template moves to `Deny` on a cluster that already has workloads.
-- [ ] **Phase 4 — `Deny` on every cluster,** template by template, once existing namespaces and objects carry their owner labels.
-- [ ] **Phase 5 — audit pipeline.** The API server audit policy at bootstrap, shipped to Loki — the record of who did what. PolicyReports are optional
-  ([question 9](#open-questions)).
+  ([results](#spike-and-acceptance-results-2026-11-04)). `Audit` is an option W'xOps does not support yet — it needs PolicyReports
+  ([question 9](#open-questions)); label existing namespaces and objects before a template runs on a cluster that already has workloads.
+- [ ] **Phase 4 — `Deny` by default.** Built 2026-11-06, ships next release: `XPlatformPolicy`'s `mode` defaults to `Deny` — validating templates in
+  `Deny` with `failurePolicy: Fail` ([decision](#deny-by-default-audit-by-choice--decided-2026-11-06)) — and `temporaryExemptPersonaRef` (with `until`) makes an exemption
+  time-bound. `XPolicy` ([ADR-005](../adr/005-kind-naming-x-prefix.md)) inherits both. On a cluster with workloads, owner labels come first.
+  Built 2026-11-07 beside it: **scope per template** (`namespaceSelector`; cluster-scoped objects never skipped), the **owner mapping** — a team's
+  `wxops.cloud/owner` label adds a second owner, read by `XPersona` (`status.owners`), `XPersonaBinding` and every policy
+  ([ADR-006](../adr/006-team-owner-mapping.md)) — and **`owner-stamp` on create and update**: an explicit owner label from any writer is kept, a missing one
+  filled from the namespace. Built 2026-11-08: the optional **`env-gate`** template — in namespaces whose `wxops.cloud/environment` is listed, only
+  members of `personaRef` whose `environments` include it write or exec — and `namespace-guard` now guards the `wxops.cloud/environment` label too.
+- [ ] **Phase 5 — audit pipeline.** The API server audit policy at bootstrap, shipped to Loki — the record of who did what. PolicyReports are not supported
+  yet ([question 9](#open-questions)); they return, with `Audit`, when events, reports and the audit log are read by an audit agent (Phase 7).
 - [ ] **Phase 6 — tools.** Argo CD, Grafana and OpenBao grants name persona groups, per [RFC-008](008-built-in-tools-identity-and-catalog.md).
 - [ ] **Phase 7 — agents.** Agent personas, and `XPlatformPolicy` templates matching their ServiceAccounts.
 - [ ] ⏸ **With the multi-cluster feature — environments.** The cluster's identity object, and the environment gate on `XPersonaBinding` and `exec-guard`.
@@ -598,6 +644,7 @@ Still open:
    after this RFC, which defines what a cluster is.
 8. **Persona roles without `edit`/`admin`, plus `sa-guard` — settled 2026-11-03:** built as
    [Phase 2b](#persona-roles-built-from-wxops-pieces-not-editadmin--built-2026-11-03), with `namespace-guard` beside it.
-9. **PolicyReports** — open (2026-11-04). Whether Kyverno's reports controller runs at all; if it does, only while a template is tuned in `Audit`, behind a
-   low-priority API Priority and Fairness `FlowSchema` so a write loop cannot starve the API server; or whether `Audit` results come from native admission
-   policies' audit-log annotations instead. Until decided, the policies run in `Deny` and the API server audit log is the record.
+9. **PolicyReports — settled 2026-11-06: not supported by W'xOps today.** Every policy runs in `Deny` with `failurePolicy: Fail`, and the API server audit
+   log is the record ([decision](#deny-by-default-audit-by-choice--decided-2026-11-06)). `mode: Audit` stays in the API but has an effect only where an
+   operator runs Kyverno's reports controller themselves. Support returns with the events-and-audit agent work (Phase 7) — then behind a low-priority API
+   Priority and Fairness `FlowSchema`, so a write loop cannot starve the API server.

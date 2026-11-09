@@ -31,12 +31,14 @@ Binds an [`XPersona`](persona.md)'s subjects to one `ClusterRole`. Kubernetes RB
 
 | Role | Built from | Bind with |
 |---|---|---|
-| `view` | Kubernetes' own, plus every `ClusterRole` labelled `rbac.authorization.k8s.io/aggregate-to-view` — reads, no Secrets | `owned`, `namespaces` |
-| `wxops:persona-viewers` | `view`, plus pieces labelled `auth.wxops.cloud/aggregate-to-persona-viewers` | `owned`, `namespaces` |
+| `wxops:persona-viewers` | Kubernetes' own `view` (every `ClusterRole` labelled `rbac.authorization.k8s.io/aggregate-to-view` — reads, no Secrets), plus pieces labelled `auth.wxops.cloud/aggregate-to-persona-viewers` — the read-only role | `owned`, `namespaces` |
 | `wxops:persona-developers` | `view`, plus the write pieces: workloads (Deployments, StatefulSets, Jobs, CronJobs, Services, ConfigMaps, PVCs, Ingresses, HPAs, PDBs, `pods` `delete`) and the operator kinds tenants write (`ExternalSecret`, `Certificate`, Traefik `IngressRoute`/`Middleware`, `ServiceMonitor`/`PodMonitor`) | `owned`, `namespaces` |
 | `wxops:persona-owners` | as developers, plus `pods/exec`, `pods/attach`, `pods/portforward` — narrowed by the `exec-guard` policy | `owned`, `namespaces` |
 | `wxops:persona-platform` | `admin`, plus pieces labelled `auth.wxops.cloud/aggregate-to-persona-platform` | `owned`, `namespaces` |
 | `wxops:platform-view` · `-edit` · `-admin` | pieces labelled `auth.wxops.cloud/aggregate-to-platform-<level>` — W'xOps kinds only | `platform` |
+
+The built-in `view`, `edit` and `admin` are not bindable. `view` is `wxops:persona-viewers` without the pieces the platform adds for viewers — bind
+`wxops:persona-viewers`; `edit` and `admin` let a person act as any ServiceAccount in the namespace.
 
 **No team persona is built on the built-in `edit` or `admin`, and neither is bindable.** Both grant `impersonate` on ServiceAccounts and
 `create serviceaccounts/token`: a person holding them acts as any ServiceAccount in the namespace, holds that account's permissions, and — arriving as
@@ -51,7 +53,7 @@ Adding a permission to a persona is one small `ClusterRole` carrying one label; 
 
 | `scope` | Renders | Subjects |
 |---|---|---|
-| `owned` | a `RoleBinding` in every namespace labelled `auth.wxops.cloud/tenant-namespace: "true"` | only the persona's **groups whose team is that namespace's `wxops.cloud/owner`** — group `<org>:payment` in `payment`'s namespaces, never in `checkout`'s. Users and ServiceAccounts have no team, so they are not bound here |
+| `owned` | a `RoleBinding` in every namespace labelled `auth.wxops.cloud/tenant-namespace: "true"` | only the persona's **groups whose team is that namespace's `wxops.cloud/owner`** — group `<org>:payment` in `payment`'s namespaces, never in `checkout`'s — or whose team the persona maps to it (`status.owners`, a team labelled `wxops.cloud/owner`, [ADR-006](../../../development-docs/adr/006-team-owner-mapping.md)): `<org>:payment-maintainers` labelled `payment` is bound in `payment`'s namespaces too. Users and ServiceAccounts have no team, so they are not bound here |
 | `namespaces` | a `RoleBinding` in each listed namespace | every subject |
 | `platform` | one `ClusterRoleBinding` | every subject; only with a `wxops:platform-*` role |
 

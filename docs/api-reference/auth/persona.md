@@ -29,12 +29,39 @@ yet is skipped, not an error. The label's key holds the persona's name, so a per
 Team names reach RBAC exactly as the claim carries them, with no case folding: use slug-form team names (`a-z0-9-`) on every vendor
 ([RFC-005](../../../development-docs/rfc/005-git-mapped-authorization.md#open-questions), question 11).
 
+### A second team on one owner
+
+A team owns its own slug — group `<org>:payment` owns `payment`. A team that should also own another team's objects carries that owner as a label on its
+`XScmTeam` ([ADR-006](../../../development-docs/adr/006-team-owner-mapping.md)):
+
+```yaml
+metadata:
+  name: payment-maintainers
+  labels:
+    scm.wxops.cloud/oidc-login: "true"
+    auth.wxops.cloud/persona-owners: "true"
+    wxops.cloud/owner: payment            # also owns what payment owns
+```
+
+The persona publishes the mapping as `status.owners`; [`XPersonaBinding`](persona-binding.md) (`scope: owned`) and every
+[`XPlatformPolicy`](platform-policy.md) read the same label. One label, one extra owner. Only the platform team writes `XScmTeam`s, so only it can map a team.
+
+**Why it helps with many teams.** Owners stay plain team slugs, and team names never have to collide or be renamed to share a namespace: `payment` and
+`payment-maintainers` keep their own groups, members and SCM permissions, and the label says the second one also stands for the first. The mapping is in
+one place — the team's own manifest, reviewed — and every layer reads it: the RoleBindings it gets, the objects `owner-seal` lets it write, the namespaces
+`exec-guard` lets it exec in, the ServiceAccounts `sa-guard` lets its workloads run as. Removing the label removes all of it at the next reconcile. It is
+also how a team that crosses several products is given each one's slice — one team per crossing, each labelled with the owner it serves.
+
+**It converges, it does not switch:** a new or removed mapping reaches the persona, the bindings and the policies at their next reconcile. To see it
+sooner, nudge a policy: `kubectl annotate xplatformpolicy <name> wxops.test/nudge="$(date +%s)" --overwrite`. The sandbox plays it end to end with
+`./run.sh mapping` ([trying the templates](platform-policy.md#trying-the-templates-on-a-cluster)).
+
 ## spec.parameters
 
 | Field | Type | Default | Notes |
 |---|---|---|---|
 | `description` | `string` | — (required) | What the persona may do, in one line |
-| `environments` | `[string]` | `[]` | Environments the persona applies on; echoed to status. The gate that uses it arrives with the multi-cluster feature |
+| `environments` | `[string]` | `[]` | Environments the persona applies on; echoed to status. Enforced per namespace by the optional [`env-gate`](platform-policy.md) template — its members change a guarded namespace only if its `wxops.cloud/environment` is listed here. The per-cluster gate arrives with the multi-cluster feature |
 | `members.teams` | `boolean` | `true` | Generate members from labelled `XScmTeam`s |
 | `members.groups` | `[string]` | `[]` | Groups by hand, `<org>:<team>`. A `system:` group is refused |
 | `members.users` | `[string]` | `[]` | Dex usernames by hand. A `system:` username is refused |
@@ -53,6 +80,7 @@ name, through `members.serviceAccounts`.
 | `subjects` | Every member as an RBAC subject (`Group`, `User` or `ServiceAccount`), sorted and de-duplicated |
 | `groups` | The `Group` names alone — what a policy matches on |
 | `teams` | The `XScmTeam`s that contributed a group |
+| `owners` | `[{group, owner}]` — member teams mapped to a second owner by `wxops.cloud/owner` ([above](#a-second-team-on-one-owner)); empty when none is |
 | `environments` | As declared |
 
 ## Example

@@ -265,7 +265,7 @@ that brings its own control, or W'xOps's own skills and MCP servers — so the c
 
 | Option | Shape | Trade-off |
 |---|---|---|
-| `view` + `wxops:platform-view` | Standard roles, through an agent persona's `XPersonaBinding` | Simplest. `view` grows with every CRD that aggregates into it, and reads every ConfigMap |
+| `wxops:persona-viewers` + `wxops:platform-view` | Persona roles, through an agent persona's `XPersonaBinding` | Simplest. `view`, which it aggregates, grows with every CRD that aggregates into it, and reads every ConfigMap |
 | `wxops:persona-agents` | An aggregated allowlist: pods, `pods/log`, events, workloads, services, policy reports, ESO status, XR status | Nothing added silently; one more role in the binding enum and in provider-kubernetes's `bind` list |
 | A read proxy (MCP or tool server) | The agent holds no Kubernetes token; the server answers and redacts | Strongest boundary; a new component, worth it once agents act across many clusters |
 
