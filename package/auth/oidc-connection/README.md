@@ -16,7 +16,7 @@ Ready condition.
 ## Prerequisites
 
 ```bash
-kubectl apply -k providers/
+make providers                     # functions, provider packages, RBAC, ProviderConfigs — in order
 ```
 
 An install of the `dexidp` chart, in the namespace named by `config.namespace`, pointed at the same

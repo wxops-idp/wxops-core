@@ -7,7 +7,7 @@ Portal, or oauth2-proxy. Platform-defined: the platform team chooses every clien
 ## Prerequisites
 
 ```bash
-kubectl apply -k providers/
+make providers                     # functions, provider packages, RBAC, ProviderConfigs — in order
 ```
 
 An [`oidc-connection`](../oidc-connection) whose vendor names the remote-key prefix.

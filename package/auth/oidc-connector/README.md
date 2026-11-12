@@ -7,7 +7,7 @@ labelling an `XScmTeam`, not hand-editing `orgs[].teams` and restarting the brok
 ## Prerequisites
 
 ```bash
-kubectl apply -k providers/
+make providers                     # functions, provider packages, RBAC, ProviderConfigs — in order
 ```
 
 An [`oidc-connection`](../oidc-connection), the [`XScmConnection`](../../scm/connection) to

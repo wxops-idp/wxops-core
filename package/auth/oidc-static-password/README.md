@@ -8,7 +8,7 @@ same render that reads it.
 ## Prerequisites
 
 ```bash
-kubectl apply -k providers/
+make providers                     # functions, provider packages, RBAC, ProviderConfigs — in order
 ```
 
 An [`oidc-connection`](../oidc-connection) whose vendor names the remote-key prefix.

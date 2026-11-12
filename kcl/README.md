@@ -1,6 +1,8 @@
 # W'xOps Core - KCL Module
 
-`platform-database-clusters`, `tenant-database`, and `tenant-app` use [`function-kcl`](https://github.com/crossplane-contrib/function-kcl) instead of `function-go-templating`. The other packages (`gitea-*`, `random-password`) are simple enough that inline HCL / Go templating is sufficient.
+`database-cluster`, `database`, `app`, the `oidc-*` record packages (except `oidc-connection`), `persona`, `persona-binding` and `policy` use
+[`function-kcl`](https://github.com/crossplane-contrib/function-kcl) instead of `function-go-templating`. The `scm-*` packages and `oidc-connection` are a
+single composed resource each, rendered with `function-patch-and-transform`; their only KCL is the shared `status` step (`kcl/status/main.k`).
 
 ## Why KCL instead of Go templating
 
@@ -12,7 +14,7 @@ Go templating is a good fit when a Composition is "render this one manifest from
 - **Generate per-item resource sets from an array** via list comprehensions (`[... for r in managedRoles]`) — each `managedRoles[]` entry fans out into a Generator + ExternalSecret + PushSecret + a `spec.managed.roles[]` entry.
 - **Apply typed defaults** with `params.get("key", default)` instead of template `default` functions scattered everywhere.
 
-In short: reach for `function-go-templating` for small, mostly-static manifests; reach for `function-kcl` once a Composition has real branching/looping logic across multiple resources, as `platform-database-clusters` and `tenant-database` do.
+In short: reach for `function-go-templating` for small, mostly-static manifests; reach for `function-kcl` once a Composition has real branching/looping logic across multiple resources, as `database-cluster` and `database` do.
 
 ## Directory layout & sync workflow (current — inline embedding)
 
@@ -20,29 +22,29 @@ In short: reach for `function-go-templating` for small, mostly-static manifests;
 kcl/{pkg}/
   kcl.mod      ← KCL module metadata (name, version, dependencies)
   main.k       ← authoritative composition source
-package/{pkg}/
+package/{group}/{pkg}/
   composition.yaml  ← spec.source: | block is a generated copy of kcl/{pkg}/main.k
 ```
 
-`kcl/{pkg}/main.k` is the **single source of truth**. `package/{pkg}/composition.yaml` embeds a copy of it inline inside the `function-kcl` pipeline step's `KCLInput.spec.source` block, because `crossplane xpkg build` only packages the Configuration directory — it can't reach outside into `kcl/`.
+`kcl/{pkg}/main.k` is the **single source of truth**. `package/{group}/{pkg}/composition.yaml` embeds a copy of it inline inside the `function-kcl` pipeline step's `KCLInput.spec.source` block, because `crossplane xpkg build` only packages the Configuration directory — it can't reach outside into `kcl/`.
 
 To pick up changes after editing `main.k`:
 
 ```bash
-make kcl-sync     # re-embed kcl/{pkg}/main.k into package/{pkg}/composition.yaml
+make kcl-sync     # re-embed kcl/{pkg}/main.k into package/{group}/{pkg}/composition.yaml
 make kcl-check    # fail if composition.yaml has drifted from kcl/{pkg}/main.k
 ```
 
-`.github/scripts/kcl-sync.py` does the splicing (splits `composition.yaml` on the `source: |` marker, re-indents `main.k`, and replaces everything after it). A pre-commit hook (`kcl-drift-check`) runs `make kcl-check` automatically, so always run `make kcl-sync` and commit **both** `kcl/{pkg}/main.k` and `package/{pkg}/composition.yaml` together.
+`.github/scripts/kcl-sync.py` does the splicing (splits `composition.yaml` on the `source: |` marker, re-indents `main.k`, and replaces everything after it). A pre-commit hook (`kcl-drift-check`) runs `make kcl-check` automatically, so always run `make kcl-sync` and commit **both** `kcl/{pkg}/main.k` and `package/{group}/{pkg}/composition.yaml` together. A new KCL package is also added to `KCL_PACKAGES` in `kcl-sync.py`.
 
 ## Wiring a KCL module into an XRD
 
-1. **Define the schema** in `package/{pkg}/xrd.yaml` under `spec.versions[].schema.openAPIV3Schema.properties.spec.properties.parameters` — this becomes `option("params").oxr.spec.parameters` inside KCL.
+1. **Define the schema** in `package/{group}/{pkg}/xrd.yaml` under `spec.versions[].schema.openAPIV3Schema.properties.spec.properties.parameters` — this becomes `option("params").oxr.spec.parameters` inside KCL.
 2. **Write `kcl/{pkg}/main.k`**:
    - Read inputs: `oxr = option("params").oxr`, `params = oxr.spec.parameters`.
-   - Derive names/flags, build one variable per desired resource (each wrapped as a `kubernetes.crossplane.io/v1alpha2 Object` with `spec.forProvider.manifest`).
+   - Derive names/flags, build one variable per desired resource, each wrapped as a provider-kubernetes `Object` with `spec.forProvider.manifest`: `kubernetes.crossplane.io/v1alpha2` for a cluster-scoped kind, `kubernetes.m.crossplane.io/v1alpha1` through the `ClusterProviderConfig` `default` for a namespaced tenant kind (`XApp`, `XDatabase` — `tests/invariants.py` enforces it).
    - Assemble the final `items = [...]` list (the resources the Composition produces).
-3. **Wire the pipeline** in `package/{pkg}/composition.yaml`:
+3. **Wire the pipeline** in `package/{group}/{pkg}/composition.yaml`:
    ```yaml
    spec:
      mode: Pipeline
@@ -59,7 +61,7 @@ make kcl-check    # fail if composition.yaml has drifted from kcl/{pkg}/main.k
              source: |
                # contents of kcl/{pkg}/main.k go here (kept in sync via kcl-sync)
    ```
-   If the KCL code reads extra resources (e.g. `database` discovers shared clusters), add a `function-extra-resources` step **before** the `function-kcl` step — the fetched resources appear in `option("params").extraResources` inside KCL. See `package/platform/tenant-database/composition.yaml` for an example.
+   If the KCL code reads extra resources (e.g. `database` discovers shared clusters), add a `function-extra-resources` step **before** the `function-kcl` step — the fetched resources appear in `option("params").ctx["apiextensions.crossplane.io/extra-resources"]` inside KCL (not `option("params").extraResources`, which that function never fills). See `package/tenant/database/composition.yaml` for an example.
 4. **Run `make kcl-sync`** to embed the source, then `make kcl-check` (or `pre-commit run --all-files`) to confirm it's in sync.
 5. **Validate** with `make test` (the goldens under `tests/cases/{pkg}/`), and `make build` to confirm the package still packages cleanly.
 
@@ -67,7 +69,8 @@ make kcl-check    # fail if composition.yaml has drifted from kcl/{pkg}/main.k
 
 > The one helper already shared is `kcl/status/main.k`, embedded into the patch-and-transform packages by `make kcl-sync` (`STATUS_PACKAGES`).
 >
-> **Status: future.** Revisit when there are 3+ KCL packages sharing helper functions, or when a single `main.k` exceeds ~300 lines and becomes hard to navigate inside `composition.yaml`.
+> **Status: future.** It was to be revisited at 3+ KCL packages sharing helpers, or a `main.k` over ~300 lines. Both are true now — nine KCL packages, and `kcl/app/main.k` is
+> about 1,200 lines — and it is still deferred, since the inline sync works.
 
 The inline-embedding approach above (kcl-sync) works well for independent per-package logic, but breaks down when:
 
@@ -79,7 +82,7 @@ The inline-embedding approach above (kcl-sync) works well for independent per-pa
 
 ```yaml
 spec:
-  source: "oci://ghcr.io/wxops-idp/kcl-platform-database-clusters:v0.2.0"
+  source: "oci://ghcr.io/wxops-idp/kcl-database-cluster:v0.2.0"
 ```
 
 The function pulls the OCI artifact at reconcile time (or from its local cache) and runs it. The artifact is a standard KCL module packaged with `kcl mod push`.
@@ -92,10 +95,10 @@ kcl/
     kcl.mod
     eso.k                       ← helper fns: eso_password(), push_secret(), ...
     k8s_object.k                ← helper fn: k8s_object(manifest) wrapper
-  platform-database-clusters/
+  database-cluster/
     kcl.mod                     ← adds lib as a dependency
     main.k                      ← imports lib, much shorter
-  tenant-database/
+  database/
     kcl.mod
     main.k
 ```
@@ -111,7 +114,7 @@ edition = "v0.10.0"
 `kcl/database-cluster/kcl.mod` after adding the dependency:
 ```toml
 [package]
-name = "platform-database-clusters"
+name = "database-cluster"
 version = "0.2.0"
 edition = "v0.10.0"
 

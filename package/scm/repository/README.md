@@ -11,7 +11,7 @@ all vendor behaviour is HCL, and the composition contains none of it.
 ## Prerequisites
 
 ```bash
-kubectl apply -k providers/
+make providers                     # functions, provider packages, RBAC, ProviderConfigs — in order
 ```
 
 That brings `provider-opentofu` and its ProviderConfig. You also need an `XScmConnection` whose

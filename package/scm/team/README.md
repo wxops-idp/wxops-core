@@ -11,7 +11,7 @@ see [What differs from `gitea-team`](#what-differs-from-gitea-team) below.
 ## Prerequisites
 
 ```bash
-kubectl apply -k providers/
+make providers                     # functions, provider packages, RBAC, ProviderConfigs — in order
 ```
 
 That brings `provider-opentofu` and its ProviderConfig. You also need an `XScmConnection` whose
@@ -215,6 +215,7 @@ in with `mode: observed` instead).
 | `exists` | Present on the host |
 | `id` | The host's own identifier |
 | `org` | The connection's org, echoed |
+| `baseUrl` | The connection's base URL, echoed — an `XOIDCConnector` matches the team to the right host with it, since two hosts can share an org name |
 | `dexTeam` | The team name a connector would see — the Gitea name, or the GitHub slug |
 | `oidcGroup` | `<org>:<dexTeam>` — what a connector emits in the `groups` claim once this team is in scope |
 

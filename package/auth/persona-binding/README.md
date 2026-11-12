@@ -7,7 +7,7 @@ holds `bind` on exactly the roles this package accepts. See [RFC-009](../../../d
 ## Prerequisites
 
 ```bash
-kubectl apply -k providers/        # includes the static roles: providers/rbac/aggregate-persona.yaml, aggregate-platform.yaml (or just: make providers-rbac)
+make providers        # includes the static roles: providers/rbac/aggregate-persona.yaml, aggregate-platform.yaml (or just: make providers-rbac)
 ```
 
 An [`XPersona`](../persona). For `scope: owned`, tenant namespaces labelled `auth.wxops.cloud/tenant-namespace: "true"` and `wxops.cloud/owner: <team>`.
@@ -45,6 +45,16 @@ spec:
 ## Parameters
 
 See [`docs/api-reference/auth/persona-binding.md`](../../../docs/api-reference/auth/persona-binding.md).
+
+## Status
+
+| Field | Description |
+|---|---|
+| `created` / `ready` | True once every binding has been applied at least once / while every binding is applied and in sync. `ready` is false while the persona cannot be read |
+| `synced` / `syncMessage` | `synced` is false while a binding failed its last apply, or the persona or parameters cannot be resolved; `syncMessage` says what, truncated |
+| `bindings` | Every binding this resource renders, with how many subjects each carries |
+
+Full reference: [`docs/api-reference/auth/persona-binding.md`](../../../docs/api-reference/auth/persona-binding.md#status).
 
 ## Build and publish
 

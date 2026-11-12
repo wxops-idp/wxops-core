@@ -10,9 +10,9 @@ scaffold — `Deployment` + `Service` + optional `Ingress` + optional
 `app.kubernetes.io/*` label conventions.
 
 This package deliberately stops at the application workload: Vault-backed
-secrets and databases are platform-level concerns, wired in via
-`secretsFrom.{app,database}` (Secrets provisioned out-of-band by GitOps or a
-[`XDatabase`](../../platform/archives/tenant-database) claim). Composition logic is written
+secrets and databases are wired in via
+`secretsFrom.{app,database}` (Secrets provisioned out-of-band by GitOps, or the
+credentials of an [`XDatabase`](../database) in the same namespace). Composition logic is written
 in KCL — see [`kcl/app/main.k`](../../../kcl/app/main.k).
 
 ## Prerequisites
