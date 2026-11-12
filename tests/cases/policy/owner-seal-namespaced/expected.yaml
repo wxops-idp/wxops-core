@@ -1,0 +1,120 @@
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPolicy
+metadata:
+  name: owner-seal-namespaced
+spec:
+  crossplane:
+    resourceRefs:
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: 96da1df0-policy
+status:
+  conditions:
+    - reason: WatchCircuitClosed
+      status: 'True'
+      type: Responsive
+    - reason: ReconcileSuccess
+      status: 'True'
+      type: Synced
+    - message: 'Unready resources: 96da1df0-policy'
+      reason: Creating
+      status: 'False'
+      type: Ready
+  created: false
+  policyKind: ValidatingPolicy
+  policyName: wxops-owner-seal-namespaced
+  ready: false
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: 96da1df0-policy
+  labels:
+    crossplane.io/composite: owner-seal-namespaced
+  name: 96da1df0-policy
+  ownerReferences:
+    - apiVersion: auth.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XPolicy
+      name: owner-seal-namespaced
+      uid: 96da1df0-0b82-5333-83dd-ba4a2765503d
+spec:
+  forProvider:
+    manifest:
+      apiVersion: policies.kyverno.io/v1
+      kind: ValidatingPolicy
+      metadata:
+        labels:
+          auth.wxops.cloud/policy: owner-seal-namespaced
+          auth.wxops.cloud/template: owner-seal
+          wxops.cloud/managed-by: platform-policy
+        name: wxops-owner-seal-namespaced
+      spec:
+        evaluation:
+          background:
+            enabled: false
+        failurePolicy: Fail
+        matchConditions:
+          - expression: '!(request.resource.group in [''authentication.k8s.io'', ''authorization.k8s.io'', ''login.concierge.pinniped.dev'', ''identity.concierge.pinniped.dev'']) && !(request.resource.resource in [''events'', ''leases''])'
+            name: not-excluded
+          - expression: '!request.userInfo.username.startsWith(''system:'') && request.userInfo.groups.exists(g, [''wxops-idp:''].exists(p, g.startsWith(p)))'
+            name: scm-user
+        matchConstraints:
+          excludeResourceRules:
+            - apiGroups:
+                - authentication.k8s.io
+                - authorization.k8s.io
+                - login.concierge.pinniped.dev
+                - identity.concierge.pinniped.dev
+              apiVersions:
+                - '*'
+              operations:
+                - '*'
+              resources:
+                - '*'
+            - apiGroups:
+                - ''
+                - events.k8s.io
+              apiVersions:
+                - '*'
+              operations:
+                - '*'
+              resources:
+                - events
+            - apiGroups:
+                - coordination.k8s.io
+              apiVersions:
+                - '*'
+              operations:
+                - '*'
+              resources:
+                - leases
+          resourceRules:
+            - apiGroups:
+                - '*'
+              apiVersions:
+                - '*'
+              operations:
+                - CREATE
+                - UPDATE
+                - DELETE
+              resources:
+                - '*'
+        validationActions:
+          - Deny
+        validations:
+          - expression: (request.operation == 'DELETE' || variables.newOwner in variables.teams) && (request.operation == 'CREATE' || variables.oldOwner in variables.teams)
+            messageExpression: '''auth.wxops.cloud: owner '' + (request.operation == ''DELETE'' ? variables.oldOwner : variables.newOwner) + '' is not one of your teams ['' + variables.teams.join('', '') + '']'''
+        variables:
+          - expression: request.userInfo.groups.filter(g, ['wxops-idp:'].exists(p, g.startsWith(p))).map(g, g.substring(g.indexOf(':') + 1))
+            name: teams
+          - expression: 'namespaceObject != null && has(namespaceObject.metadata.labels) && ''wxops.cloud/owner'' in namespaceObject.metadata.labels ? namespaceObject.metadata.labels[''wxops.cloud/owner''] : '''''
+            name: nsOwner
+          - expression: '(object != null ? (has(object.metadata.labels) && ''wxops.cloud/owner'' in object.metadata.labels ? object.metadata.labels[''wxops.cloud/owner''] : variables.nsOwner) : '''')'
+            name: newOwner
+          - expression: '(oldObject != null ? (has(oldObject.metadata.labels) && ''wxops.cloud/owner'' in oldObject.metadata.labels ? oldObject.metadata.labels[''wxops.cloud/owner''] : variables.nsOwner) : '''')'
+            name: oldOwner
+  providerConfigRef:
+    name: default

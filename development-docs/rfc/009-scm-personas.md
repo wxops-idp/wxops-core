@@ -439,7 +439,7 @@ that breaks the rule, or that cannot be checked because Kyverno is down, never l
 - **`mode` never grants access.** Switching a policy to `Audit` opens it for every SCM user, cluster-wide, with no expiry. Debugging access is a
   time-bound exemption — `temporaryExemptPersonaRef` with `until`, beside the standing `exemptPersonaRef`, checked by Kyverno's `time.now()`, no `break-glass` template — and RBAC elevation separately.
 - **Where the default lands.** `XPlatformPolicy`'s `mode` defaults to `Deny` from the release after `release-2026-11-04` (a `careful` change: an XR that
-  left `mode` out starts refusing on upgrade); `XPolicy`, the successor kind ([ADR-005](../adr/005-kind-naming-x-prefix.md)), inherits it.
+  left `mode` out starts refusing on upgrade); `XPolicy`, the successor kind ([ADR-005](../adr/005-kind-ownership-scope-and-naming.md)), inherits it.
 - **Why `Audit` was the first default, and why it is not now.** It guarded unproven templates (now proven), unlabelled objects that would lock their owners
   out (a rollout order — label first, or [RFC-010](010-namespaced-tenant-kinds.md)'s namespaced tenant kinds), and assumed PolicyReports would show what it
   caught (they were not running).
@@ -514,7 +514,7 @@ Run on one cluster with two test teams, `team-a` and `team-b`, before this RFC i
 #### Spike and acceptance results (2026-11-04)
 
 Run on the hub — RKE2, Kubernetes v1.36.5 (upgraded from v1.34.5 during the run), Kyverno v1.19.2, Pinniped v0.46.0 through its impersonation proxy — with
-the [scenario kit](../../examples/auth/platform-policy/scenarios): two team namespaces, the sandbox personas and bindings, all eight templates in `Deny`.
+the [scenario kit](../../examples/auth/policy/scenarios): two team namespaces, the sandbox personas and bindings, all eight templates in `Deny`.
 Impersonated run: **50/50**. Real logins through Dex and Pinniped, one user per session: **alice 26/26**, **bob 7/7**, **paula 8/8** — alice's first
 run had one failure, the kit misreading an RBAC refusal as a policy refusal (fixed below), and passed in full on the rerun.
 
@@ -608,7 +608,7 @@ run had one failure, the kit misreading an RBAC refusal as a policy refusal (fix
 - [x] **Phase 4 — `Deny` by default.** Shipped in `release-2026-11-09`, proven in the sandbox (impersonation; `./run.sh mapping` and `./run.sh env-gate`
   replay the new pieces). `XPlatformPolicy`'s `mode` defaults to `Deny` — validating templates in
   `Deny` with `failurePolicy: Fail` ([decision](#deny-by-default-audit-by-choice--decided-2026-11-06)) — and `temporaryExemptPersonaRef` (with `until`) makes an exemption
-  time-bound. `XPolicy` ([ADR-005](../adr/005-kind-naming-x-prefix.md)) inherits both. On a cluster with workloads, owner labels come first.
+  time-bound. `XPolicy` ([ADR-005](../adr/005-kind-ownership-scope-and-naming.md)) inherits both. On a cluster with workloads, owner labels come first.
   Built 2026-11-07 beside it: **scope per template** (`namespaceSelector`; cluster-scoped objects never skipped), the **owner mapping** — a team's
   `wxops.cloud/owner` label adds a second owner, read by `XPersona` (`status.owners`), `XPersonaBinding` and every policy
   ([ADR-006](../adr/006-team-owner-mapping.md)) — and **`owner-stamp` on create and update**: an explicit owner label from any writer is kept, a missing one

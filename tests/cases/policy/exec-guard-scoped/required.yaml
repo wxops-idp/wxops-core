@@ -1,0 +1,29 @@
+# Two persona lookups: personaRef (who may exec) and exemptPersonaRef (who is not subject to the policy at all). See kcl/policy/main.k.
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPersona
+metadata:
+  name: owners
+  labels:
+    crossplane.io/composite: owners
+spec:
+  parameters:
+    description: As developers, and production — a team's maintainers
+status:
+  subjects:
+    - {kind: Group, name: "wxops-idp:owners", apiGroup: rbac.authorization.k8s.io}
+    - {kind: User, name: alice, apiGroup: rbac.authorization.k8s.io}
+    - {kind: ServiceAccount, name: debugger, namespace: ai-suite}
+---
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPersona
+metadata:
+  name: platform
+  labels:
+    crossplane.io/composite: platform
+spec:
+  parameters:
+    description: Takes responsibility across every org, team and cluster
+status:
+  subjects:
+    - {kind: Group, name: "wxops-idp:platform", apiGroup: rbac.authorization.k8s.io}
+    - {kind: User, name: root, apiGroup: rbac.authorization.k8s.io}

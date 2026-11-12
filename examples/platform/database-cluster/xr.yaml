@@ -1,0 +1,109 @@
+apiVersion: platform.wxops.cloud/v1alpha1
+kind: XDatabaseCluster
+metadata:
+  name: cluster-a
+  labels:
+    wxops.cloud/managed-by: platform-database-clusters
+spec:
+  # spec.crossplane is a sibling of spec.parameters, not a field inside it — track a channel
+  # (every release labels its Composition channel: stable; make install-dev applies channel:
+  # nightly). See development-docs/development/releasing.md#channels for the Manual-pin alternative.
+  # crossplane:
+  #   compositionRevisionSelector:
+  #     matchLabels:
+  #       channel: stable          # or nightly
+  #   compositionUpdatePolicy: Automatic
+  parameters:
+    clusterName: cluster-a
+    namespace: cnpg-system
+    instances: 1
+    postgresVersion: 16
+    storageSize: "8Gi"
+    shared: true       # joins the shared pool an XDatabase with tier: shared is placed on (needs the managed-by label above)
+    environment: dev   # the pool is per environment — an XDatabase with environment: dev (or none) lands on dev clusters
+    vaultPlatformSecretStore: "vault-platform"
+
+    # RW pooler (default: enabled)
+    enablePooler: true
+    poolMode: transaction
+
+    # PostgreSQL configuration (postgresql.conf + pg_hba.conf)
+    # postgresConfig:
+    #   tuning:
+    #     maxConnections: 300
+    #     sharedBuffers: "1GB"
+    #     workMem: "16MB"
+    #     maintenanceWorkMem: "256MB"
+    #     effectiveCacheSize: "3GB"
+    #     maxWalSize: "2GB"
+    #     minWalSize: "512MB"
+    #     checkpointCompletionTarget: "0.9"
+    #     randomPageCost: "1.1"          # SSD-backed storage
+    #     logMinDurationStatement: "1000" # log queries slower than 1s
+    #     logStatement: "ddl"
+    #     statementTimeout: "30s"
+    #     idleInTransactionSessionTimeout: "10min"
+    #   # Free-form escape hatch for anything not in `tuning` (overrides on collision)
+    #   extraParameters:
+    #     track_io_timing: "on"
+    #     wal_compression: "zstd"
+    #   # Extra pg_hba rules appended after CNPG's defaults
+    #   pgHba:
+    #     - "hostssl app app_db 10.0.0.0/8 scram-sha-256"
+
+    # Prometheus Operator integration
+    monitoring:
+      enablePodMonitor: false
+
+    # Barman backup to S3 / MinIO (disabled by default)
+    backup:
+      enabled: false
+      # destinationPath: "s3://my-bucket/cnpg/cluster-a"
+      # endpointURL: "http://minio.minio-system.svc.cluster.local:9000"
+      # credentialsSecretRef:
+      #   name: s3-credentials
+      #   namespace: cnpg-system
+      # schedule: "0 0 2 * * *"
+      # retentionPolicy: "30d"
+
+    # Read-only replica pooler (disabled by default)
+    readReplica:
+      enablePooler: false
+      # poolerInstances: 1
+
+    # Cluster-wide managed roles (disabled by default). Each entry gets a
+    # stable (refreshInterval "0", never auto-rotated) ESO-generated password
+    # synced to Vault at database-clusters/{clusterName}/roles/{name}/creds.
+    # Delete the generated Secret ({clusterName}-{name}-creds) to force a
+    # password regeneration.
+    # managedRoles:
+    #   - name: readonly
+    #     login: true
+    #     inRoles:
+    #       - pg_read_all_data
+    #   - name: monitoring
+    #     login: true
+    #     inRoles:
+    #       - pg_monitor
+    #       - pg_read_all_stats
+    #   - name: app-admin
+    #     login: true
+    #     createdb: true
+    #     createrole: true
+    #     connectionLimit: 10
+
+    # Bootstrap mode (default: fresh empty cluster)
+    # bootstrapFrom:
+    #   type: import-microservices      # or import-monolith
+    #   sourceHost: "legacy-pg.internal"
+    #   sourcePort: 5432
+    #   sourceDatabase: "myapp"         # microservices: single db
+    #   sourceUser: postgres
+    #   sourceSSLMode: require
+    #   sourcePasswordSecretRef:
+    #     name: legacy-pg-superuser
+    #     namespace: cnpg-system
+    #
+    # For import-monolith:
+    #   sourceDatabases: [myapp, reporting]
+    #   sourceRoles: [myapp_owner, reporting_reader]

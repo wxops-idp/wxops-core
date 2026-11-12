@@ -33,7 +33,7 @@ Every finding carries a tier from release-notes/README.md's change taxonomy:
 
 Usage:
     python3 tests/api_compat.py                   # all packages vs last release tag
-    python3 tests/api_compat.py tenant-app
+    python3 tests/api_compat.py app
     python3 tests/api_compat.py --baseline v0.4.0
     python3 tests/api_compat.py --json            # for the release tooling
     python3 tests/api_compat.py --self-test       # tests/cases/_api_compat fixtures
@@ -185,13 +185,16 @@ def diff_xrd(old_doc: dict, new_doc: dict) -> list[Finding]:
     out: list[Finding] = []
     os_, ns = old_doc.get("spec") or {}, new_doc.get("spec") or {}
 
-    # Crossplane: "You can't change the XRD group or names."
-    for field in ("group", "scope"):
+    # Crossplane: "You can't change the XRD group or names." Its XRD CRD enforces it with `self == oldSelf` on spec.group, spec.scope,
+    # spec.enforcedCompositionRef and the WHOLE spec.names object — so adding categories or shortNames to an existing XRD is refused by the API
+    # server ("spec.names: Invalid value: Value is immutable"), not just a renamed kind or plural. Only a new kind can carry new names.
+    for field in ("group", "scope", "enforcedCompositionRef"):
         if os_.get(field) != ns.get(field):
             out.append(Finding("breaking", "immutable-changed", field,
                                f"{os_.get(field)!r} → {ns.get(field)!r}"))
-    for field in ("kind", "plural"):
-        o, n = (os_.get("names") or {}).get(field), (ns.get("names") or {}).get(field)
+    old_names, new_names = os_.get("names") or {}, ns.get("names") or {}
+    for field in sorted(set(old_names) | set(new_names)):
+        o, n = old_names.get(field), new_names.get(field)
         if o != n:
             out.append(Finding("breaking", "immutable-changed", f"names.{field}", f"{o!r} → {n!r}"))
 

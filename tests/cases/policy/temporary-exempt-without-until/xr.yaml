@@ -1,0 +1,11 @@
+# A temporary exemption needs `until`: the XRD's CEL rule refuses it on a cluster; offline it reaches the composition, which exempts nobody and says why.
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPolicy
+metadata:
+  name: temporary-exempt-without-until
+spec:
+  parameters:
+    template: protected
+    scmOrgs: [wxops-idp]
+    temporaryExemptPersonaRef:
+      name: debug-alice

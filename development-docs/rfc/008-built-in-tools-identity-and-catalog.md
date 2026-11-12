@@ -118,7 +118,7 @@ All objects carry `wxops.cloud/owner: <owner>` and `wxops.cloud/tool: <tool>`, a
 
 The `AppProject` is the one object outside the tenant namespace. A namespaced XR composes only into its own namespace, so it is rendered as a namespaced
 provider-kubernetes `Object` in the tenant namespace whose manifest targets Argo CD's — the same cross-namespace write [RFC-010](010-namespaced-tenant-kinds.md)
-needs for `XDatabase`, read in the provider's code and **not yet tested** (Phase 0). If it does not hold, only this piece moves to a small cluster-scoped
+needs for `XDatabase`: the provider's v1.2.1 code applies a manifest's namespace as written and does not restrict it, but it is **not yet run on a cluster** (Phase 0). If it does not hold, only this piece moves to a small cluster-scoped
 kind; OpenBao and Grafana stay in the tenant namespace.
 
 ### Persona → tool access
@@ -178,8 +178,8 @@ reach it. It writes nothing back; an object made by hand still appears — as on
 ### Compatibility and change tier
 
 Two new packages — `workspace-class` (`XWorkspaceClass`, `platform.wxops.cloud`) and `workspace` (`XWorkspace`, `tenant.wxops.cloud`) — at `v1alpha1`:
-additive, `safe`. The new `tenant.wxops.cloud` group needs an ADR beside [ADR-002](../adr/002-three-api-groups.md) (three groups → four), shared with
-RFC-010. Names follow [ADR-005](../adr/005-kind-naming-x-prefix.md). `provider-vault` stays on the reference stack as today.
+additive, `safe`. Names, the new `tenant.wxops.cloud` group and each kind's scope follow [ADR-005](../adr/005-kind-ownership-scope-and-naming.md).
+`provider-vault` stays on the reference stack as today.
 
 ### Testing
 
@@ -213,7 +213,7 @@ RFC-010. Names follow [ADR-005](../adr/005-kind-naming-x-prefix.md). `provider-v
 
 - [x] **Spike — OpenBao OIDC login through Dex with an external group alias.** Verified 2026-10-21: the `groups` claim binds to the external group's alias.
 - [ ] **Now: document the default setup** per tool in `docs/user-guide/setup.md` — login, default access, the bootstrap steps that stay manual.
-- [ ] **Phase 0 — decide and spike.** The `tenant.wxops.cloud` ADR (with RFC-010). Spikes: each `provider-vault` namespaced resource against OpenBao;
+- [ ] **Phase 0 — decide and spike.** The `tenant.wxops.cloud` group is decided ([ADR-005](../adr/005-kind-ownership-scope-and-naming.md)). Spikes: each `provider-vault` namespaced resource against OpenBao;
   `GrafanaFolder` with `allowCrossNamespaceImport`; a namespaced provider-kubernetes `Object` writing an `AppProject` into Argo CD's namespace; Grafana
   open source per-team folder access.
 - [ ] **Phase 1 — `XWorkspaceClass` and `XWorkspace` with OpenBao:** adopt the existing mounts and backends; render each tenant's policy, groups and aliases.

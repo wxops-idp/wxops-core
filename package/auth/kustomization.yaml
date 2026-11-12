@@ -13,4 +13,4 @@ resources:
   - oidc-connector
   - persona
   - persona-binding
-  - platform-policy
+  - policy

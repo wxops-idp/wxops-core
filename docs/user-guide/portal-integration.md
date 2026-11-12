@@ -67,7 +67,7 @@ Present only when `status.darlane` exists (absent ⇒ twin disabled — hide the
 | Twin on/off, replicas | writes `parameters.darlane.{enabled,replicas}`; reads `status.darlane.{ready,replicas}` — **status replicas are observed, spec are desired; show both when they differ** |
 | Traffic mode badge | `status.darlane.trafficMode` (`none\|weighted\|header\|both`) |
 | TTL countdown | `status.darlane.ttl` is a **duration** (`"4h"`), not a timestamp — compute expiry client-side from the twin Deployment's `creationTimestamp` |
-| "Open shell" | requires an RBAC binding to `status.darlane.serviceAccountName` — the portal *displays* the SA name and links the runbook; it does not grant access (the RBAC seam — [tenant-app.md](../api-reference/platform/tenant-app.md#developer-access-and-rbac)) |
+| "Open shell" | requires an RBAC binding to `status.darlane.serviceAccountName` — the portal *displays* the SA name and links the runbook; it does not grant access (the RBAC seam — [tenant-app.md](../api-reference/_archives/tenant-app.md#developer-access-and-rbac)) |
 | Prod toggle | `darlane.productionOverride` — surface as an explicit double-confirm, that's its purpose |
 
 ### Databases (`XTenantDatabase`)
@@ -106,6 +106,6 @@ escalated", with the evidence bundle attached
 
 ## See also
 
-[`status-contract.md`](../api-reference/status-contract.md) — the producer contract · [`tenant-app.md`](../api-reference/platform/tenant-app.md) /
-[`tenant-database.md`](../api-reference/platform/tenant-database.md) — full field reference ·
+[`status-contract.md`](../api-reference/status-contract.md) — the producer contract · [`tenant-app.md`](../api-reference/_archives/tenant-app.md) /
+[`tenant-database.md`](../api-reference/_archives/tenant-database.md) — full field reference ·
 [`solution-matrix.md`](../../development-docs/core-ideas/solution-matrix.md) — what's shipped vs. designed before you build UI against it.

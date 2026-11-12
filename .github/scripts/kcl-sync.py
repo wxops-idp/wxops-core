@@ -31,9 +31,9 @@ sys.path.insert(0, str(ROOT / "tests" / "lib"))
 import packages as P  # noqa: E402
 
 KCL_PACKAGES = [
-    "platform-database-clusters", "tenant-database", "tenant-app",
+    "database-cluster", "database", "app",
     "oidc-static-password", "oidc-client", "oidc-connector",
-    "persona", "persona-binding", "platform-policy",
+    "persona", "persona-binding", "policy",
 ]
 
 # Patch-and-transform packages whose last pipeline step is the shared kcl/status/main.k. Each

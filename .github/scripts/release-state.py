@@ -261,6 +261,16 @@ def check() -> int:
             else:
                 legacy.append(pkg)  # pinned before date-named releases existed
 
+    # An archived package must leave package/install/ too: its manifest would keep installing a Configuration whose XRD the release no longer ships.
+    registered = set(packages())
+    for manifest in sorted(INSTALL.glob("*/*.yaml")):
+        if manifest.name != "kustomization.yaml" and manifest.stem not in registered:
+            problems.append(f"{manifest.stem}: {rel(manifest)} exists but the package is not in VERSIONS.yaml — an archived package's install manifest is removed with it")
+    for kust in sorted(INSTALL.glob("*/kustomization.yaml")):
+        for entry in re.findall(r"(?m)^\s*-\s+(\S+\.yaml)\s*$", kust.read_text()):
+            if not (kust.parent / entry).exists():
+                problems.append(f"{rel(kust)} lists {entry}, which does not exist")
+
     if legacy:
         print(f"  note  {len(legacy)} legacy pin(s) not on {REGISTRY}: {', '.join(legacy)} — "
               f"the first `make release ALL=1` moves them")
@@ -309,7 +319,19 @@ def summary(release: str, draft: bool = False) -> str:
             notable.append(f"- `{pkg}` · **{f['tier']}**{allowed} · `{f['rule']}` · "
                            f"`{f['path']}`{detail}")
 
-    head = (f"API group `platform.wxops.cloud`. Change tiers are measured against `{baseline}` "
+    groups = [f"`{g}.wxops.cloud`" for g in P.groups()]
+    named = groups[0] if len(groups) == 1 else ", ".join(groups[:-1]) + " and " + groups[-1]
+    # A package archived in this release is no longer in VERSIONS.yaml, so the loop above never saw it: list it, with what its removal breaks.
+    for pkg, entry in sorted((report.get("packages") or {}).items()):
+        if pkg in pk:
+            continue
+        rows.append(f"| `{pkg}` | — | — | `{entry.get('tier', 'breaking')}` | archived — removed from this release |")
+        for f in entry.get("findings") or []:
+            allowed = " (allowed)" if f.get("allowed") else ""
+            detail = f" — {f['detail']}" if f.get("detail") else ""
+            notable.append(f"- `{pkg}` · **{f['tier']}**{allowed} · `{f['rule']}` · `{f['path']}`{detail}")
+
+    head = (f"API group{'s' if len(groups) > 1 else ''} {named}. Change tiers are measured against `{baseline}` "
             f"by `tests/api_compat.py`." if baseline else
             "First release — there is no earlier release to measure changes against.")
     out = [head, "", *rows]

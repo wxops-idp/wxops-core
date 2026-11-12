@@ -2,7 +2,7 @@
 
 > [!NOTE]
 > **Status: shipped inside `XTenantApp`** (`spec.parameters.darlane`); the standalone `XDarlane` is the future. Every field is in the
-> [API reference](../../docs/api-reference/platform/tenant-app.md#darlane-debug-twin-deployment). This page is the why, what ships, and what comes next — the
+> [API reference](../../docs/api-reference/_archives/tenant-app.md#darlane-debug-twin-deployment). This page is the why, what ships, and what comes next — the
 > [detailed edition](../_archives/darlane-detailed.md) keeps every workflow pattern, scenario playbook and trade-off for anyone diving deeper.
 
 ---
@@ -198,15 +198,14 @@ RBAC. Platform kinds (`XPlatformDatabaseCluster`, `XScm*`, `XOIDC*`, `auth.wxops
 | Session audit wired by hand | `audit`, required by policy for production steal mode |
 
 ```yaml
-apiVersion: platform.wxops.cloud/v1alpha1
+apiVersion: tenant.wxops.cloud/v1alpha1
 kind: XDarlane
 metadata:
   name: payment-api-dev-alice
-  labels:
-    wxops.cloud/owner: payment          # who may use it — resolved by the access model, never by RBAC in the claim
+  namespace: payment                    # owner = this namespace's wxops.cloud/owner (ADR-005)
 spec:
   parameters:
-    appRef: {name: payment-api}         # the XTenantApp this workspace mirrors
+    appRef: {name: payment-api}         # the XApp this workspace mirrors, in the same namespace
     ttl: "8h"                           # mandatory
     fileSync: {enabled: true, mountPath: /app}
     debugPort: {enabled: true, protocol: dap, port: 5678, language: python}
@@ -219,12 +218,12 @@ spec:
 
 Each consumer holds its own claim — `payment-api-dev-alice` (8h), `payment-api-sre-hotfix` (2h, `productionOverride`), `payment-api-agent-branch` (4h, no
 traffic) — and the app's XR never changes. Migration is additive: `darlane.*` keeps working. The app kind it mirrors is
-[RFC-010](../rfc/010-namespaced-tenant-kinds.md)'s namespaced `XApp`, named by [ADR-005](../adr/005-kind-naming-x-prefix.md).
+[RFC-010](../rfc/010-namespaced-tenant-kinds.md)'s namespaced `XApp`, named by [ADR-005](../adr/005-kind-ownership-scope-and-naming.md).
 
 ### Built as a Crossplane function — not a provider, not an operator
 
 *Decided 2026-11-06.* `XDarlane` is a Configuration package whose pipeline ends in a composition function: `function-kcl` while the logic is small (today's
-~150 lines in `kcl/tenant-app/main.k`), then **`function-darlane`**, written in Go with `function-sdk-go`, once twin inheritance, flags and test wiring
+~150 lines in `kcl/app/main.k`), then **`function-darlane`**, written in Go with `function-sdk-go`, once twin inheritance, flags and test wiring
 outgrow KCL. Crossplane's own reconciler does the watching, retries and drift; Darlane writes only the step that turns an app into its twin. This is the
 escape hatch the [no-controller decision](../_archives/ROADMAP.md) names — "the answer is a new Crossplane *function*, not a bespoke operator".
 

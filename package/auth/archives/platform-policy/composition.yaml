@@ -1,0 +1,511 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: xplatformpolicies.auth.wxops.cloud
+  labels:
+    crossplane.io/xrd: xplatformpolicies.auth.wxops.cloud
+    channel: stable
+spec:
+  compositeTypeRef:
+    apiVersion: auth.wxops.cloud/v1alpha1
+    kind: XPlatformPolicy
+
+  mode: Pipeline
+  pipeline:
+    - step: fetch-resources
+      functionRef:
+        name: function-extra-resources
+      input:
+        apiVersion: extra-resources.fn.crossplane.io/v1beta1
+        kind: Input
+        spec:
+          extraResources:
+            # Each *Ref is a single named lookup via the "crossplane.io/composite" label every root XR carries, set by
+            # Crossplane to its own metadata.name — see kcl/platform-policy/main.k. Both are optional.
+            - kind: XPersona
+              into: personas
+              apiVersion: auth.wxops.cloud/v1alpha1
+              type: Selector
+              selector:
+                maxMatch: 1
+                minMatch: 0
+                matchLabels:
+                  - key: crossplane.io/composite
+                    type: FromCompositeFieldPath
+                    valueFromFieldPath: spec.parameters.personaRef.name
+            - kind: XPersona
+              into: exemptPersonas
+              apiVersion: auth.wxops.cloud/v1alpha1
+              type: Selector
+              selector:
+                maxMatch: 1
+                minMatch: 0
+                matchLabels:
+                  - key: crossplane.io/composite
+                    type: FromCompositeFieldPath
+                    valueFromFieldPath: spec.parameters.exemptPersonaRef.name
+            # Optional: an XR created before this field existed has no such path until the API server re-reads it with the new
+            # schema's default, and a Required path would fail the whole pipeline. A missing path skips the lookup — nobody is exempt.
+            - kind: XPersona
+              into: temporaryExemptPersonas
+              apiVersion: auth.wxops.cloud/v1alpha1
+              type: Selector
+              selector:
+                maxMatch: 1
+                minMatch: 0
+                matchLabels:
+                  - key: crossplane.io/composite
+                    type: FromCompositeFieldPath
+                    valueFromFieldPath: spec.parameters.temporaryExemptPersonaRef.name
+                    fromFieldPathPolicy: Optional
+            # Every team that can log in — the same set XPersona draws on — for the owner mapping: a team labelled
+            # `wxops.cloud/owner: <owner>` also owns <owner> (ADR-006).
+            - kind: XScmTeam
+              into: teams
+              apiVersion: scm.wxops.cloud/v1alpha1
+              type: Selector
+              selector:
+                maxMatch: 500
+                minMatch: 0
+                matchLabels:
+                  - key: scm.wxops.cloud/oidc-login
+                    type: Value
+                    value: "true"
+    - step: render
+      functionRef:
+        name: function-kcl
+      input:
+        apiVersion: krm.kcl.dev/v1alpha1
+        kind: KCLInput
+        metadata:
+          name: render
+        spec:
+          source: |
+            """
+            XPolicy and XPlatformPolicy — KCL composition source, shared by both kinds (ADR-005: XPolicy replaces XPlatformPolicy, which is archived once every XR has moved).
+
+            Renders ONE reviewed Kyverno CEL policy (policies.kyverno.io/v1) per XR, chosen by `template`. Policies are templates with parameters, not free-form CEL: a new rule is a
+            change to this file, with tests. Kyverno only ever refuses (ValidatingPolicy) or copies a namespace's owner (MutatingPolicy); it grants nothing — RBAC does (XPersonaBinding).
+
+            Inputs (via option("params").oxr.spec.parameters):
+              template          string    owner-stamp | owner-seal | secret-guard | exec-guard | protected | rbac-guard | sa-guard | namespace-guard | env-gate.
+              mode              string    Deny (default) | Audit. Ignored by owner-stamp.
+              scmOrgs           [string]  The orgs whose "<org>:<team>" groups make a caller an SCM user.
+              personaRef.name   string    exec-guard: the persona that may exec. env-gate: the persona that may change the guarded environments.
+              environments      [string]  env-gate: the environments it guards — namespaces whose `wxops.cloud/environment` is one of these, and an XApp or XDatabase whose own
+                                          `spec.parameters.environment` is one of these (RFC-010 §2b): a second Kyverno policy, `wxops-<name>-apps`.
+              exemptPersonaRef.name string  A persona the policy does not apply to, for good (the platform team) — a match condition, never reaches Kyverno.
+              temporaryExemptPersonaRef.{name, until}  A second persona exempt until `until` (RFC 3339 UTC) — checked by Kyverno's time.now() inside each validation.
+              namespaceSelector object    Optional label selector (matchLabels, matchExpressions): the policy applies only in matching namespaces. Cluster-scoped objects
+                                          are never skipped by a namespace selector. owner-stamp keeps its tenant-namespace label on top.
+              ownerPattern      string    owner-seal: the owner label must match this RE2 pattern.
+              immutableOwner    bool      owner-seal: the owner may not change on update.
+
+            Annotation (on the XR, never a parameter):
+              wxops.cloud/handover: "true"   Hands the Kyverno policy over to the new kind. The Object is rendered Observe-only with deletionPolicy Orphan, so it stops writing
+                                             and deleting the XR leaves the policy in place. See docs/user-guide/migrating-to-new-kinds.md.
+
+            Design:
+              Who a policy applies to — SCM users and nobody else. The match condition `scm-user` is: no `system:` username, and at least one group "<org>:..." for a listed org.
+              Controllers, Crossplane, External Secrets Operator and Argo CD are never matched; they answer to their own RBAC (Argo CD to its AppProjects and merge review).
+              Who owns an object — its `wxops.cloud/owner` label; an unlabelled NAMESPACED object takes its namespace's. A cluster-scoped object has no namespace to fall back on, so
+              it needs the label — which is how Core XRs are sealed. An owner is a team: group "<org>:<team>" owns "<team>", matched exactly (no case folding), and also
+              the owner its XScmTeam's `wxops.cloud/owner` label names (ADR-006) — every team that can log in is read for that mapping.
+              Which label wins — owner-stamp keeps any explicit `wxops.cloud/owner`, whoever set it (a person, Argo CD, Crossplane), and fills a missing one from the
+              namespace on create and update. A person's explicit label is still checked by owner-seal.
+              A missing persona makes a policy stricter, never looser: exec-guard then allows nobody and an exemption disappears — rendered, with the reason in syncMessage.
+              Background scanning is off: these policies read `request.userInfo`, which a background scan does not have. PolicyReports come from admission.
+
+            Composed resources:
+              <short>-policy       kubernetes.crossplane.io/v1alpha2 Object  — wraps the ValidatingPolicy or MutatingPolicy.
+              <short>-policy-apps  kubernetes.crossplane.io/v1alpha2 Object  — env-gate only: the second ValidatingPolicy, on an application's own environment.
+            """
+
+            oxr = option("params").oxr
+            params = oxr.spec.parameters
+            uid = oxr.metadata.uid
+            short = uid[:8:]
+            xrName = oxr.metadata.name
+
+            _get = lambda d: any, k: str, default: any -> any {
+                _safe = d or {}
+                _safe[k] if k in _safe else default
+            }
+
+            _ctxExtras = option("params").ctx["apiextensions.crossplane.io/extra-resources"] or {}
+
+            template = params.template
+            mode = _get(params, "mode", "Deny")
+            scmOrgs = params.scmOrgs
+            personaName = _get(_get(params, "personaRef", {}), "name", "")
+            exemptName = _get(_get(params, "exemptPersonaRef", {}), "name", "")
+            tempExemptName = _get(_get(params, "temporaryExemptPersonaRef", {}), "name", "")
+            tempExemptUntil = _get(_get(params, "temporaryExemptPersonaRef", {}), "until", "")
+            environments = _get(params, "environments", [])
+            ownerPattern = _get(params, "ownerPattern", "")
+            immutableOwner = _get(params, "immutableOwner", False)
+
+            _policyName = "wxops-" + xrName
+            _handover = _get(_get(oxr.metadata, "annotations", {}), "wxops.cloud/handover", "") == "true"
+            _kind = "MutatingPolicy" if template == "owner-stamp" else "ValidatingPolicy"
+
+            # ── Personas ────────────────────────────────────────────────────────────────
+            _personas = _ctxExtras.personas or []
+            _exemptPersonas = _ctxExtras.exemptPersonas or []
+            _tempExemptPersonas = _ctxExtras.temporaryExemptPersonas or []
+            _subjectsOf = lambda ps: [any] -> [any] {
+                _get(_get(ps[0] if ps else {}, "status", {}), "subjects", [])
+            }
+            _groupsOf = lambda ps: [any] -> [str] {
+                [s.name for s in _subjectsOf(ps) if s.kind == "Group"]
+            }
+            _usersOf = lambda ps: [any] -> [str] {
+                [s.name for s in _subjectsOf(ps) if s.kind == "User"]
+            }
+
+            _problems = [p for p in [
+                "persona '" + personaName + "' not found — " + template + " allows nobody until it exists" if personaName != "" and not _personas else "",
+                "exempt persona '" + exemptName + "' not found — the policy applies to everyone until it exists" if exemptName != "" and not _exemptPersonas else "",
+                "temporary exempt persona '" + tempExemptName + "' not found — nobody is exempt until it exists" if tempExemptName != "" and not _tempExemptPersonas else "",
+                "temporaryExemptPersonaRef '" + tempExemptName + "' has no until — nobody is exempt" if tempExemptName != "" and tempExemptUntil == "" else "",
+            ] if p != ""]
+
+            # ── CEL building blocks ─────────────────────────────────────────────────────
+            _q = lambda s: str -> str {
+                "'" + s.replace("\\", "\\\\").replace("'", "\\'") + "'"
+            }
+            _list = lambda xs: [str] -> str {
+                "[" + ", ".join([_q(x) for x in xs]) + "]"
+            }
+
+            _prefixes = _list([o + ":" for o in scmOrgs])
+            _isScmUser = "!request.userInfo.username.startsWith('system:') && request.userInfo.groups.exists(g, " + _prefixes + ".exists(p, g.startsWith(p)))"
+            _exemptGroups = _groupsOf(_exemptPersonas)
+            _exemptUsers = _usersOf(_exemptPersonas)
+            _isExempt = "request.userInfo.groups.exists(g, g in " + _list(_exemptGroups) + ") || request.userInfo.username in " + _list(_exemptUsers)
+
+            _hasExemption = exemptName != "" and (_exemptGroups or _exemptUsers)
+            _tempExemptGroups = _groupsOf(_tempExemptPersonas)
+            _tempExemptUsers = _usersOf(_tempExemptPersonas)
+            _isTempExempt = "request.userInfo.groups.exists(g, g in " + _list(_tempExemptGroups) + ") || request.userInfo.username in " + _list(_tempExemptUsers)
+            _hasTempExemption = tempExemptName != "" and tempExemptUntil != "" and (_tempExemptGroups or _tempExemptUsers)
+            # The standing exemption is a match condition, so its requests never reach Kyverno. The temporary one cannot be: match conditions run in the API server,
+            # which has no time.now() — so it is checked inside each validation instead (below).
+            _matchConditions = [{name = "scm-user", expression = _isScmUser}] + ([{name = "not-exempt", expression = "!(" + _isExempt + ")"}] if _hasExemption else [])
+
+            # Owner mapping (ADR-006): a team that can log in and carries `wxops.cloud/owner: <owner>` also owns <owner>. Only groups of a listed org count.
+            _teamOwnerOf = {_get(_get(t, "status", {}), "oidcGroup", ""): _get(_get(_get(t, "metadata", {}), "labels", {}), "wxops.cloud/owner", "") for t in (_ctxExtras.teams or [])}
+            _teamOwnerOf = {g: o for g, o in _teamOwnerOf if g != "" and o != "" and o != g[g.find(":") + 1:] and any org in scmOrgs { g.startswith(org + ":") }}
+            _mappedGroups = sorted(_teamOwnerOf)
+            _mappedOwners = " + request.userInfo.groups.filter(g, g in " + _list(_mappedGroups) + ").map(g, {" + ", ".join([_q(g) + ": " + _q(_teamOwnerOf[g]) for g in _mappedGroups]) + "}[g])" if _mappedGroups else ""
+
+            # The caller's teams: "<org>:<team>" groups of a listed org, with the org removed — plus the owners their teams are mapped to.
+            _teamsVar = {name = "teams", expression = "request.userInfo.groups.filter(g, " + _prefixes + ".exists(p, g.startsWith(p))).map(g, g.substring(g.indexOf(':') + 1))" + _mappedOwners}
+            # The owner of the namespace the request is in; empty for a cluster-scoped object.
+            _nsOwnerVar = {name = "nsOwner", expression = "namespaceObject != null && has(namespaceObject.metadata.labels) && 'wxops.cloud/owner' in namespaceObject.metadata.labels ? namespaceObject.metadata.labels['wxops.cloud/owner'] : ''"}
+            _ownerOf = lambda obj: str -> str {
+                "(" + obj + " != null ? (has(" + obj + ".metadata.labels) && 'wxops.cloud/owner' in " + obj + ".metadata.labels ? " + obj + ".metadata.labels['wxops.cloud/owner'] : variables.nsOwner) : '')"
+            }
+            _newOwnerVar = {name = "newOwner", expression = _ownerOf("object")}
+            _oldOwnerVar = {name = "oldOwner", expression = _ownerOf("oldObject")}
+
+            # Requests that carry no owner by nature — access and token reviews, Pinniped's login APIs, events and leases — are never sealed.
+            _excludedGroups = ["authentication.k8s.io", "authorization.k8s.io", "login.concierge.pinniped.dev", "identity.concierge.pinniped.dev"]
+            _excludeRules = [
+                {apiGroups = _excludedGroups, apiVersions = ["*"], operations = ["*"], resources = ["*"]}
+                {apiGroups = ["", "events.k8s.io"], apiVersions = ["*"], operations = ["*"], resources = ["events"]}
+                {apiGroups = ["coordination.k8s.io"], apiVersions = ["*"], operations = ["*"], resources = ["leases"]}
+            ]
+            # The same exclusions as a match condition. Kyverno copies match conditions into the webhook it registers, but not excludeResourceRules — without this,
+            # the API server calls Kyverno for every access review, so every authorization check (Pinniped's proxy, aggregated APIs) waits on Kyverno first.
+            _notExcluded = {name = "not-excluded", expression = "!(request.resource.group in " + _list(_excludedGroups) + ") && !(request.resource.resource in ['events', 'leases'])"}
+            _rule = lambda groups: [str], resources: [str], ops: [str] -> any {
+                {apiGroups = groups, apiVersions = ["*"], operations = ops, resources = resources}
+            }
+
+            # ── The templates ────────────────────────────────────────────────────────
+            _common = {
+                failurePolicy = "Fail" if mode == "Deny" else "Ignore"
+                evaluation = {background = {enabled = False}}
+            }
+            _validating = _common | {validationActions = [mode]}
+
+            _ownerStamp = {
+                failurePolicy = "Ignore"
+                evaluation = {background = {enabled = False}}
+                matchConstraints = {
+                    namespaceSelector = {matchLabels = {"auth.wxops.cloud/tenant-namespace" = "true"}}
+                    # Namespaced only: a namespace selector does not apply to cluster-scoped objects, so without this every cluster-scoped CREATE reaches Kyverno.
+                    # CREATE and UPDATE: an object made before this policy, or while Kyverno was down, is labelled on its next update. The match conditions run in the
+                    # API server, so an object that already has an owner never reaches Kyverno.
+                    resourceRules = [_rule(["*"], ["*"], ["CREATE", "UPDATE"]) | {scope = "Namespaced"}]
+                    excludeResourceRules = _excludeRules
+                }
+                matchConditions = [
+                    _notExcluded
+                    {name = "namespace-has-owner", expression = "namespaceObject != null && has(namespaceObject.metadata.labels) && 'wxops.cloud/owner' in namespaceObject.metadata.labels"}
+                    {name = "object-has-no-owner", expression = "!(has(object.metadata.labels) && 'wxops.cloud/owner' in object.metadata.labels)"}
+                ]
+                mutations = [{
+                    patchType = "ApplyConfiguration"
+                    applyConfiguration = {expression = "Object{metadata: Object.metadata{labels: {'wxops.cloud/owner': namespaceObject.metadata.labels['wxops.cloud/owner']}}}"}
+                }]
+            }
+
+            _ownerSealValidations = [{
+                expression = "(request.operation == 'DELETE' || variables.newOwner in variables.teams) && (request.operation == 'CREATE' || variables.oldOwner in variables.teams)"
+                messageExpression = "'auth.wxops.cloud: owner ' + (request.operation == 'DELETE' ? variables.oldOwner : variables.newOwner) + ' is not one of your teams [' + variables.teams.join(', ') + ']'"
+            }] + ([{
+                expression = "request.operation == 'DELETE' || variables.newOwner.matches(" + _q(ownerPattern) + ")"
+                message = "auth.wxops.cloud: the wxops.cloud/owner label must match " + ownerPattern
+            }] if ownerPattern != "" else []) + ([{
+                expression = "request.operation != 'UPDATE' || variables.newOwner == variables.oldOwner"
+                message = "auth.wxops.cloud: the wxops.cloud/owner label is immutable"
+            }] if immutableOwner else [])
+
+            _ownerSeal = _validating | {
+                matchConstraints = {
+                    resourceRules = [_rule(["*"], ["*"], ["CREATE", "UPDATE", "DELETE"])]
+                    excludeResourceRules = _excludeRules
+                }
+                matchConditions = [_notExcluded] + _matchConditions
+                variables = [_teamsVar, _nsOwnerVar, _newOwnerVar, _oldOwnerVar]
+                validations = _ownerSealValidations
+            }
+
+            _secretGuard = _validating | {
+                matchConstraints = {resourceRules = [_rule([""], ["secrets"], ["CREATE", "UPDATE", "DELETE"])]}
+                matchConditions = _matchConditions
+                validations = [{
+                    expression = "false"
+                    message = "auth.wxops.cloud: Secrets are written by External Secrets Operator from OpenBao, not by hand"
+                }]
+            }
+
+            _execGuard = _validating | {
+                matchConstraints = {resourceRules = [_rule([""], ["pods/exec", "pods/attach", "pods/portforward"], ["CONNECT"])]}
+                matchConditions = _matchConditions
+                variables = [_teamsVar, _nsOwnerVar]
+                validations = [{
+                    expression = "(request.userInfo.groups.exists(g, g in " + _list(_groupsOf(_personas)) + ") || request.userInfo.username in " + _list(_usersOf(_personas)) + ") && variables.nsOwner in variables.teams"
+                    message = "auth.wxops.cloud: exec, attach and port-forward are for the members of persona '" + personaName + "', in a namespace one of their teams owns"
+                }]
+            }
+
+            _protected = _validating | {
+                matchConstraints = {
+                    resourceRules = [_rule(["*"], ["*"], ["UPDATE", "DELETE"])]
+                    excludeResourceRules = _excludeRules
+                }
+                matchConditions = [_notExcluded] + _matchConditions
+                validations = [{
+                    expression = "!(has(oldObject.metadata.labels) && 'wxops.cloud/protected' in oldObject.metadata.labels && oldObject.metadata.labels['wxops.cloud/protected'] == 'true')"
+                    message = "auth.wxops.cloud: this object is protected (wxops.cloud/protected) — the platform team changes it"
+                }]
+            }
+
+            _rbacGuard = _validating | {
+                matchConstraints = {resourceRules = [
+                    _rule(["rbac.authorization.k8s.io"], ["roles", "rolebindings", "clusterroles", "clusterrolebindings"], ["CREATE", "UPDATE", "DELETE"])
+                    _rule(["auth.wxops.cloud"], ["*"], ["CREATE", "UPDATE", "DELETE"])
+                ]}
+                matchConditions = _matchConditions
+                validations = [{
+                    expression = "false"
+                    message = "auth.wxops.cloud: bindings are written by XPersonaBinding and personas and policies by the platform team, not by hand"
+                }]
+            }
+
+            # A workload's pod spec, wherever its kind keeps it, and the ServiceAccount it runs as (the deprecated `serviceAccount` field still counts).
+            _podSpecVar = {name = "podSpec", expression = "object.kind == 'Pod' ? object.spec : object.kind == 'CronJob' ? object.spec.jobTemplate.spec.template.spec : object.spec.template.spec"}
+            _serviceAccountVar = {name = "serviceAccount", expression = "has(variables.podSpec.serviceAccountName) && variables.podSpec.serviceAccountName != '' ? variables.podSpec.serviceAccountName : has(variables.podSpec.serviceAccount) && variables.podSpec.serviceAccount != '' ? variables.podSpec.serviceAccount : 'default'"}
+
+            _saGuard = _validating | {
+                matchConstraints = {resourceRules = [
+                    _rule([""], ["pods"], ["CREATE", "UPDATE"])
+                    _rule(["apps"], ["deployments", "statefulsets", "daemonsets", "replicasets"], ["CREATE", "UPDATE"])
+                    _rule(["batch"], ["jobs", "cronjobs"], ["CREATE", "UPDATE"])
+                ]}
+                matchConditions = _matchConditions
+                variables = [_teamsVar, _podSpecVar, _serviceAccountVar]
+                validations = [{
+                    # Reads the namespace's ServiceAccounts at admission (Kyverno's resource library), so this template stays a Kyverno webhook policy.
+                    expression = "variables.serviceAccount == 'default' || dyn(resource.List('v1', 'serviceaccounts', request.namespace).items).exists(s, s.metadata.name == variables.serviceAccount && has(s.metadata.labels) && 'wxops.cloud/owner' in s.metadata.labels && s.metadata.labels['wxops.cloud/owner'] in variables.teams)"
+                    messageExpression = "'auth.wxops.cloud: ServiceAccount ' + variables.serviceAccount + ' is not owned by one of your teams [' + variables.teams.join(', ') + '] — run as default or your own'"
+                }]
+            }
+
+            _guardedNamespaceLabels = _list(["wxops.cloud/owner", "auth.wxops.cloud/tenant-namespace", "wxops.cloud/environment"])
+            _namespaceGuard = _validating | {
+                matchConstraints = {resourceRules = [_rule([""], ["namespaces"], ["CREATE", "UPDATE", "DELETE"])]}
+                matchConditions = _matchConditions
+                validations = [
+                    {
+                        expression = "request.operation == 'UPDATE'"
+                        message = "auth.wxops.cloud: Namespaces are created and deleted by the platform team"
+                    }
+                    {
+                        expression = "request.operation != 'UPDATE' || " + _guardedNamespaceLabels + ".all(k, (has(object.metadata.labels) && k in object.metadata.labels ? object.metadata.labels[k] : '') == (has(oldObject.metadata.labels) && k in oldObject.metadata.labels ? oldObject.metadata.labels[k] : ''))"
+                        message = "auth.wxops.cloud: a Namespace's wxops.cloud/owner, auth.wxops.cloud/tenant-namespace and wxops.cloud/environment labels change only by the platform team"
+                    }
+                ]
+            }
+
+            # The guarded environments are chosen by the namespace's own `wxops.cloud/environment`, so the API server skips every other namespace before Kyverno is called.
+            # Inside one, only members of personaRef whose environments include it may write or exec; everyone else changes it through Git.
+            _nsEnvVar = {name = "nsEnv", expression = "namespaceObject != null && has(namespaceObject.metadata.labels) && 'wxops.cloud/environment' in namespaceObject.metadata.labels ? namespaceObject.metadata.labels['wxops.cloud/environment'] : ''"}
+            _personaEnvironments = _get(_get(_personas[0] if _personas else {}, "status", {}), "environments", [])
+            _envGate = _validating | {
+                matchConstraints = {
+                    namespaceSelector = {matchExpressions = [{key = "wxops.cloud/environment", operator = "In", values = environments}]}
+                    resourceRules = [
+                        _rule(["*"], ["*"], ["CREATE", "UPDATE", "DELETE"]) | {scope = "Namespaced"}
+                        _rule([""], ["pods/exec", "pods/attach", "pods/portforward"], ["CONNECT"]) | {scope = "Namespaced"}
+                    ]
+                    excludeResourceRules = _excludeRules
+                }
+                matchConditions = [_notExcluded] + _matchConditions
+                variables = [_nsEnvVar]
+                validations = [{
+                    expression = "(request.userInfo.groups.exists(g, g in " + _list(_groupsOf(_personas)) + ") || request.userInfo.username in " + _list(_usersOf(_personas)) + ") && variables.nsEnv in " + _list(_personaEnvironments)
+                    messageExpression = "'auth.wxops.cloud: ' + variables.nsEnv + ' is a guarded environment — changes here are for members of persona " + personaName.replace("'", "") + " whose environments include it; everyone else goes through Git'"
+                }]
+            }
+
+            # An application's own environment (RFC-010 §2b). The gate above filters by the namespace's label, so it cannot see an `environment` a team puts on an XApp or XDatabase in
+            # a namespace that is not itself labelled. This second policy matches those two kinds in any namespace and reads the field. A change is checked on the object before AND
+            # after, so a guarded environment cannot be renamed to slip past, and every guarded environment it touches must be one the persona reaches. An object with no
+            # environment is not guarded: it has none. Argo CD and controllers are not SCM users, so Git stays the way to change a guarded application.
+            _envOf = lambda obj: str -> str {
+                "(" + obj + " != null && has(" + obj + ".spec) && has(" + obj + ".spec.parameters) && has(" + obj + ".spec.parameters.environment) ? " + obj + ".spec.parameters.environment : '')"
+            }
+            _envGateApps = _validating | {
+                matchConstraints = {resourceRules = [_rule(["tenant.wxops.cloud"], ["xapps", "xdatabases"], ["CREATE", "UPDATE", "DELETE"]) | {scope = "Namespaced"}]}
+                matchConditions = _matchConditions
+                variables = [
+                    {name = "oldEnv", expression = _envOf("oldObject")}
+                    {name = "newEnv", expression = _envOf("object")}
+                    {name = "guarded", expression = "[variables.oldEnv, variables.newEnv].filter(e, e in " + _list(environments) + ")"}
+                ]
+                validations = [{
+                    expression = "variables.guarded.size() == 0 || ((request.userInfo.groups.exists(g, g in " + _list(_groupsOf(_personas)) + ") || request.userInfo.username in " + _list(_usersOf(_personas)) + ") && variables.guarded.all(e, e in " + _list(_personaEnvironments) + "))"
+                    messageExpression = "'auth.wxops.cloud: ' + variables.guarded.join(', ') + ' is a guarded environment — changes to it are for members of persona " + personaName.replace("'", "") + " whose environments include it; everyone else goes through Git'"
+                }]
+            }
+
+            _template = _ownerStamp if template == "owner-stamp" else _ownerSeal if template == "owner-seal" else _secretGuard if template == "secret-guard" else _execGuard if template == "exec-guard" else _protected if template == "protected" else _saGuard if template == "sa-guard" else _namespaceGuard if template == "namespace-guard" else _envGate if template == "env-gate" else _rbacGuard
+
+            # Scope per template: an optional namespace selector, on top of the template's own. A template's own selector (owner-stamp's tenant label, env-gate's
+            # environments) is always kept: its labels win, and the user's expressions are added to its own.
+            _nsSelector = _get(params, "namespaceSelector", {})
+            _scope = lambda t: any -> any {
+                _baseSelector = _get(t.matchConstraints, "namespaceSelector", {})
+                _baseLabels = _get(_baseSelector, "matchLabels", {})
+                _userLabels = {k: v for k, v in _get(_nsSelector, "matchLabels", {}) if k not in _baseLabels}
+                _selectorLabels = _userLabels | _baseLabels
+                _selectorExpressions = _get(_nsSelector, "matchExpressions", []) + _get(_baseSelector, "matchExpressions", [])
+                _scopedSelector = ({matchLabels = _selectorLabels} if _selectorLabels else {}) | ({matchExpressions = _selectorExpressions} if _selectorExpressions else {})
+                {
+                    **t
+                    matchConstraints = {
+                        **t.matchConstraints
+                        namespaceSelector = _scopedSelector
+                    }
+                } if _nsSelector else t
+            }
+
+            # The temporary exemption: each validation passes for that persona until `temporaryExemptPersonaRef.until`, then applies to it like everyone else.
+            _timedExempt = "((" + _isTempExempt + ") && time.now() < timestamp(" + _q(tempExemptUntil) + "))"
+            _timed = lambda t: any -> any {
+                {
+                    **t
+                    validations = [v | {expression = _timedExempt + " || (" + v.expression + ")"} for v in t.validations]
+                } if _hasTempExemption and template != "owner-stamp" else t
+            }
+
+            _isEnvGate = template == "env-gate"
+            _spec = _timed(_scope(_template))
+            _appsSpec = _timed(_scope(_envGateApps)) if _isEnvGate else {}
+
+            # ── Readiness ───────────────────────────────────────────────────────────────
+            _ocds = option("params").ocds or {}
+            # A composed resource whose last apply failed keeps Ready=True from the earlier success, so Ready
+            # alone cannot say the apply worked: Synced is the condition the provider sets False.
+            _syncConds = lambda name: str -> [any] {
+                _res = _get(_get(_ocds, name, {}), "Resource", {})
+                [c for c in _get(_get(_res, "status", {}), "conditions", []) if _get(c, "type", "") == "Synced" and _get(c, "status", "") == "False"]
+            }
+            _syncFailed = lambda name: str -> bool {
+                len(_syncConds(name)) > 0
+            }
+            _isReady = lambda name: str -> bool {
+                _ocd = _ocds[name] if name in _ocds else {}
+                _res = _get(_ocd, "Resource", {})
+                _conds = _get(_get(_res, "status", {}), "conditions", [])
+                len([c for c in _conds if _get(c, "type", "") == "Ready" and _get(c, "status", "") == "True"]) > 0 and not _syncFailed(name)
+            }
+
+            # ── Composed Objects ────────────────────────────────────────────────────────
+            _policyObject = lambda objName: str, polName: str, polSpec: any -> any {
+                {
+                    apiVersion = "kubernetes.crossplane.io/v1alpha2"
+                    kind = "Object"
+                    metadata = {
+                        name = objName
+                        annotations = {
+                            "crossplane.io/composition-resource-name" = objName
+                        } | ({"krm.kcl.dev/ready" = "True"} if _isReady(objName) else {})
+                    }
+                    spec = {
+                        providerConfigRef = {name = "default"}
+                        forProvider = {
+                            manifest = {
+                                apiVersion = "policies.kyverno.io/v1"
+                                kind = _kind
+                                metadata = {
+                                    name = polName
+                                    labels = {
+                                        "wxops.cloud/managed-by" = "platform-policy"
+                                        "auth.wxops.cloud/policy" = xrName
+                                        "auth.wxops.cloud/template" = template
+                                    }
+                                }
+                                spec = polSpec
+                            }
+                        }
+                    }
+                }
+            }
+            _objectName = short + "-policy"
+            _policy_object = _policyObject(_objectName, _policyName, _spec)
+            _appObjectName = short + "-policy-apps"
+            _appPolicyName = _policyName + "-apps"
+            _policy_apps_object = _policyObject(_appObjectName, _appPolicyName, _appsSpec)
+
+            # ── dxr update — status write-back ──────────────────────────────────────────
+            _created = _objectName in _ocds and (_appObjectName in _ocds if _isEnvGate else True)
+            _ready = _isReady(_objectName) and (_isReady(_appObjectName) if _isEnvGate else True) and len(_problems) == 0
+
+            _syncFailures = _problems + [n + ": " + _get(_syncConds(n)[0], "message", _get(_syncConds(n)[0], "reason", "not synced")) for n in _ocds if _syncFailed(n)]
+            _synced = len(_syncFailures) == 0
+            _syncMessage = (_syncFailures[0] + (" (+" + str(len(_syncFailures) - 1) + " more)" if len(_syncFailures) > 1 else ""))[:400] if _syncFailures else ""
+
+            _dxr = {
+                apiVersion = oxr.apiVersion
+                kind = oxr.kind
+                status = {
+                    created = _created
+                    ready = _ready
+                    policyName = _policyName
+                    policyKind = _kind
+                } | ({"appPolicyName" = _appPolicyName} if _isEnvGate else {}) | ({"synced" = _synced} if _ocds or _problems else {}) | ({"syncMessage" = _syncMessage} if _syncFailures else {})
+            }
+
+            # A handed-over Object only observes: the new kind's XR writes the same policy, and deleting this XR must not delete it. Without the annotation nothing changes.
+            _handedOver = lambda o: any -> any {
+                {**o, "spec" = {**o.spec, "managementPolicies" = ["Observe"], "deletionPolicy" = "Orphan"}}
+            }
+
+            _composedItems = [_policy_object] + ([_policy_apps_object] if _isEnvGate else [])
+
+            items = [_dxr] + ([_handedOver(o) for o in _composedItems] if _handover else _composedItems)

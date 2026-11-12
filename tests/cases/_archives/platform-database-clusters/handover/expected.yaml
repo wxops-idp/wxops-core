@@ -1,0 +1,311 @@
+apiVersion: platform.wxops.cloud/v1alpha1
+kind: XPlatformDatabaseCluster
+metadata:
+  name: handover
+spec:
+  crossplane:
+    resourceRefs:
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: 5bc35a72-app-push-secret
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: 5bc35a72-cnpg-cluster
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: 5bc35a72-cnpg-rw-pooler
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: 5bc35a72-push-secret
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: 5bc35a72-sql-creds
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: 5bc35a72-sql-provider-config
+status:
+  clusterName: cluster-a
+  conditions:
+    - reason: WatchCircuitClosed
+      status: 'True'
+      type: Responsive
+    - reason: ReconcileSuccess
+      status: 'True'
+      type: Synced
+    - message: 'Unready resources: 5bc35a72-app-push-secret, 5bc35a72-cnpg-cluster, 5bc35a72-cnpg-rw-pooler, and 3 more'
+      reason: Creating
+      status: 'False'
+      type: Ready
+  created: false
+  environment: dev
+  namespace: cnpg-system
+  ready: false
+  shared: true
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: 5bc35a72-app-push-secret
+  labels:
+    crossplane.io/composite: handover
+  name: 5bc35a72-app-push-secret
+  ownerReferences:
+    - apiVersion: platform.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XPlatformDatabaseCluster
+      name: handover
+      uid: 5bc35a72-16e8-5964-8420-9595e84bf894
+spec:
+  deletionPolicy: Orphan
+  forProvider:
+    manifest:
+      apiVersion: external-secrets.io/v1alpha1
+      kind: PushSecret
+      metadata:
+        labels: {}
+        name: cluster-a-app-push
+        namespace: cnpg-system
+      spec:
+        data:
+          - match:
+              remoteRef:
+                remoteKey: database-clusters/cluster-a/app-creds
+        deletionPolicy: Delete
+        refreshInterval: 1h
+        secretStoreRefs:
+          - kind: ClusterSecretStore
+            name: vault-platform
+        selector:
+          secret:
+            name: cluster-a-app
+        template:
+          data:
+            pooler-host: cluster-a-rw-pooler.cnpg-system.svc.cluster.local
+            pooler-jdbc-uri: jdbc:postgresql://cluster-a-rw-pooler.cnpg-system.svc.cluster.local:5432/{{ .dbname }}?user={{ .username }}&password={{ .password }}
+            pooler-pgpass: cluster-a-rw-pooler.cnpg-system.svc.cluster.local:5432:{{ .dbname }}:{{ .username }}:{{ .password }}
+            pooler-port: '5432'
+            pooler-uri: postgresql://{{ .username }}:{{ .password }}@cluster-a-rw-pooler.cnpg-system.svc.cluster.local:5432/{{ .dbname }}
+          engineVersion: v2
+          mergePolicy: Merge
+  managementPolicies:
+    - Observe
+  providerConfigRef:
+    name: default
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: 5bc35a72-cnpg-cluster
+  labels:
+    crossplane.io/composite: handover
+  name: 5bc35a72-cnpg-cluster
+  ownerReferences:
+    - apiVersion: platform.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XPlatformDatabaseCluster
+      name: handover
+      uid: 5bc35a72-16e8-5964-8420-9595e84bf894
+spec:
+  deletionPolicy: Orphan
+  forProvider:
+    manifest:
+      apiVersion: postgresql.cnpg.io/v1
+      kind: Cluster
+      metadata:
+        labels: {}
+        name: cluster-a
+        namespace: cnpg-system
+      spec:
+        bootstrap:
+          initdb:
+            database: postgres
+            owner: postgres
+        enableSuperuserAccess: true
+        imageName: ghcr.io/cloudnative-pg/postgresql:16
+        instances: 1
+        postgresql:
+          parameters:
+            max_connections: '200'
+        storage:
+          size: 8Gi
+  managementPolicies:
+    - Observe
+  providerConfigRef:
+    name: default
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: 5bc35a72-cnpg-rw-pooler
+  labels:
+    crossplane.io/composite: handover
+  name: 5bc35a72-cnpg-rw-pooler
+  ownerReferences:
+    - apiVersion: platform.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XPlatformDatabaseCluster
+      name: handover
+      uid: 5bc35a72-16e8-5964-8420-9595e84bf894
+spec:
+  deletionPolicy: Orphan
+  forProvider:
+    manifest:
+      apiVersion: postgresql.cnpg.io/v1
+      kind: Pooler
+      metadata:
+        labels: {}
+        name: cluster-a-rw-pooler
+        namespace: cnpg-system
+      spec:
+        cluster:
+          name: cluster-a
+        instances: 1
+        pgbouncer:
+          poolMode: transaction
+        type: rw
+  managementPolicies:
+    - Observe
+  providerConfigRef:
+    name: default
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: 5bc35a72-push-secret
+  labels:
+    crossplane.io/composite: handover
+  name: 5bc35a72-push-secret
+  ownerReferences:
+    - apiVersion: platform.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XPlatformDatabaseCluster
+      name: handover
+      uid: 5bc35a72-16e8-5964-8420-9595e84bf894
+spec:
+  deletionPolicy: Orphan
+  forProvider:
+    manifest:
+      apiVersion: external-secrets.io/v1alpha1
+      kind: PushSecret
+      metadata:
+        labels: {}
+        name: cluster-a-superuser-push
+        namespace: cnpg-system
+      spec:
+        data:
+          - match:
+              remoteRef:
+                remoteKey: database-clusters/cluster-a/superuser-creds
+        deletionPolicy: Delete
+        refreshInterval: 1h
+        secretStoreRefs:
+          - kind: ClusterSecretStore
+            name: vault-platform
+        selector:
+          secret:
+            name: cluster-a-superuser
+        template:
+          data:
+            pooler-host: cluster-a-rw-pooler.cnpg-system.svc.cluster.local
+            pooler-jdbc-uri: jdbc:postgresql://cluster-a-rw-pooler.cnpg-system.svc.cluster.local:5432/{{ .dbname }}?user={{ .username }}&password={{ .password }}
+            pooler-pgpass: cluster-a-rw-pooler.cnpg-system.svc.cluster.local:5432:{{ .dbname }}:{{ .username }}:{{ .password }}
+            pooler-port: '5432'
+            pooler-uri: postgresql://{{ .username }}:{{ .password }}@cluster-a-rw-pooler.cnpg-system.svc.cluster.local:5432/{{ .dbname }}
+          engineVersion: v2
+          mergePolicy: Merge
+  managementPolicies:
+    - Observe
+  providerConfigRef:
+    name: default
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: 5bc35a72-sql-creds
+  labels:
+    crossplane.io/composite: handover
+  name: 5bc35a72-sql-creds
+  ownerReferences:
+    - apiVersion: platform.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XPlatformDatabaseCluster
+      name: handover
+      uid: 5bc35a72-16e8-5964-8420-9595e84bf894
+spec:
+  deletionPolicy: Orphan
+  forProvider:
+    manifest:
+      apiVersion: external-secrets.io/v1
+      kind: ExternalSecret
+      metadata:
+        labels: {}
+        name: cluster-a-app-sql
+        namespace: cnpg-system
+      spec:
+        dataFrom:
+          - extract:
+              key: database-clusters/cluster-a/app-creds
+        refreshInterval: 1h
+        secretStoreRef:
+          kind: ClusterSecretStore
+          name: vault-platform
+        target:
+          creationPolicy: Owner
+          name: cluster-a-app-sql
+          template:
+            data:
+              endpoint: cluster-a-rw.cnpg-system.svc.cluster.local
+              password: '{{ .password }}'
+              port: '{{ .port }}'
+              username: '{{ .username }}'
+            engineVersion: v2
+  managementPolicies:
+    - Observe
+  providerConfigRef:
+    name: default
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: 5bc35a72-sql-provider-config
+  labels:
+    crossplane.io/composite: handover
+  name: 5bc35a72-sql-provider-config
+  ownerReferences:
+    - apiVersion: platform.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XPlatformDatabaseCluster
+      name: handover
+      uid: 5bc35a72-16e8-5964-8420-9595e84bf894
+spec:
+  deletionPolicy: Orphan
+  forProvider:
+    manifest:
+      apiVersion: postgresql.sql.crossplane.io/v1alpha1
+      kind: ProviderConfig
+      metadata:
+        labels: {}
+        name: cluster-a
+      spec:
+        credentials:
+          connectionSecretRef:
+            name: cluster-a-app-sql
+            namespace: cnpg-system
+          source: PostgreSQLConnectionSecret
+        sslMode: require
+  managementPolicies:
+    - Observe
+  providerConfigRef:
+    name: default

@@ -11,6 +11,5 @@ kind: Kustomization
 resources:
   # One directory per API group (ADR-002). `make release` adds a new group here
   # and the manifest inside it — see .github/scripts/release-state.py.
-  - platform/
   - scm/
   - auth/

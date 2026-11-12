@@ -1,0 +1,10 @@
+# No environment: the dev pool, the one every XTenantDatabase defaulted to.
+apiVersion: tenant.wxops.cloud/v1alpha1
+kind: XDatabase
+metadata:
+  name: payment-db
+  namespace: rocket-team-production
+spec:
+  parameters:
+    extensions:
+      - uuid-ossp

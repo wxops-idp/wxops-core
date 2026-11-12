@@ -1,0 +1,10 @@
+# expect: template
+# expect: is not one of
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPolicy
+metadata:
+  name: nope
+spec:
+  parameters:
+    template: free-form-cel
+    scmOrgs: [wxops-idp]

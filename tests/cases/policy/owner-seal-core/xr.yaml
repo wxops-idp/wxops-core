@@ -1,0 +1,14 @@
+# A Core XR is cluster-scoped — no namespace to fall back on — so it must carry the label (ownerPattern), may not change owner at all (immutableOwner), and the platform persona onboards every team (exempt).
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPolicy
+metadata:
+  name: owner-seal-core
+spec:
+  parameters:
+    template: owner-seal
+    scmOrgs: [wxops-idp]
+    mode: Deny
+    ownerPattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+    immutableOwner: true
+    exemptPersonaRef:
+      name: platform

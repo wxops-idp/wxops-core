@@ -32,7 +32,7 @@ developer / SRE agent ──▶ Darlane pod (real secrets, real traffic)   ← B
 - **B1 — who may act**: human identity via Dex in front of the SCM (GitHub or Gitea), Pinniped for
   `kubectl`; agent identity via dedicated SAs and agent personas ([access model](access-model.md)); RBAC authored only in GitOps — RFC-009 proposes bindings
   from `XPersonaBinding` as the one exception
-  (`development-docs/_archives/ROADMAP.md` §Decided and rejected; the seam in [tenant-app.md](../../docs/api-reference/platform/tenant-app.md#developer-access-and-rbac)).
+  (`development-docs/_archives/ROADMAP.md` §Decided and rejected; the seam in [tenant-app.md](../../docs/api-reference/_archives/tenant-app.md#developer-access-and-rbac)).
 - **B2 — what may enter the system**: XRD schema validation at admission
   (B2a) and, for changes to the platform itself, the pr-validate gate — XRD
   conformance, golden render diff, invariants, xpkg build (B2b). The gate is
@@ -69,7 +69,7 @@ developer / SRE agent ──▶ Darlane pod (real secrets, real traffic)   ← B
 ## The rules that hold it together (cross-references)
 
 1. **No custom controllers** (`CLAUDE.md` architecture rule; twice-validated per [multi-cluster-scale.md](../_archives/multi-cluster-scale.md#gpu-pools--the-third-architecture-already-field-tested-here)) — smaller attack surface, everything renderable offline.
-2. **No RBAC from compositions** + **the SA-in-status seam** — `development-docs/_archives/ROADMAP.md` §Decided and rejected; [tenant-app.md](../../docs/api-reference/platform/tenant-app.md#developer-access-and-rbac).
+2. **No RBAC from compositions** + **the SA-in-status seam** — `development-docs/_archives/ROADMAP.md` §Decided and rejected; [tenant-app.md](../../docs/api-reference/_archives/tenant-app.md#developer-access-and-rbac).
 3. **One write path for fixes — the PR gate** ([self-service-operations.md](self-service-operations.md#the-suggest-patch-loop--why-l4-is-structurally-cheap-here)); agents get read-only + PR, never kubectl-write (L5 gated behind session and agent audit).
 4. **Payload/metadata corpus tiering** for any AI ([knowledge-architecture.md](knowledge-architecture.md#architecture-around-the-agent)).
 5. **Access control over obscurity** — gates are real (Pinniped, RBAC, permission-gated forge), not hidden URLs; the only obscurity kept (SSH port) is a free scan-reduction, not a control.

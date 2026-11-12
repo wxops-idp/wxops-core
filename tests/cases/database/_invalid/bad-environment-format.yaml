@@ -1,0 +1,11 @@
+# expect: does not match
+#
+# An environment is any name, but a DNS-label-shaped one.
+apiVersion: tenant.wxops.cloud/v1alpha1
+kind: XDatabase
+metadata:
+  name: payment-db
+  namespace: rocket-team-production
+spec:
+  parameters:
+    environment: Prod_1

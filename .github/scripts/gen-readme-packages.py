@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-gen-readme-packages.py — sync the Packages table in README.md from VERSIONS.yaml.
+gen-readme-packages.py — sync the Packages list in README.md (one collapsed <details> per API group) from VERSIONS.yaml.
 
 Reads VERSIONS.yaml for package names, versions, and API versions. Reads each
 package/{name}/xrd.yaml for the Kind name. Replaces the block between
@@ -28,24 +28,76 @@ B_START = "<!-- badges-dynamic-start -->"
 B_END = "<!-- badges-dynamic-end -->"
 
 
+# What each API group is for (ADR-005 decision 8). Scope is read from the XRDs, never written here; a group missing from GROUPS fails the sync.
+GROUPS = {
+    "tenant": ("what a team runs",
+               "What a team runs: its applications and their databases. Each one is created in the team's own namespace, which decides whose it is and "
+               "where it runs, so there is no owner, namespace or cluster to type."),
+    "platform": ("shared capacity",
+                 "Capacity the platform team provides to every team: PostgreSQL clusters, either a shared pool per environment or one dedicated to a "
+                 "single database."),
+    "scm": ("Git hosting",
+            "Git hosting through OpenTofu: register a Gitea or GitHub service once, then create or observe its repositories, teams and OAuth apps. "
+            "One module per resource serves every vendor."),
+    "auth": ("identity and rules",
+             "Identity and rules: the records the OIDC broker logs people in with (its connection, static users, clients and upstream connectors), "
+             "personas that turn SCM teams into RBAC subjects and the bindings that grant them roles, and reviewed Kyverno policies."),
+}
+SCOPE_DETAIL = {
+    "Namespaced": "a team's own, created in its namespace; the namespace's `wxops.cloud/owner` owns it",
+    "Cluster": "one object for the whole cluster, written by the platform team",
+}
+
+
+def _first_sentence(text: str) -> str:
+    text = " ".join(text.split())
+    cut = text.find(". ")
+    return text if cut == -1 else text[: cut + 1]
+
+
 def build_table() -> str:
     versions = yaml.safe_load((ROOT / "VERSIONS.yaml").read_text())
-    rows = []
-    for name, info in versions.get("packages", {}).items():
-        pkg_dir = P.rel_path(name)
-        xrd = yaml.safe_load((ROOT / pkg_dir / "xrd.yaml").read_text())
-        kind = xrd["spec"]["names"]["kind"]
-        api_versions = ", ".join(f"`{v}`" for v in info["api"]["served"])
-        pkg_version = info["package"]["current"]
-        rows.append(
-            f"| [`{name}`]({pkg_dir}/) | `{kind}` | `{P.group(name)}.wxops.cloud`"
-            f" | {api_versions} | `{pkg_version}` |"
-        )
-    return "\n".join([
-        "| Package | Kind | Group | API Versions | Last changed in |",
-        "|---|---|---|---|---|",
-        *rows,
-    ])
+    packages = versions.get("packages", {})
+    by_group: dict[str, list[str]] = {}
+    for name in packages:
+        by_group.setdefault(P.group(name), []).append(name)
+    missing = [g for g in by_group if g not in GROUPS]
+    if missing:
+        sys.exit(f"ERROR: no purpose text for API group(s) {missing} — add them to GROUPS in {Path(__file__).name}")
+
+    blocks = []
+    for group in [g for g in GROUPS if g in by_group]:
+        rows, scopes = [], []
+        for name in by_group[group]:
+            info = packages[name]
+            pkg_dir = P.rel_path(name)
+            xrd = yaml.safe_load((ROOT / pkg_dir / "xrd.yaml").read_text())
+            kind = xrd["spec"]["names"]["kind"]
+            scope = xrd["spec"].get("scope", "Cluster")
+            if scope not in scopes:
+                scopes.append(scope)
+            api_versions = ", ".join(f"`{v}`" for v in info["api"]["served"])
+            api_page = Path("docs/api-reference") / group / f"{Path(pkg_dir).name}.md"
+            docs = f"[API]({api_page})" if (ROOT / api_page).exists() else "—"
+            rows.append(f"| [`{name}`]({pkg_dir}/) | `{kind}` | {_first_sentence(info.get('description', ''))} | {api_versions} "
+                        f"| `{info['package']['current']}` | {docs} |")
+        short, purpose = GROUPS[group]
+        count = f"{len(rows)} package{'s' if len(rows) != 1 else ''}"
+        blocks += [
+            "<details>",
+            f"<summary><b><code>{group}.wxops.cloud</code></b> · <b>{' + '.join(scopes)}</b> · {count} — {short}</summary>",
+            "",
+            purpose,
+            "",
+            *[f"**Scope:** `{sc}` — {SCOPE_DETAIL.get(sc, '')}." for sc in scopes],
+            "",
+            "| Package | Kind | What it does | API | Last changed in | Docs |",
+            "|---|---|---|---|---|---|",
+            *rows,
+            "",
+            "</details>",
+        ]
+    return "\n".join(blocks)
 
 
 def build_badges() -> str:

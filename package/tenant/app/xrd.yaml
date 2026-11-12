@@ -1,0 +1,1168 @@
+apiVersion: apiextensions.crossplane.io/v2
+kind: CompositeResourceDefinition
+metadata:
+  name: xapps.tenant.wxops.cloud
+spec:
+  group: tenant.wxops.cloud
+  scope: Namespaced
+  names:
+    kind: XApp
+    plural: xapps
+    categories:
+      - wxops
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - parameters
+              properties:
+                parameters:
+                  type: object
+                  required:
+                    - image
+                  properties:
+                    appName:
+                      type: string
+                      description: |
+                        Optional. The application's name: the name of the Deployment, Service
+                        and Ingress, and the value of the app.kubernetes.io/name and
+                        app.kubernetes.io/instance labels. Defaults to the XR's own name.
+                        Set it only to adopt an application whose resources an XTenantApp
+                        named differently from the XR.
+
+                        There is no `namespace`, `owner` or `cluster` here: the application
+                        runs in the XR's namespace, is owned by that namespace's
+                        wxops.cloud/owner, and runs on the hub (ADR-005, RFC-010).
+                    environment:
+                      type: string
+                      pattern: "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+                      maxLength: 63
+                      description: |
+                        Optional, any name — a team may run one environment, two, or none.
+                        Applied as the wxops.cloud/environment label on created resources,
+                        and read by the env-gate policy and by Darlane's production guard.
+                        Absent means no label and no environment rule. Promotion between
+                        environments is a Git change between overlays, one XApp each; the
+                        platform decides where an environment runs (RFC-010 §2b).
+                    appFlavor:
+                      type: string
+                      enum: ["webapp", "ai", "ai-webapp", "geo-webapp", "search-webapp"]
+                      default: "webapp"
+                      description: |
+                        Application flavor. Applied as the wxops.cloud/app-flavor
+                        label on created resources — purely metadata for
+                        platform-level automation (e.g. a separate
+                        XDatabase claim choosing pgvector/postgis
+                        extensions) to key off.
+                        Does not affect any resource composed by this XR.
+                    templateId:
+                      type: string
+                      description: |
+                        Optional Backstage/IDP software-template identifier
+                        this app was scaffolded from. Applied as the
+                        wxops.cloud/template-id annotation on all composed
+                        resources — purely metadata for catalog linking.
+                    repository:
+                      type: object
+                      default: {}
+                      description: |
+                        Metadata about the application's source-code
+                        repository. XApp does not create or import
+                        repositories itself — this is just a link recorded
+                        for catalog/portal purposes.
+                      properties:
+                        url:
+                          type: string
+                          description: |
+                            URL of the application's source repository (e.g.
+                            a Gitea repo created or imported by the platform/
+                            portal). Applied as the wxops.cloud/repo-url
+                            annotation on all composed resources.
+
+                    # ── Extra labels/annotations ────────────────────────────
+                    labels:
+                      type: object
+                      default: {}
+                      description: |
+                        Extra labels merged onto all composed resources
+                        (Deployment, Darlane, Service, Ingress). The standard
+                        app.kubernetes.io/* labels always take precedence and
+                        cannot be overridden, since selectors depend on them. Every
+                        key under wxops.cloud/ is dropped: the platform sets those.
+                      additionalProperties:
+                        type: string
+                    deploymentAnnotations:
+                      type: object
+                      default: {}
+                      description: |
+                        Extra annotations merged onto the main Deployment's
+                        metadata.annotations, alongside wxops.cloud/template-id,
+                        wxops.cloud/repo-url, and (if reloader.enabled)
+                        reloader.stakater.com/auto.
+                      additionalProperties:
+                        type: string
+
+                    # ── Pod identity & security ──────────────────────────────
+                    serviceAccount:
+                      type: object
+                      default: {}
+                      description: |
+                        ServiceAccount for the pod. When create is true,
+                        the composition creates a ServiceAccount in the
+                        target namespace. When false, references an
+                        existing one by name. If unset entirely, the
+                        namespace default ServiceAccount is used.
+                      properties:
+                        create:
+                          type: boolean
+                          default: false
+                          description: |
+                            If true, compose a new ServiceAccount named
+                            after the app (or the value of name if set).
+                        name:
+                          type: string
+                          description: |
+                            ServiceAccount name. Defaults to appName when
+                            create is true. When create is false, must
+                            reference an existing ServiceAccount in the
+                            target namespace.
+                        annotations:
+                          type: object
+                          default: {}
+                          additionalProperties:
+                            type: string
+                          description: |
+                            Annotations on the created ServiceAccount
+                            (ignored when create is false). Use for
+                            workload identity bindings, e.g.
+                            eks.amazonaws.com/role-arn for IRSA or
+                            iam.gke.io/gcp-service-account for GCP WI.
+                    securityContext:
+                      type: object
+                      default: {}
+                      description: |
+                        Pod-level and container-level security settings.
+                        Pod-level fields apply to all containers; container-
+                        level fields apply to the main app container (and
+                        Darlane container if enabled).
+                      properties:
+                        runAsNonRoot:
+                          type: boolean
+                          description: |
+                            Pod-level. Require all containers to run as a
+                            non-root user. Many clusters enforce this via
+                            admission policies (Kyverno, OPA Gatekeeper).
+                        runAsUser:
+                          type: integer
+                          description: Pod-level. UID to run all containers as.
+                        runAsGroup:
+                          type: integer
+                          description: Pod-level. Primary GID for all containers.
+                        fsGroup:
+                          type: integer
+                          description: |
+                            Pod-level. GID applied to all volumes mounted by
+                            the pod. Required when using PVCs with
+                            fsGroupPolicy.
+                        readOnlyRootFilesystem:
+                          type: boolean
+                          description: |
+                            Container-level. Mount the container's root
+                            filesystem as read-only. Apps that need to write
+                            temp files should use an emptyDir volume.
+                        allowPrivilegeEscalation:
+                          type: boolean
+                          description: |
+                            Container-level. Whether the container process can
+                            gain more privileges than its parent. Should be
+                            false for all non-system workloads.
+                        capabilities:
+                          type: object
+                          default: {}
+                          description: Container-level. Linux capabilities to add or drop.
+                          properties:
+                            drop:
+                              type: array
+                              default: []
+                              items:
+                                type: string
+                              description: |
+                                Capabilities to drop. Use ["ALL"] to drop
+                                all capabilities (recommended baseline).
+                            add:
+                              type: array
+                              default: []
+                              items:
+                                type: string
+                              description: |
+                                Capabilities to add back after dropping.
+                                e.g. ["NET_BIND_SERVICE"] if the app binds
+                                to a port < 1024.
+                    terminationGracePeriodSeconds:
+                      type: integer
+                      minimum: 0
+                      default: 30
+                      description: |
+                        Seconds to wait for graceful shutdown after SIGTERM
+                        before SIGKILL. Increase for apps with long-running
+                        requests, connection draining, or batch processing.
+
+                    # ── Registry credentials ─────────────────────────────────
+                    imagePullSecrets:
+                      type: array
+                      default: []
+                      description: |
+                        Names of existing Kubernetes Secrets (type
+                        kubernetes.io/dockerconfigjson) to use as image pull
+                        credentials. Added to spec.imagePullSecrets on the
+                        Deployment (and Darlane if enabled). The Secrets must
+                        already exist in the target namespace — this XR does
+                        not create them.
+                      items:
+                        type: string
+
+                    # ── Container ────────────────────────────────────────────
+                    image:
+                      type: string
+                      description: |
+                        Container image reference as a single string
+                        (repository:tag). e.g. ghcr.io/org/app:1.0.0.
+                        Use this form so Kustomize image-updater can
+                        target it directly.
+                    imagePullPolicy:
+                      type: string
+                      enum: ["Always", "IfNotPresent", "Never"]
+                      default: "IfNotPresent"
+                    replicas:
+                      type: integer
+                      minimum: 0
+                      default: 1
+                    containerPort:
+                      type: integer
+                      default: 8080
+
+                    # ── Rollout strategy ─────────────────────────────────────
+                    rolloutStrategy:
+                      type: object
+                      default: {}
+                      description: |
+                        Deployment.spec.strategy — how Pods are replaced on
+                        update, relevant when replicas > 1.
+                      properties:
+                        type:
+                          type: string
+                          enum: ["RollingUpdate", "Recreate"]
+                          default: "RollingUpdate"
+                        rollingUpdate:
+                          type: object
+                          default: {}
+                          description: Only used when type is RollingUpdate.
+                          properties:
+                            maxSurge:
+                              x-kubernetes-int-or-string: true
+                              default: "25%"
+                            maxUnavailable:
+                              x-kubernetes-int-or-string: true
+                              default: "25%"
+                    resources:
+                      type: object
+                      description: Passed through verbatim to the container's resources field.
+                      properties:
+                        requests:
+                          type: object
+                          properties:
+                            cpu:
+                              type: string
+                            memory:
+                              type: string
+                        limits:
+                          type: object
+                          properties:
+                            cpu:
+                              type: string
+                            memory:
+                              type: string
+                    env:
+                      type: array
+                      default: []
+                      description: Plain (non-secret) environment variables.
+                      items:
+                        type: object
+                        required:
+                          - name
+                          - value
+                        properties:
+                          name:
+                            type: string
+                          value:
+                            type: string
+                    envFrom:
+                      type: array
+                      default: []
+                      description: |
+                        Additional envFrom sources, appended after
+                        secretsFrom.app and secretsFrom.database (if
+                        enabled). Each entry references an existing Secret
+                        or ConfigMap by name.
+                      items:
+                        type: object
+                        properties:
+                          secretRef:
+                            type: object
+                            required:
+                              - name
+                            properties:
+                              name:
+                                type: string
+                          configMapRef:
+                            type: object
+                            required:
+                              - name
+                            properties:
+                              name:
+                                type: string
+                    podAnnotations:
+                      type: object
+                      default: {}
+                      description: Annotations applied to the pod template (e.g. for Prometheus scraping).
+                      additionalProperties:
+                        type: string
+
+                    # ── Secrets (provisioned out-of-band by the platform) ───
+                    secretsFrom:
+                      type: object
+                      default: {}
+                      description: |
+                        Toggles for envFrom.secretRef entries pointing at
+                        Secrets provisioned out-of-band by the platform/
+                        GitOps (an ExternalSecret/PushSecret for app
+                        secrets, an XDatabase's connection-creds for
+                        the database). This XR only wires the reference by
+                        name — it does not provision or wait for the Secret
+                        to exist.
+                      properties:
+                        app:
+                          type: object
+                          default: {}
+                          properties:
+                            enabled:
+                              type: boolean
+                              default: false
+                            secretName:
+                              type: string
+                              description: 'Defaults to "{appName}-env" if unset.'
+                        database:
+                          type: object
+                          default: {}
+                          properties:
+                            enabled:
+                              type: boolean
+                              default: false
+                            secretName:
+                              type: string
+                              description: 'Defaults to "{appName}-db-creds" if unset.'
+                    command:
+                      type: array
+                      description: Optional container command override.
+                      items:
+                        type: string
+                    args:
+                      type: array
+                      description: Optional container args override.
+                      items:
+                        type: string
+                    volumes:
+                      type: array
+                      default: []
+                      description: |
+                        Volumes to mount into the main app container. Volume source
+                        is determined by which field is set — exactly one must be
+                        provided per entry:
+                          claimName     → PVC (existing or create: true)
+                          configMapName → existing ConfigMap
+                          secretName    → existing Secret
+                      items:
+                        type: object
+                        required: [name, mountPath]
+                        properties:
+                          name:
+                            type: string
+                            description: Volume name (used in pod spec and volumeMount).
+                          mountPath:
+                            type: string
+                            description: Absolute mount path inside the container.
+                          subPath:
+                            type: string
+                            description: Optional subpath within the volume.
+                          readOnly:
+                            type: boolean
+                            default: false
+                          claimName:
+                            type: string
+                            description: |
+                              PVC name — the existing claim to reference, or the
+                              name of the PVC to create when create is true.
+                              Mutually exclusive with configMapName / secretName.
+                          create:
+                            type: boolean
+                            default: false
+                            description: |
+                              If true, compose a new PVC named claimName.
+                              Requires storageClass and size.
+                          storageClass:
+                            type: string
+                            description: StorageClass for the new PVC. Required when create is true.
+                          size:
+                            type: string
+                            description: PVC capacity request (e.g. "10Gi"). Required when create is true.
+                          accessModes:
+                            type: array
+                            default: ["ReadWriteOnce"]
+                            description: PVC access modes. Only used when create is true.
+                            items:
+                              type: string
+                          configMapName:
+                            type: string
+                            description: |
+                              Name of an existing ConfigMap to mount as a volume.
+                              Mutually exclusive with claimName / secretName.
+                          secretName:
+                            type: string
+                            description: |
+                              Name of an existing Secret to mount as a volume.
+                              Mutually exclusive with claimName / configMapName.
+                          items:
+                            type: array
+                            description: |
+                              Key-to-path projections for configMap or secret volumes.
+                              When set, only the listed keys are mounted, at the
+                              specified relative paths inside mountPath.
+                            items:
+                              type: object
+                              required: [key, path]
+                              properties:
+                                key:
+                                  type: string
+                                  description: Key in the ConfigMap or Secret.
+                                path:
+                                  type: string
+                                  description: Relative path inside mountPath to mount this key.
+
+                    # ── Reloader (Stakater) ──────────────────────────────────
+                    reloader:
+                      type: object
+                      default: {}
+                      description: |
+                        If enabled, adds reloader.stakater.com/auto: "true"
+                        to the Deployment's annotations so the Stakater
+                        Reloader controller restarts pods when referenced
+                        ConfigMaps/Secrets change. Requires Reloader
+                        (https://github.com/stakater/Reloader) to be
+                        installed in-cluster.
+                      properties:
+                        enabled:
+                          type: boolean
+                          default: false
+
+                    # ── Darlane (in-cluster developer lane) ─────────────────
+                    monitoring:
+                      type: object
+                      default: {}
+                      description: |
+                        Prometheus scrape configuration, emitted as a real Prometheus
+                        Operator CRD (ServiceMonitor or PodMonitor).
+
+                        This replaces the prometheus.io/* pod annotations, which do
+                        nothing on this platform: those are a Prometheus convention
+                        honoured only by a kubernetes_sd_config job with matching
+                        relabel rules, and kube-prometheus-stack's
+                        additionalScrapeConfigs is empty. See development-docs/core-ideas/observability.md.
+                      properties:
+                        enabled:
+                          type: boolean
+                          default: false
+                          description: Master toggle. When false, no monitor is emitted.
+                        kind:
+                          type: string
+                          enum: [auto, ServiceMonitor, PodMonitor]
+                          default: auto
+                          description: |
+                            auto            — ServiceMonitor when service.enabled is true,
+                                              PodMonitor when it is false.
+                            ServiceMonitor  — scrapes endpoints behind the Service. Requires
+                                              service.enabled: true.
+                            PodMonitor      — scrapes pods directly by label.
+
+                            Prefer PodMonitor when per-pod visibility through a readiness
+                            failure matters: a ServiceMonitor only scrapes endpoints the
+                            Service considers Ready, so a pod failing its readiness probe
+                            drops out of the endpoint list and stops being scraped —
+                            exactly when its metrics are most useful.
+                        port:
+                          type: integer
+                          description: |
+                            Port to scrape. Defaults to containerPort when unset — no
+                            schema default, matching the darlane.telemetryPort precedent.
+                        path:
+                          type: string
+                          default: /metrics
+                          description: HTTP path exposing the metrics.
+                        interval:
+                          type: string
+                          default: 30s
+                          description: Scrape interval.
+                        scrapeTimeout:
+                          type: string
+                          default: 10s
+                          description: Per-scrape timeout. Must be <= interval.
+                        sampleLimit:
+                          type: integer
+                          default: 5000
+                          description: |
+                            Maximum samples accepted per scrape. Set by the composition
+                            rather than left to Prometheus, which runs with sampleLimit,
+                            targetLimit and labelLimit all 0 — no guardrail anywhere. One
+                            tenant emitting raw URLs as a `path` label would otherwise
+                            degrade Prometheus for every tenant on the cluster.
+                        honorLabels:
+                          type: boolean
+                          default: false
+                          description: |
+                            When true, target labels from the scraped metrics win over
+                            the labels Prometheus attaches. Leave false unless federating.
+                        metricRelabelings:
+                          type: array
+                          default: []
+                          description: |
+                            Prometheus metric_relabel_configs applied at ingest — the
+                            escape hatch for dropping a misbehaving high-cardinality
+                            series without redeploying the application.
+                          items:
+                            type: object
+                            x-kubernetes-preserve-unknown-fields: true
+                    darlane:
+                      type: object
+                      default: {}
+                      description: |
+                        Platform-provisioned developer lane — a parallel Deployment
+                        (<appName>-darlane) sharing the same secrets, database
+                        connections, and env as the main app. Scaled to 0 at rest,
+                        zero external exposure by default. Supports file sync and
+                        traffic mirroring (mirrord). See development-docs/core-ideas/darlane.md.
+
+                        Developer access is NOT granted here. This composition creates
+                        the ServiceAccount and publishes its name in
+                        status.darlane.serviceAccountName; the Role and RoleBinding are
+                        authored in the GitOps repo, where RBAC gets reviewed on a diff
+                        and Crossplane needs no permission to mint it.
+                      properties:
+                        enabled:
+                          type: boolean
+                          default: false
+                        replicas:
+                          type: integer
+                          minimum: 0
+                          default: 0
+                        image:
+                          type: string
+                          description: |
+                            Optional image override for the Darlane pod
+                            (repository:tag). Defaults to the main image.
+                        command:
+                          type: array
+                          default: ["sleep", "infinity"]
+                          description: |
+                            Container command. Defaults to an idle command so
+                            the pod stays up for exec/port-forward without
+                            serving traffic itself.
+                          items:
+                            type: string
+                        args:
+                          type: array
+                          description: Container args override for the Darlane pod.
+                          items:
+                            type: string
+                        containerPort:
+                          type: integer
+                          description: |
+                            Port the Darlane process actually listens on.
+                            Defaults to the main app's containerPort. Override
+                            when the dev server starts on a different port
+                            (e.g. the main app serves on 8080 but the dev
+                            hot-reload server starts on 3000). Used as
+                            targetPort in the Darlane Service when
+                            trafficWeight > 0 — without this, A/B traffic
+                            reaches the Service but nothing is listening.
+                        env:
+                          type: array
+                          default: []
+                          description: |
+                            Extra env vars layered on top of the main app env.
+                            Darlane values win on key collision.
+                          items:
+                            type: object
+                            required: [name, value]
+                            properties:
+                              name:
+                                type: string
+                              value:
+                                type: string
+                        resources:
+                          type: object
+                          description: |
+                            Resource requests/limits for the Darlane pod,
+                            independent of the main app. Debugging tools
+                            typically need more memory.
+                          properties:
+                            requests:
+                              type: object
+                              properties:
+                                cpu:
+                                  type: string
+                                memory:
+                                  type: string
+                            limits:
+                              type: object
+                              properties:
+                                cpu:
+                                  type: string
+                                memory:
+                                  type: string
+                        securityContext:
+                          type: object
+                          description: |
+                            Security context overrides for the Darlane container.
+                            readOnlyRootFilesystem defaults to false so
+                            apt/pip installs work without a custom image.
+                          properties:
+                            runAsUser:
+                              type: integer
+                            runAsGroup:
+                              type: integer
+                            runAsNonRoot:
+                              type: boolean
+                            readOnlyRootFilesystem:
+                              type: boolean
+                            allowPrivilegeEscalation:
+                              type: boolean
+                        productionOverride:
+                          type: boolean
+                          default: false
+                          description: |
+                            Required when environment=prod to enable Darlane.
+                            Explicit double opt-in — visible in XR diffs and PRs.
+                        ttl:
+                          type: string
+                          description: |
+                            Adds wxops.cloud/darlane-ttl annotation to the Darlane
+                            Deployment (e.g. "4h"). Enforcement via Kyverno
+                            policy — composition only emits the annotation.
+                        trafficWeight:
+                          type: integer
+                          minimum: 0
+                          maximum: 100
+                          default: 0
+                          description: |
+                            When > 0 (and ingress.enabled=true), emits a ClusterIP
+                            Service for the Darlane pod and a Traefik TraefikService
+                            weighted split between the main app and Darlane. The
+                            standard Kubernetes Ingress is replaced with a Traefik
+                            IngressRoute, which natively supports TraefikService
+                            backends (Kubernetes Ingress only supports Service
+                            backends). When set back to 0, the standard Ingress
+                            is restored.
+                            0   = debug only — Darlane has no Service, no traffic
+                            1–99 = A/B split — real users reach Darlane at this %
+                            100 = full canary — all traffic routes to Darlane
+                            Requires ingress.enabled: true and Traefik with the
+                            TraefikService and IngressRoute CRDs installed.
+                        stickySession:
+                          type: object
+                          default: {}
+                          description: |
+                            Pin each client to the same backend (main app or Darlane)
+                            for the duration of their session. Required for valid A/B
+                            tests — without it, a single user's requests are split
+                            probabilistically on every hop. Only effective when
+                            trafficWeight > 0. Uses a Traefik session cookie set on
+                            the first response. Browser clients only — API clients
+                            that do not forward cookies remain per-request.
+                          properties:
+                            enabled:
+                              type: boolean
+                              default: false
+                            cookieName:
+                              type: string
+                              default: darlane-ab
+                              description: |
+                                Name of the session cookie Traefik sets. Override to
+                                avoid collisions if multiple apps share the same domain.
+                            secure:
+                              type: boolean
+                              default: true
+                              description: Set Secure flag on the cookie (HTTPS only).
+                            sameSite:
+                              type: string
+                              enum: [lax, strict, none]
+                              default: lax
+                              description: |
+                                SameSite cookie policy.
+                                lax   — safe default; works for top-level navigations
+                                strict — strictest; may break OAuth redirect flows
+                                none  — cross-site; requires secure: true
+                        headerRouting:
+                          type: object
+                          default: {}
+                          description: |
+                            Pin requests to the Darlane pod using a request
+                            header — independent of trafficWeight. Any request
+                            that carries the configured header name/value is
+                            routed directly to the Darlane Service, bypassing
+                            the weighted TraefikService entirely. All other
+                            requests follow the normal split (or go straight
+                            to the main app when trafficWeight is 0).
+                            Works with or without trafficWeight — use
+                            trafficWeight: 0 for pure explicit opt-in with
+                            no random traffic spill at all.
+                            Requires ingress.enabled: true and darlane.enabled: true.
+                          properties:
+                            enabled:
+                              type: boolean
+                              default: false
+                            header:
+                              type: string
+                              description: |
+                                HTTP header name to match (e.g. "X-Target-Env").
+                                Case-sensitive. Required when enabled: true.
+                            value:
+                              type: string
+                              description: |
+                                Header value that pins the request to the Darlane
+                                pod (e.g. "darlane"). Case-sensitive. Required
+                                when enabled: true.
+                        telemetryPort:
+                          type: integer
+                          minimum: 1
+                          maximum: 65535
+                          description: |
+                            When set, emits a ClusterIP Service named
+                            {appName}-darlane-telemetry on this port. Provides
+                            stable in-cluster DNS so the OTEL collector,
+                            Prometheus, or any other in-cluster consumer can
+                            scrape the Darlane pod on a secondary port.
+                            Common values: 4317 (OTEL gRPC), 4318 (OTEL HTTP),
+                            9090 (Prometheus metrics). Works standalone or
+                            alongside trafficWeight for side-by-side A/B
+                            observability — one scrape target per version.
+                        fileSync:
+                          type: object
+                          default: {}
+                          description: |
+                            Mount a writable emptyDir volume at mountPath so
+                            tools like kubectl cp or mutagen can sync source
+                            files into the running pod. Essential when
+                            readOnlyRootFilesystem: true — the emptyDir is
+                            mounted on top of the read-only rootfs and is
+                            always writable. Combine with a hot-reload command
+                            (--reload, nodemon, air, watchmedo) so changes
+                            take effect without restarting the pod.
+                          properties:
+                            enabled:
+                              type: boolean
+                              default: false
+                            mountPath:
+                              type: string
+                              default: /app
+                              description: |
+                                Absolute path inside the container to mount
+                                the writable emptyDir. Must match where the
+                                application reads its source files.
+                            initFromImage:
+                              type: boolean
+                              default: true
+                              description: |
+                                If true, run an initContainer that copies the
+                                image's mountPath contents into the emptyDir
+                                before the main container starts. The pod then
+                                starts with the full source tree already in
+                                place — sync tools only push deltas. Set to
+                                false if the image has no files at mountPath
+                                (e.g. a bare language base image).
+                        volumes:
+                          type: array
+                          default: []
+                          description: |
+                            Volumes to mount into the Darlane pod. Volume source is
+                            determined by which field is set — exactly one must be
+                            provided per entry:
+                              claimName     → existing PVC (no creation)
+                              configMapName → existing ConfigMap
+                              secretName    → existing Secret
+                            Useful for persistent caches, config overlays, and shared
+                            data that survive pod restarts.
+                          items:
+                            type: object
+                            required: [name, mountPath]
+                            properties:
+                              name:
+                                type: string
+                                description: Volume name.
+                              mountPath:
+                                type: string
+                                description: Absolute mount path inside the container.
+                              subPath:
+                                type: string
+                                description: Optional subpath within the volume.
+                              readOnly:
+                                type: boolean
+                                default: false
+                              claimName:
+                                type: string
+                                description: |
+                                  Name of an existing PVC in the target namespace.
+                                  Mutually exclusive with configMapName / secretName.
+                              configMapName:
+                                type: string
+                                description: |
+                                  Name of an existing ConfigMap to mount as a volume.
+                                  Mutually exclusive with claimName / secretName.
+                              secretName:
+                                type: string
+                                description: |
+                                  Name of an existing Secret to mount as a volume.
+                                  Mutually exclusive with claimName / configMapName.
+                              items:
+                                type: array
+                                description: |
+                                  Key-to-path projections for configMap or secret volumes.
+                                  When set, only the listed keys are mounted at the
+                                  specified relative paths inside mountPath.
+                                items:
+                                  type: object
+                                  required: [key, path]
+                                  properties:
+                                    key:
+                                      type: string
+                                      description: Key in the ConfigMap or Secret.
+                                    path:
+                                      type: string
+                                      description: Relative path inside mountPath to mount this key.
+                        serviceAccount:
+                          type: object
+                          default: {}
+                          description: |
+                            ServiceAccount for the Darlane pod. When create is
+                            true, the composition creates a dedicated SA named
+                            {appName}-darlane (or the value of name). Use the SA
+                            token in the portal or CI pipeline to authenticate
+                            against the cluster (e.g. with workload identity
+                            bindings via annotations). When create is false and
+                            name is set, the Darlane pod runs as that existing SA.
+                          properties:
+                            create:
+                              type: boolean
+                              default: false
+                              description: |
+                                If true, emit a ServiceAccount named
+                                {appName}-darlane (or the value of name) in the
+                                target namespace.
+                            name:
+                              type: string
+                              description: |
+                                ServiceAccount name. Defaults to {appName}-darlane
+                                when create is true. When create is false, references
+                                an existing ServiceAccount in the target namespace.
+                            annotations:
+                              type: object
+                              default: {}
+                              additionalProperties:
+                                type: string
+                              description: |
+                                Annotations on the created ServiceAccount (ignored
+                                when create is false). Use for workload identity
+                                bindings, e.g. eks.amazonaws.com/role-arn (IRSA)
+                                or iam.gke.io/gcp-service-account (GCP WI).
+
+                    # ── Service ──────────────────────────────────────────────
+                    service:
+                      type: object
+                      default: {}
+                      properties:
+                        enabled:
+                          type: boolean
+                          default: true
+                        type:
+                          type: string
+                          enum: ["ClusterIP", "NodePort", "LoadBalancer"]
+                          default: "ClusterIP"
+                        port:
+                          type: integer
+                          default: 80
+                          description: Service port. targetPort is always containerPort.
+
+                    # ── Probes ───────────────────────────────────────────────
+                    probes:
+                      type: object
+                      default: {}
+                      description: |
+                        HTTP GET liveness/readiness/startup probes for the
+                        container. liveness and readiness default to enabled
+                        (mirroring service.enabled) against containerPort.
+                      properties:
+                        liveness:
+                          type: object
+                          default: {}
+                          description: 'Default: enabled (= service.enabled), GET /healthz.'
+                          properties:
+                            enabled:
+                              type: boolean
+                              description: Defaults to service.enabled.
+                            path:
+                              type: string
+                              default: "/healthz"
+                            port:
+                              type: integer
+                              description: Defaults to containerPort.
+                            initialDelaySeconds:
+                              type: integer
+                              default: 10
+                            periodSeconds:
+                              type: integer
+                              default: 10
+                            timeoutSeconds:
+                              type: integer
+                              default: 1
+                            failureThreshold:
+                              type: integer
+                              default: 3
+                        readiness:
+                          type: object
+                          default: {}
+                          description: 'Default: enabled (= service.enabled), GET /readyz.'
+                          properties:
+                            enabled:
+                              type: boolean
+                              description: Defaults to service.enabled.
+                            path:
+                              type: string
+                              default: "/readyz"
+                            port:
+                              type: integer
+                              description: Defaults to containerPort.
+                            initialDelaySeconds:
+                              type: integer
+                              default: 5
+                            periodSeconds:
+                              type: integer
+                              default: 10
+                            timeoutSeconds:
+                              type: integer
+                              default: 1
+                            failureThreshold:
+                              type: integer
+                              default: 3
+                        startup:
+                          type: object
+                          default: {}
+                          description: |
+                            Disabled by default. Useful for slow-starting apps —
+                            if enabled, liveness/readiness probes don't start
+                            until this probe succeeds. GET /healthz.
+                          properties:
+                            enabled:
+                              type: boolean
+                              default: false
+                            path:
+                              type: string
+                              default: "/healthz"
+                            port:
+                              type: integer
+                              description: Defaults to containerPort.
+                            periodSeconds:
+                              type: integer
+                              default: 10
+                            failureThreshold:
+                              type: integer
+                              default: 30
+
+                    # ── Ingress ──────────────────────────────────────────────
+                    ingress:
+                      type: object
+                      default: {}
+                      description: |
+                        Emits a Traefik IngressRoute (traefik.io/v1alpha1) — not
+                        a standard Kubernetes Ingress. IngressRoute is used in all
+                        cases so that switching darlane.trafficWeight is a live
+                        field update with zero downtime (no resource type swap).
+                        host is required when enabled (validated by the Composition).
+                      properties:
+                        enabled:
+                          type: boolean
+                          default: false
+                        className:
+                          type: string
+                          default: "traefik"
+                          description: |
+                            Not used by IngressRoute (which is always Traefik-native).
+                            Kept for schema compatibility.
+                        host:
+                          type: string
+                        path:
+                          type: string
+                          default: "/"
+                          description: |
+                            Path prefix for the IngressRoute match rule.
+                            Rendered as PathPrefix(`{path}`) in the route match expression.
+                        pathType:
+                          type: string
+                          enum: ["Prefix", "Exact", "ImplementationSpecific"]
+                          default: "Prefix"
+                          description: |
+                            Not used by IngressRoute (which uses its own match expression
+                            syntax). Kept for schema compatibility.
+                        annotations:
+                          type: object
+                          default: {}
+                          additionalProperties:
+                            type: string
+                        tls:
+                          type: object
+                          default: {}
+                          properties:
+                            enabled:
+                              type: boolean
+                              default: false
+                            secretName:
+                              type: string
+                              description: |
+                                TLS Secret name. Defaults to "{appName}-tls" if unset.
+                                When clusterIssuer is set, the composition emits a
+                                cert-manager Certificate CR that writes into this name.
+                                Without clusterIssuer, this Secret must already exist.
+                            clusterIssuer:
+                              type: string
+                              description: |
+                                If set (and tls.enabled), the composition emits a
+                                cert-manager Certificate CR (cert-manager.io/v1)
+                                referencing this ClusterIssuer. cert-manager
+                                auto-provisions the TLS Secret into secretName.
+                                The IngressRoute references the same secretName.
+                                Requires cert-manager and the named ClusterIssuer
+                                to exist in-cluster. Without this field,
+                                secretName must already exist.
+                        auth:
+                          type: object
+                          default: {}
+                          description: |
+                            SSO via Traefik's forward-auth Middleware chain (oauth2-proxy).
+                            Adds auth-errors and forward-auth-redirect Middleware references
+                            to the IngressRoute route (spec.routes[].middlewares). Both
+                            Middleware CRDs must exist in kube-system. Requires Traefik
+                            with allowCrossNamespace=true.
+                          properties:
+                            enabled:
+                              type: boolean
+                              default: false
+            status:
+              type: object
+              properties:
+                created:
+                  type: boolean
+                  description: |
+                    True when all expected cluster resources (Deployment, Service, Ingress)
+                    have been observed in the cluster at least once. Use this to distinguish
+                    "provisioning in progress" (created=false) from "exists but pods not yet
+                    healthy" (created=true, ready=false).
+                ready:
+                  type: boolean
+                  description: |
+                    True when all core cluster resources (Deployment, Service, Ingress)
+                    report Ready. Derived from the observed composed-resource state on
+                    each reconcile — accurate even when Crossplane's composite Ready
+                    condition lags due to WatchCircuitOpen throttling.
+
+                    Scoped to the core workload on purpose. Check dependenciesReady
+                    alongside it before declaring the app fully healthy.
+                synced:
+                  type: boolean
+                  description: |
+                    False while a composed resource that `ready` depends on failed its last apply —
+                    its `Ready` condition can stay True from the earlier success, so `ready` is
+                    derived with this in mind. `syncMessage` says what. Absent until the first
+                    reconcile.
+                syncMessage:
+                  type: string
+                  description: |
+                    The failing resource and the provider's own message, truncated; present while
+                    anything — including a resource `ready` deliberately excludes — is not Synced.
+                dependenciesReady:
+                  type: boolean
+                  description: |
+                    True when composed resources that do not gate the workload itself,
+                    but do gate the app being usable end-to-end, report Ready. Today
+                    that is the cert-manager Certificate (when ingress.tls is enabled).
+
+                    Split from `ready` so a consumer can render "app is up, TLS still
+                    issuing" rather than a blanket "not ready" for an app that is
+                    already serving.
+
+                    Note this XR does not compose an XDatabase — secretsFrom.database
+                    only wires an existing Secret in by name and is never waited on — so
+                    database provisioning is not reflected here.
+                darlane:
+                  type: object
+                  description: |
+                    Observed state of the Darlane debug twin. Absent entirely when
+                    darlane.enabled is false.
+                  properties:
+                    ready:
+                      type: boolean
+                      description: True when the <appName>-darlane Deployment reports Ready.
+                    replicas:
+                      type: integer
+                      description: |
+                        Observed ready replicas, read from the Deployment manifest that
+                        provider-kubernetes writes back — not the desired count from spec.
+                    trafficMode:
+                      type: string
+                      description: |
+                        Resolved routing for the twin: none, weighted (TraefikService
+                        split), header (header-matched IngressRoute), or both.
+                    ttl:
+                      type: string
+                      description: |
+                        The configured darlane.ttl duration (e.g. "4h"), echoed as-is.
+                        Not an expiry timestamp: ttl is a duration and the composition
+                        has no clock, so combine it with the Deployment's
+                        creationTimestamp to compute one. Empty when unset.
+                    serviceAccountName:
+                      type: string
+                      description: |
+                        Name of the ServiceAccount the twin runs as, published so RBAC
+                        can be bound to it from the GitOps repo. Compositions in this
+                        repo never emit Role or RoleBinding themselves. Empty when no
+                        ServiceAccount is configured.
+                url:
+                  type: string
+                  description: |
+                    Application URL derived from ingress.host (https:// when tls.enabled,
+                    http:// otherwise). Empty when ingress is disabled.
+                namespace:
+                  type: string
+                  description: Kubernetes namespace where the app is deployed.
+                owner:
+                  type: string
+                  description: |
+                    The owner this application runs under — its namespace's wxops.cloud/owner.
+                    Absent when the namespace has none; the application then renders nothing and
+                    syncMessage says so.
+                image:
+                  type: string
+                  description: Container image currently configured for the deployment.

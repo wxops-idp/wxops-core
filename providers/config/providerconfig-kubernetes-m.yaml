@@ -1,0 +1,10 @@
+# The namespaced twin of providerconfig-kubernetes.yaml: the hub, as a ClusterProviderConfig that namespaced Objects (kubernetes.m.crossplane.io) reference — XApp and
+# XDatabase's (ADR-005). Platform-owned and fixed by the compositions: a tenant neither creates nor names one. Same identity, so the same RBAC
+# (providers/rbac/provider-kubernetes.yaml) is its ceiling.
+apiVersion: kubernetes.m.crossplane.io/v1alpha1
+kind: ClusterProviderConfig
+metadata:
+  name: default
+spec:
+  credentials:
+    source: InjectedIdentity

@@ -1,0 +1,20 @@
+# A namespace with no wxops.cloud/owner is not a tenant namespace.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: rocket-team-production
+  labels:
+    kubernetes.io/metadata.name: rocket-team-production
+---
+apiVersion: platform.wxops.cloud/v1alpha1
+kind: XDatabaseCluster
+metadata:
+  name: cluster-a
+  labels:
+    wxops.cloud/managed-by: platform-database-clusters
+spec:
+  parameters:
+    clusterName: cluster-a
+    namespace: cnpg-system
+    shared: true
+    environment: dev

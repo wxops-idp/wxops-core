@@ -1,0 +1,13 @@
+# expect: until
+# expect: does not match
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPolicy
+metadata:
+  name: nope
+spec:
+  parameters:
+    template: secret-guard
+    scmOrgs: [wxops-idp]
+    temporaryExemptPersonaRef:
+      name: platform
+      until: tomorrow

@@ -1377,5 +1377,5 @@ If it is a requirement, Arch 1 needs a status-feedback project. If it is a prefe
 **Internal**
 - [`development-docs/core-ideas/darlane.md`](../core-ideas/darlane.md) — the interactive workflows that constrain this design
 - [`development-docs/core-ideas/guardian.md`](guardian.md) — safety layer for Darlane sessions
-- [`docs/api-reference/platform/tenant-app.md`](../../docs/api-reference/platform/tenant-app.md) — `XTenantApp` API reference
+- [`docs/api-reference/platform/tenant-app.md`](../../docs/api-reference/_archives/tenant-app.md) — `XTenantApp` API reference
 - [`providers/`](../../providers) — current single-cluster `ProviderConfig` and RBAC

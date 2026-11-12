@@ -1,0 +1,110 @@
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPolicy
+metadata:
+  name: sa-guard
+spec:
+  crossplane:
+    resourceRefs:
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: 9c41dcf7-policy
+status:
+  conditions:
+    - reason: WatchCircuitClosed
+      status: 'True'
+      type: Responsive
+    - reason: ReconcileSuccess
+      status: 'True'
+      type: Synced
+    - message: 'Unready resources: 9c41dcf7-policy'
+      reason: Creating
+      status: 'False'
+      type: Ready
+  created: false
+  policyKind: ValidatingPolicy
+  policyName: wxops-sa-guard
+  ready: false
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: 9c41dcf7-policy
+  labels:
+    crossplane.io/composite: sa-guard
+  name: 9c41dcf7-policy
+  ownerReferences:
+    - apiVersion: auth.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XPolicy
+      name: sa-guard
+      uid: 9c41dcf7-0a92-5721-b2a3-88bcc70b9ddd
+spec:
+  forProvider:
+    manifest:
+      apiVersion: policies.kyverno.io/v1
+      kind: ValidatingPolicy
+      metadata:
+        labels:
+          auth.wxops.cloud/policy: sa-guard
+          auth.wxops.cloud/template: sa-guard
+          wxops.cloud/managed-by: platform-policy
+        name: wxops-sa-guard
+      spec:
+        evaluation:
+          background:
+            enabled: false
+        failurePolicy: Fail
+        matchConditions:
+          - expression: '!request.userInfo.username.startsWith(''system:'') && request.userInfo.groups.exists(g, [''wxops-idp:''].exists(p, g.startsWith(p)))'
+            name: scm-user
+          - expression: '!(request.userInfo.groups.exists(g, g in [''wxops-idp:platform'']) || request.userInfo.username in [''root''])'
+            name: not-exempt
+        matchConstraints:
+          resourceRules:
+            - apiGroups:
+                - ''
+              apiVersions:
+                - '*'
+              operations:
+                - CREATE
+                - UPDATE
+              resources:
+                - pods
+            - apiGroups:
+                - apps
+              apiVersions:
+                - '*'
+              operations:
+                - CREATE
+                - UPDATE
+              resources:
+                - deployments
+                - statefulsets
+                - daemonsets
+                - replicasets
+            - apiGroups:
+                - batch
+              apiVersions:
+                - '*'
+              operations:
+                - CREATE
+                - UPDATE
+              resources:
+                - jobs
+                - cronjobs
+        validationActions:
+          - Deny
+        validations:
+          - expression: variables.serviceAccount == 'default' || dyn(resource.List('v1', 'serviceaccounts', request.namespace).items).exists(s, s.metadata.name == variables.serviceAccount && has(s.metadata.labels) && 'wxops.cloud/owner' in s.metadata.labels && s.metadata.labels['wxops.cloud/owner'] in variables.teams)
+            messageExpression: "'auth.wxops.cloud: ServiceAccount ' + variables.serviceAccount + ' is not owned by one of your teams [' + variables.teams.join(', ') + '] \u2014 run as default or your own'"
+        variables:
+          - expression: request.userInfo.groups.filter(g, ['wxops-idp:'].exists(p, g.startsWith(p))).map(g, g.substring(g.indexOf(':') + 1))
+            name: teams
+          - expression: 'object.kind == ''Pod'' ? object.spec : object.kind == ''CronJob'' ? object.spec.jobTemplate.spec.template.spec : object.spec.template.spec'
+            name: podSpec
+          - expression: 'has(variables.podSpec.serviceAccountName) && variables.podSpec.serviceAccountName != '''' ? variables.podSpec.serviceAccountName : has(variables.podSpec.serviceAccount) && variables.podSpec.serviceAccount != '''' ? variables.podSpec.serviceAccount : ''default'''
+            name: serviceAccount
+  providerConfigRef:
+    name: default

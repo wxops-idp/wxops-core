@@ -1,0 +1,22 @@
+# The XR's namespace, as function-extra-resources fetches it: found by its name label, owned by a team. XDatabase takes its owner from here.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: rocket-team-production
+  labels:
+    kubernetes.io/metadata.name: rocket-team-production
+    auth.wxops.cloud/tenant-namespace: "true"
+    wxops.cloud/owner: rocket-team
+---
+apiVersion: platform.wxops.cloud/v1alpha1
+kind: XDatabaseCluster
+metadata:
+  name: cluster-a
+  labels:
+    wxops.cloud/managed-by: platform-database-clusters
+spec:
+  parameters:
+    clusterName: cluster-a
+    namespace: cnpg-system
+    shared: true
+    environment: dev

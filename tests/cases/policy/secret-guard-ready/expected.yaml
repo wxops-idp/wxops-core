@@ -1,0 +1,81 @@
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPolicy
+metadata:
+  name: secret-guard
+spec:
+  crossplane:
+    resourceRefs:
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: 3d1a9503-policy
+status:
+  conditions:
+    - reason: WatchCircuitClosed
+      status: 'True'
+      type: Responsive
+    - reason: ReconcileSuccess
+      status: 'True'
+      type: Synced
+    - message: 'Unready resources: 3d1a9503-policy'
+      reason: Creating
+      status: 'False'
+      type: Ready
+  created: false
+  policyKind: ValidatingPolicy
+  policyName: wxops-secret-guard
+  ready: false
+  synced: true
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: 3d1a9503-policy
+  labels:
+    crossplane.io/composite: secret-guard
+  name: 3d1a9503-policy
+  ownerReferences:
+    - apiVersion: auth.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XPolicy
+      name: secret-guard
+      uid: 3d1a9503-2bef-5fd3-8555-cb2debdf5373
+spec:
+  forProvider:
+    manifest:
+      apiVersion: policies.kyverno.io/v1
+      kind: ValidatingPolicy
+      metadata:
+        labels:
+          auth.wxops.cloud/policy: secret-guard
+          auth.wxops.cloud/template: secret-guard
+          wxops.cloud/managed-by: platform-policy
+        name: wxops-secret-guard
+      spec:
+        evaluation:
+          background:
+            enabled: false
+        failurePolicy: Fail
+        matchConditions:
+          - expression: '!request.userInfo.username.startsWith(''system:'') && request.userInfo.groups.exists(g, [''wxops-idp:''].exists(p, g.startsWith(p)))'
+            name: scm-user
+        matchConstraints:
+          resourceRules:
+            - apiGroups:
+                - ''
+              apiVersions:
+                - '*'
+              operations:
+                - CREATE
+                - UPDATE
+                - DELETE
+              resources:
+                - secrets
+        validationActions:
+          - Deny
+        validations:
+          - expression: 'false'
+            message: 'auth.wxops.cloud: Secrets are written by External Secrets Operator from OpenBao, not by hand'
+  providerConfigRef:
+    name: default

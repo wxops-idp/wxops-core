@@ -1,0 +1,266 @@
+apiVersion: tenant.wxops.cloud/v1alpha1
+kind: XDatabase
+metadata:
+  name: analytics-db
+  namespace: rocket-team-production
+spec:
+  crossplane:
+    resourceRefs:
+      - apiVersion: kubernetes.m.crossplane.io/v1alpha1
+        kind: Object
+        name: 21208d9e-cnpg-database
+      - apiVersion: kubernetes.m.crossplane.io/v1alpha1
+        kind: Object
+        name: 21208d9e-conn-bundle
+      - apiVersion: kubernetes.m.crossplane.io/v1alpha1
+        kind: Object
+        name: 21208d9e-push-secret
+      - apiVersion: kubernetes.m.crossplane.io/v1alpha1
+        kind: Object
+        name: 21208d9e-pwd-gen
+      - apiVersion: kubernetes.m.crossplane.io/v1alpha1
+        kind: Object
+        name: 21208d9e-sql-role
+status:
+  clusterNamespace: analytics
+  clusterRef: rocket-team-analytics-db-cluster
+  conditions:
+    - reason: WatchCircuitClosed
+      status: 'True'
+      type: Responsive
+    - reason: ReconcileSuccess
+      status: 'True'
+      type: Synced
+    - message: 'Unready resources: 21208d9e-cnpg-database, 21208d9e-conn-bundle, 21208d9e-push-secret, and 2 more'
+      reason: Creating
+      status: 'False'
+      type: Ready
+  created: false
+  databaseName: rocket-team-analytics-db
+  dbName: analytics-db
+  owner: rocket-team
+  ready: false
+  tier: dedicated
+---
+apiVersion: kubernetes.m.crossplane.io/v1alpha1
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: 21208d9e-cnpg-database
+  labels:
+    crossplane.io/composite: analytics-db
+  name: 21208d9e-cnpg-database
+  namespace: rocket-team-production
+  ownerReferences:
+    - apiVersion: tenant.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XDatabase
+      name: analytics-db
+      uid: 21208d9e-1325-5dcf-8d5d-30240c7b3dc5
+spec:
+  forProvider:
+    manifest:
+      apiVersion: postgresql.cnpg.io/v1
+      kind: Database
+      metadata:
+        labels:
+          wxops.cloud/owner: rocket-team
+        name: rocket-team-analytics-db
+        namespace: analytics
+      spec:
+        cluster:
+          name: rocket-team-analytics-db-cluster
+        databaseReclaimPolicy: retain
+        extensions:
+          - ensure: present
+            name: uuid-ossp
+          - ensure: present
+            name: pgcrypto
+        name: rocket-team-analytics-db
+        owner: rocket-team-analytics-db
+  providerConfigRef:
+    kind: ClusterProviderConfig
+    name: default
+---
+apiVersion: kubernetes.m.crossplane.io/v1alpha1
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: 21208d9e-conn-bundle
+  labels:
+    crossplane.io/composite: analytics-db
+  name: 21208d9e-conn-bundle
+  namespace: rocket-team-production
+  ownerReferences:
+    - apiVersion: tenant.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XDatabase
+      name: analytics-db
+      uid: 21208d9e-1325-5dcf-8d5d-30240c7b3dc5
+spec:
+  forProvider:
+    manifest:
+      apiVersion: external-secrets.io/v1
+      kind: ExternalSecret
+      metadata:
+        labels:
+          wxops.cloud/owner: rocket-team
+        name: rocket-team-analytics-db-conn-es
+        namespace: analytics
+      spec:
+        dataFrom:
+          - sourceRef:
+              generatorRef:
+                apiVersion: generators.external-secrets.io/v1alpha1
+                kind: Password
+                name: rocket-team-analytics-db-pwd-gen
+        refreshInterval: '0'
+        refreshPolicy: CreatedOnce
+        target:
+          creationPolicy: Owner
+          deletionPolicy: Retain
+          name: rocket-team-analytics-db-connection-creds
+          template:
+            data:
+              connectionString: postgresql://rocket-team-analytics-db:{{ .password }}@rocket-team-analytics-db-cluster-rw.analytics.svc.cluster.local:5432/rocket-team-analytics-db
+              database: rocket-team-analytics-db
+              endpoint: rocket-team-analytics-db-cluster-rw.analytics.svc.cluster.local
+              password: '{{ .password }}'
+              port: '5432'
+              username: rocket-team-analytics-db
+            engineVersion: v2
+  managementPolicies:
+    - Observe
+    - Create
+    - Update
+    - LateInitialize
+  providerConfigRef:
+    kind: ClusterProviderConfig
+    name: default
+---
+apiVersion: kubernetes.m.crossplane.io/v1alpha1
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: 21208d9e-push-secret
+  labels:
+    crossplane.io/composite: analytics-db
+  name: 21208d9e-push-secret
+  namespace: rocket-team-production
+  ownerReferences:
+    - apiVersion: tenant.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XDatabase
+      name: analytics-db
+      uid: 21208d9e-1325-5dcf-8d5d-30240c7b3dc5
+spec:
+  forProvider:
+    manifest:
+      apiVersion: external-secrets.io/v1alpha1
+      kind: PushSecret
+      metadata:
+        labels:
+          wxops.cloud/owner: rocket-team
+        name: rocket-team-analytics-db-push
+        namespace: analytics
+      spec:
+        data:
+          - match:
+              remoteRef:
+                remoteKey: rocket-team/databases/analytics-db/connection-creds
+        deletionPolicy: None
+        refreshInterval: '0'
+        secretStoreRefs:
+          - kind: ClusterSecretStore
+            name: vault-tenant
+        selector:
+          secret:
+            name: rocket-team-analytics-db-connection-creds
+  providerConfigRef:
+    kind: ClusterProviderConfig
+    name: default
+---
+apiVersion: kubernetes.m.crossplane.io/v1alpha1
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: 21208d9e-pwd-gen
+  labels:
+    crossplane.io/composite: analytics-db
+  name: 21208d9e-pwd-gen
+  namespace: rocket-team-production
+  ownerReferences:
+    - apiVersion: tenant.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XDatabase
+      name: analytics-db
+      uid: 21208d9e-1325-5dcf-8d5d-30240c7b3dc5
+spec:
+  forProvider:
+    manifest:
+      apiVersion: generators.external-secrets.io/v1alpha1
+      kind: Password
+      metadata:
+        labels:
+          wxops.cloud/owner: rocket-team
+        name: rocket-team-analytics-db-pwd-gen
+        namespace: analytics
+      spec:
+        allowRepeat: false
+        digits: 8
+        length: 32
+        noUpper: false
+        symbolCharacters: ''
+        symbols: 0
+  managementPolicies:
+    - Observe
+    - Create
+    - Update
+    - LateInitialize
+  providerConfigRef:
+    kind: ClusterProviderConfig
+    name: default
+---
+apiVersion: kubernetes.m.crossplane.io/v1alpha1
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: 21208d9e-sql-role
+  labels:
+    crossplane.io/composite: analytics-db
+  name: 21208d9e-sql-role
+  namespace: rocket-team-production
+  ownerReferences:
+    - apiVersion: tenant.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XDatabase
+      name: analytics-db
+      uid: 21208d9e-1325-5dcf-8d5d-30240c7b3dc5
+spec:
+  forProvider:
+    manifest:
+      apiVersion: postgresql.sql.crossplane.io/v1alpha1
+      kind: Role
+      metadata:
+        labels:
+          wxops.cloud/owner: rocket-team
+        name: rocket-team-analytics-db
+      spec:
+        deletionPolicy: Orphan
+        forProvider:
+          passwordSecretRef:
+            key: password
+            name: rocket-team-analytics-db-connection-creds
+            namespace: analytics
+          privileges:
+            login: true
+        providerConfigRef:
+          name: rocket-team-analytics-db-cluster
+  providerConfigRef:
+    kind: ClusterProviderConfig
+    name: default

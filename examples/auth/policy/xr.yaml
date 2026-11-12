@@ -1,0 +1,12 @@
+# owner-seal — "edit" means "edit your own" (RFC-009). Every policy matches SCM users only, never a system: identity. One example per template, with the
+# Kyverno policy each renders: docs/api-reference/auth/policy.md. Cluster acceptance tests: scenarios/.
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPolicy
+metadata:
+  name: owner-seal
+spec:
+  parameters:
+    template: owner-seal
+    scmOrgs: [wxops-idp]
+    exemptPersonaRef:
+      name: platform

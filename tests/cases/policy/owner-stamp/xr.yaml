@@ -1,0 +1,8 @@
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPolicy
+metadata:
+  name: owner-stamp
+spec:
+  parameters:
+    template: owner-stamp
+    scmOrgs: [wxops-idp]

@@ -1,0 +1,13 @@
+# tier: dedicated uses the XDatabaseCluster the platform team created for it: rocket-team-analytics-db-cluster, labelled wxops.cloud/owner: rocket-team, shared: false.
+apiVersion: tenant.wxops.cloud/v1alpha1
+kind: XDatabase
+metadata:
+  name: analytics-db
+  namespace: rocket-team-production
+spec:
+  parameters:
+    tier: dedicated
+    environment: dev
+    extensions:
+      - uuid-ossp
+      - pgcrypto

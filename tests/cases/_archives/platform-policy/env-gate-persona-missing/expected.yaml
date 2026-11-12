@@ -1,0 +1,201 @@
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPlatformPolicy
+metadata:
+  name: env-gate-persona-missing
+spec:
+  crossplane:
+    resourceRefs:
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: 694a99c4-policy
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: 694a99c4-policy-apps
+status:
+  appPolicyName: wxops-env-gate-persona-missing-apps
+  conditions:
+    - reason: WatchCircuitClosed
+      status: 'True'
+      type: Responsive
+    - reason: ReconcileSuccess
+      status: 'True'
+      type: Synced
+    - message: 'Unready resources: 694a99c4-policy, 694a99c4-policy-apps'
+      reason: Creating
+      status: 'False'
+      type: Ready
+  created: false
+  policyKind: ValidatingPolicy
+  policyName: wxops-env-gate-persona-missing
+  ready: false
+  syncMessage: "persona 'ghost' not found \u2014 env-gate allows nobody until it exists"
+  synced: false
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: 694a99c4-policy
+  labels:
+    crossplane.io/composite: env-gate-persona-missing
+  name: 694a99c4-policy
+  ownerReferences:
+    - apiVersion: auth.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XPlatformPolicy
+      name: env-gate-persona-missing
+      uid: 694a99c4-9d33-5efc-b596-1921a3381eae
+spec:
+  forProvider:
+    manifest:
+      apiVersion: policies.kyverno.io/v1
+      kind: ValidatingPolicy
+      metadata:
+        labels:
+          auth.wxops.cloud/policy: env-gate-persona-missing
+          auth.wxops.cloud/template: env-gate
+          wxops.cloud/managed-by: platform-policy
+        name: wxops-env-gate-persona-missing
+      spec:
+        evaluation:
+          background:
+            enabled: false
+        failurePolicy: Fail
+        matchConditions:
+          - expression: '!(request.resource.group in [''authentication.k8s.io'', ''authorization.k8s.io'', ''login.concierge.pinniped.dev'', ''identity.concierge.pinniped.dev'']) && !(request.resource.resource in [''events'', ''leases''])'
+            name: not-excluded
+          - expression: '!request.userInfo.username.startsWith(''system:'') && request.userInfo.groups.exists(g, [''wxops-idp:''].exists(p, g.startsWith(p)))'
+            name: scm-user
+        matchConstraints:
+          excludeResourceRules:
+            - apiGroups:
+                - authentication.k8s.io
+                - authorization.k8s.io
+                - login.concierge.pinniped.dev
+                - identity.concierge.pinniped.dev
+              apiVersions:
+                - '*'
+              operations:
+                - '*'
+              resources:
+                - '*'
+            - apiGroups:
+                - ''
+                - events.k8s.io
+              apiVersions:
+                - '*'
+              operations:
+                - '*'
+              resources:
+                - events
+            - apiGroups:
+                - coordination.k8s.io
+              apiVersions:
+                - '*'
+              operations:
+                - '*'
+              resources:
+                - leases
+          namespaceSelector:
+            matchExpressions:
+              - key: wxops.cloud/environment
+                operator: In
+                values:
+                  - prod
+          resourceRules:
+            - apiGroups:
+                - '*'
+              apiVersions:
+                - '*'
+              operations:
+                - CREATE
+                - UPDATE
+                - DELETE
+              resources:
+                - '*'
+              scope: Namespaced
+            - apiGroups:
+                - ''
+              apiVersions:
+                - '*'
+              operations:
+                - CONNECT
+              resources:
+                - pods/exec
+                - pods/attach
+                - pods/portforward
+              scope: Namespaced
+        validationActions:
+          - Deny
+        validations:
+          - expression: (request.userInfo.groups.exists(g, g in []) || request.userInfo.username in []) && variables.nsEnv in []
+            messageExpression: "'auth.wxops.cloud: ' + variables.nsEnv + ' is a guarded environment \u2014 changes here are for members of persona ghost whose environments include it; everyone else goes through Git'"
+        variables:
+          - expression: 'namespaceObject != null && has(namespaceObject.metadata.labels) && ''wxops.cloud/environment'' in namespaceObject.metadata.labels ? namespaceObject.metadata.labels[''wxops.cloud/environment''] : '''''
+            name: nsEnv
+  providerConfigRef:
+    name: default
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: 694a99c4-policy-apps
+  labels:
+    crossplane.io/composite: env-gate-persona-missing
+  name: 694a99c4-policy-apps
+  ownerReferences:
+    - apiVersion: auth.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XPlatformPolicy
+      name: env-gate-persona-missing
+      uid: 694a99c4-9d33-5efc-b596-1921a3381eae
+spec:
+  forProvider:
+    manifest:
+      apiVersion: policies.kyverno.io/v1
+      kind: ValidatingPolicy
+      metadata:
+        labels:
+          auth.wxops.cloud/policy: env-gate-persona-missing
+          auth.wxops.cloud/template: env-gate
+          wxops.cloud/managed-by: platform-policy
+        name: wxops-env-gate-persona-missing-apps
+      spec:
+        evaluation:
+          background:
+            enabled: false
+        failurePolicy: Fail
+        matchConditions:
+          - expression: '!request.userInfo.username.startsWith(''system:'') && request.userInfo.groups.exists(g, [''wxops-idp:''].exists(p, g.startsWith(p)))'
+            name: scm-user
+        matchConstraints:
+          resourceRules:
+            - apiGroups:
+                - tenant.wxops.cloud
+              apiVersions:
+                - '*'
+              operations:
+                - CREATE
+                - UPDATE
+                - DELETE
+              resources:
+                - xapps
+                - xdatabases
+              scope: Namespaced
+        validationActions:
+          - Deny
+        validations:
+          - expression: variables.guarded.size() == 0 || ((request.userInfo.groups.exists(g, g in []) || request.userInfo.username in []) && variables.guarded.all(e, e in []))
+            messageExpression: "'auth.wxops.cloud: ' + variables.guarded.join(', ') + ' is a guarded environment \u2014 changes to it are for members of persona ghost whose environments include it; everyone else goes through Git'"
+        variables:
+          - expression: '(oldObject != null && has(oldObject.spec) && has(oldObject.spec.parameters) && has(oldObject.spec.parameters.environment) ? oldObject.spec.parameters.environment : '''')'
+            name: oldEnv
+          - expression: '(object != null && has(object.spec) && has(object.spec.parameters) && has(object.spec.parameters.environment) ? object.spec.parameters.environment : '''')'
+            name: newEnv
+          - expression: '[variables.oldEnv, variables.newEnv].filter(e, e in [''prod''])'
+            name: guarded
+  providerConfigRef:
+    name: default

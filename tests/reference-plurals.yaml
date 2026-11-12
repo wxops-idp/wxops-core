@@ -1,0 +1,14 @@
+# Plurals served by the reference stack (CLAUDE.md, "Reference stack"), checked by tests/invariants.py against every W'xOps kind's plural (ADR-005, decision 3).
+# kubectl resolves a kind by its plural, so a W'xOps plural equal to one of these would shadow, or be shadowed by, the stack's own. Add a plural here with the
+# stack component that serves it; bump the list when the reference stack moves.
+Kyverno: [policies, clusterpolicies, validatingpolicies, mutatingpolicies, generatingpolicies, deletingpolicies, policyexceptions, cleanuppolicies]
+CloudNativePG: [clusters, databases, poolers, backups, scheduledbackups, publications, subscriptions]
+External Secrets Operator: [externalsecrets, pushsecrets, secretstores, clustersecretstores, passwords]
+Argo CD: [applications, applicationsets, appprojects]
+Crossplane: [compositions, compositeresourcedefinitions, compositionrevisions, usages, clusterusages, providers, functions, configurations, operations]
+provider-kubernetes: [objects, providerconfigs, clusterproviderconfigs]
+provider-sql: [roles, grants, providerconfigs]
+cert-manager: [certificates, issuers, clusterissuers]
+Traefik: [ingressroutes, middlewares, traefikservices]
+Prometheus Operator: [servicemonitors, podmonitors, prometheusrules]
+Kubernetes: [namespaces, roles, rolebindings, clusterroles, clusterrolebindings, deployments, services, secrets, configmaps]

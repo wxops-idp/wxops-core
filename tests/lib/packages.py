@@ -86,8 +86,8 @@ def baseline_paths(name: str) -> list[str]:
     """Repo-relative directories this package may occupy, newest layout first.
 
     The flat `package/<name>` entry covers release tags cut before RFC-007's move; the
-    `package/platform/<name>` entry covers an archived package (RFC-003 §Removing the old
-    kinds): gone from the current registry entirely, but still real at the baseline tag.
+    `package/<group>/<name>` entries cover an archived package (RFC-003 §Removing the old
+    kinds): gone from the current registry entirely, so its group is unknown too, but still real at the baseline tag.
     `tests/api_compat.py`'s own `packages()` unions such names in from the baseline specifically
     to classify their removal, so this must resolve a historical path without the name being
     registered now — see `.github/scripts/release-state.py` for the mirror-image use.
@@ -96,7 +96,9 @@ def baseline_paths(name: str) -> list[str]:
         out = [rel_path(name)]
     except KeyError:
         out = []
-    for candidate in (f"package/{name}", f"package/platform/{name}"):
+    # An archived package is in no registry entry, so its group is unknown: try every group directory, current or not.
+    groups_seen = groups() + [g for g in ("platform", "scm", "auth", "tenant") if g not in groups()]
+    for candidate in [f"package/{name}"] + [f"package/{g}/{name}" for g in groups_seen]:
         if candidate not in out:
             out.append(candidate)
     return out

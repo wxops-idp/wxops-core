@@ -33,7 +33,7 @@ story belongs in the commits themselves; this is the one-paragraph version a rev
 
 ## Packages touched
 
-<!-- Every package this PR's commits carry as a scope, e.g. tenant-app, scm-repository.
+<!-- Every package this PR's commits carry as a scope, e.g. app, scm-repository.
 Matters for release-notes' package table and for a reviewer scoping their read. -->
 
 ## Change tier

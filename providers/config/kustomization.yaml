@@ -4,5 +4,6 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - providerconfig-kubernetes.yaml      # provider-kubernetes: InjectedIdentity, in-cluster
+  - providerconfig-kubernetes-m.yaml    # the same, as the ClusterProviderConfig namespaced Objects use (XApp, XDatabase)
   - providerconfig-opentofu.yaml        # provider-opentofu: Kubernetes state backend, secret_suffix tofu-state
   - providerconfig-vault.yaml           # provider-vault: OpenBao address and the out-of-band vault-credentials Secret

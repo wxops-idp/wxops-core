@@ -1,0 +1,13 @@
+# Scope per template on owner-stamp: the selector is added on top of the tenant-namespace label, which a selector can never override.
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPolicy
+metadata:
+  name: owner-stamp-scoped
+spec:
+  parameters:
+    template: owner-stamp
+    scmOrgs: [wxops-idp]
+    namespaceSelector:
+      matchLabels:
+        wxops.cloud/environment: prod
+        auth.wxops.cloud/tenant-namespace: "false"

@@ -2,7 +2,7 @@
 
 A persona is a title that collects who it applies to: **SCM teams, hand-listed groups and users, and in-cluster agents**, plus the environments it applies on.
 It grants nothing. It resolves its members into `status.subjects` — RBAC subjects, ready to copy — which [`XPersonaBinding`](persona-binding.md) turns into
-`RoleBinding`s and [`XPlatformPolicy`](platform-policy.md) into Kyverno policies. Design: [RFC-009](../../../development-docs/rfc/009-scm-personas.md).
+`RoleBinding`s and [`XPolicy`](policy.md) into Kyverno policies. Design: [RFC-009](../../../development-docs/rfc/009-scm-personas.md).
 
 | | |
 |---|---|
@@ -44,7 +44,7 @@ metadata:
 ```
 
 The persona publishes the mapping as `status.owners`; [`XPersonaBinding`](persona-binding.md) (`scope: owned`) and every
-[`XPlatformPolicy`](platform-policy.md) read the same label. One label, one extra owner. Only the platform team writes `XScmTeam`s, so only it can map a team.
+[`XPolicy`](policy.md) read the same label. One label, one extra owner. Only the platform team writes `XScmTeam`s, so only it can map a team.
 
 **Why it helps with many teams.** Owners stay plain team slugs, and team names never have to collide or be renamed to share a namespace: `payment` and
 `payment-maintainers` keep their own groups, members and SCM permissions, and the label says the second one also stands for the first. The mapping is in
@@ -53,15 +53,15 @@ one place — the team's own manifest, reviewed — and every layer reads it: th
 also how a team that crosses several products is given each one's slice — one team per crossing, each labelled with the owner it serves.
 
 **It converges, it does not switch:** a new or removed mapping reaches the persona, the bindings and the policies at their next reconcile. To see it
-sooner, nudge a policy: `kubectl annotate xplatformpolicy <name> wxops.test/nudge="$(date +%s)" --overwrite`. The sandbox plays it end to end with
-`./run.sh mapping` ([trying the templates](platform-policy.md#trying-the-templates-on-a-cluster)).
+sooner, nudge a policy: `kubectl annotate xpolicy <name> wxops.test/nudge="$(date +%s)" --overwrite`. The sandbox plays it end to end with
+`./run.sh mapping` ([trying the templates](policy.md#trying-the-templates-on-a-cluster)).
 
 ## spec.parameters
 
 | Field | Type | Default | Notes |
 |---|---|---|---|
 | `description` | `string` | — (required) | What the persona may do, in one line |
-| `environments` | `[string]` | `[]` | Environments the persona applies on; echoed to status. Enforced per namespace by the optional [`env-gate`](platform-policy.md) template — its members change a guarded namespace only if its `wxops.cloud/environment` is listed here. The per-cluster gate arrives with the multi-cluster feature |
+| `environments` | `[string]` | `[]` | Environments the persona applies on; echoed to status. Enforced per namespace by the optional [`env-gate`](policy.md) template — its members change a guarded namespace only if its `wxops.cloud/environment` is listed here — and on an `XApp` or `XDatabase`'s own `environment`, which must be listed here too. The per-cluster gate arrives with the multi-cluster feature |
 | `members.teams` | `boolean` | `true` | Generate members from labelled `XScmTeam`s |
 | `members.groups` | `[string]` | `[]` | Groups by hand, `<org>:<team>`. A `system:` group is refused |
 | `members.users` | `[string]` | `[]` | Dex usernames by hand. A `system:` username is refused |

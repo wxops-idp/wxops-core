@@ -1,7 +1,7 @@
 # KCL, the Way This Repo Uses It
 
 > This is not a KCL tutorial — for the language itself, see the [KCL introduction](https://www.kcl-lang.io/docs/user_docs/getting-started/intro). This page
-> covers the idioms this repo actually leans on, walking real slices of `kcl/platform-database-clusters/main.k` — not the whole 800-line file.
+> covers the idioms this repo actually leans on, walking real slices of `kcl/database-cluster/main.k` — not the whole 800-line file.
 
 **Table of Contents**
 - [Why KCL exists here at all](#why-kcl-exists-here-at-all)
@@ -17,7 +17,7 @@
 
 ## Why KCL exists here at all
 
-`platform-database-clusters`, `tenant-database` and `tenant-app` need real logic: compose a `Pooler` only if pooling is on, a `ScheduledBackup` only if backups
+`database-cluster`, `database` and `app` need real logic: compose a `Pooler` only if pooling is on, a `ScheduledBackup` only if backups
 are configured, a variable-length list of Secrets for a variable-length list of managed roles. `function-patch-and-transform` (the Terraform packages' technique
 — [see here](02-opentofu-here.md)) has no branching or looping; `function-kcl` does. That's the entire reason two techniques coexist in this repo — not a
 preference, a capability gap. Full reasoning: [`kcl/README.md`](../../kcl/README.md).
@@ -63,7 +63,7 @@ You'll see this shape constantly. It reads oddly at first; it's the only tool KC
 
 ## Composing a resource conditionally
 
-This is the core idiom — a real slice from `platform-database-clusters`, composing a `ScheduledBackup` only when backups are enabled:
+This is the core idiom — a real slice from `database-cluster`, composing a `ScheduledBackup` only when backups are enabled:
 
 ```python
 backupEnabled = _get(_bkp, "enabled", False)

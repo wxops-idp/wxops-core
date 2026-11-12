@@ -1,0 +1,169 @@
+apiVersion: apiextensions.crossplane.io/v2
+kind: CompositeResourceDefinition
+metadata:
+  name: xdatabases.tenant.wxops.cloud
+spec:
+  group: tenant.wxops.cloud
+  scope: Namespaced
+  names:
+    kind: XDatabase
+    plural: xdatabases
+    categories:
+      - wxops
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - parameters
+              properties:
+                parameters:
+                  type: object
+                  properties:
+                    tier:
+                      type: string
+                      default: "shared"
+                      enum: [shared, dedicated]
+                      description: |
+                        shared    — a shared XDatabaseCluster for this database's environment,
+                                    chosen by the platform: a stable hash of owner/dbName
+                                    picks one, and the choice is kept in status.clusterRef,
+                                    so adding a cluster never moves a database.
+                        dedicated — the XDatabaseCluster the platform team created for this
+                                    database: named <owner>-<dbName>-cluster, labelled
+                                    wxops.cloud/owner: <owner>, shared: false. 1 cluster = 1
+                                    database, fully isolated. The platform team creates it and
+                                    sizes it; this XR only uses it.
+
+                        There is no cluster, namespace or owner to name here: the platform
+                        decides where a database lives and the namespace decides whose it is
+                        (ADR-005, RFC-010).
+                    environment:
+                      type: string
+                      pattern: "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+                      maxLength: 63
+                      description: |
+                        Optional, any name. For tier: shared, the pool is the shared clusters
+                        whose environment matches — dev databases land on dev clusters, prod on
+                        prod. Absent means "dev", the pool every XTenantDatabase defaulted to.
+                        Ignored for tier: dedicated, whose cluster is named after the database.
+                    dbName:
+                      type: string
+                      description: |
+                        Optional. The database's logical name: it scopes the PostgreSQL role
+                        (<owner>-<dbName>), the connection Secret and the OpenBao path
+                        tenants/<owner>/databases/<dbName>/connection-creds. Defaults to the
+                        XR's own name. Unique per owner.
+                    databaseName:
+                      type: string
+                      description: |
+                        Optional. The PostgreSQL database's own name. Defaults to
+                        <owner>-<dbName>, so it is unique on its cluster by construction and two
+                        teams can both have a database called "app". Set it only to adopt a
+                        database an earlier XTenantDatabase created under its bare dbName —
+                        the name of an existing CNPG database cannot change.
+                    extensions:
+                      type: array
+                      default: []
+                      description: |
+                        PostgreSQL extensions to enable in the database.
+                        Example: [uuid-ossp, pgcrypto, postgis]
+                      items:
+                        type: string
+                    databaseReclaimPolicy:
+                      type: string
+                      default: "retain"
+                      enum: [delete, retain]
+                      description: |
+                        CNPG Database.spec.databaseReclaimPolicy. "retain" (default)
+                        protects this tenant's database from XR/claim deletion: the
+                        database (and its data) and its owning role both survive XR
+                        deletion and must be cleaned up manually if the tenant is
+                        decommissioned.
+
+                        Set to "delete" to have CNPG drop the database when this XR
+                        is deleted, which also allows the owning role to be dropped.
+                        A Usage (tenant-role-db-usage) orders this: the role's
+                        DROP ROLE is blocked until the database's DROP DATABASE has
+                        completed, then replayed — avoiding the "role ... cannot be
+                        dropped because some objects depend on it" (2BP01) race that
+                        parallel deletion would otherwise cause.
+
+                        Also controls the connection-creds Secret and the
+                        ExternalSecret/Password-generator that manage it:
+                        "retain" orphans them on XR deletion (the existing
+                        password is preserved and reused on recreate — an
+                        admin must delete them manually to force a new
+                        password); "delete" removes them along with everything
+                        else, so recreation generates a brand-new password. A
+                        second Usage (tenant-conn-role-usage) orders
+                        this: the connection-creds Secret's deletion is
+                        blocked until DROP ROLE has completed, then replayed —
+                        otherwise provider-sql's Observe() (which always reads
+                        the Role's passwordSecretRef, even while deleting)
+                        permanently fails once the Secret is gone, leaving the
+                        Role stuck in Terminating forever.
+            status:
+              type: object
+              properties:
+                clusterRef:
+                  type: string
+                  description: |
+                    Resolved CNPG cluster name this database is provisioned on.
+                    Written by the composition on first assignment and reused on
+                    subsequent reconciles (sticky), so adding a cluster to the
+                    pool never moves an existing database.
+                clusterNamespace:
+                  type: string
+                  description: Namespace of the resolved cluster.
+                tier:
+                  type: string
+                  description: Resolved tier (shared, dedicated, or explicit).
+                dbName:
+                  type: string
+                  description: PostgreSQL database name (echoed for cross-XR collision checks).
+                databaseName:
+                  type: string
+                  description: The PostgreSQL database's own name — <owner>-<dbName> unless databaseName was set.
+                owner:
+                  type: string
+                  description: |
+                    The owner this database runs under — its namespace's wxops.cloud/owner. Absent
+                    when the namespace has none; the XR then renders nothing and syncMessage says so.
+                created:
+                  type: boolean
+                  description: |
+                    True once every composed resource has been observed at least
+                    once. Indicates provisioning has started, not that it succeeded.
+                ready:
+                  type: boolean
+                  description: |
+                    True when the database is usable: it exists, its owning role
+                    exists, and the connection Secret has materialised (plus, on
+                    tier: dedicated, the child cluster is up).
+
+                    Derived from observed composed-resource state rather than the
+                    native type:Ready condition, which is unreliable on Crossplane
+                    v2.3 with function-kcl v0.12.1. Poll this field, not conditions.
+
+                    Vault credential push (PushSecret) is deliberately excluded — if
+                    it lags, applications can still connect.
+
+                synced:
+                  type: boolean
+                  description: |
+                    False while a composed resource that `ready` depends on failed its last apply —
+                    its `Ready` condition can stay True from the earlier success, so `ready` is
+                    derived with this in mind. `syncMessage` says what. Absent until the first
+                    reconcile.
+                syncMessage:
+                  type: string
+                  description: |
+                    The failing resource and the provider's own message, truncated; present while
+                    anything — including a resource `ready` deliberately excludes — is not Synced.

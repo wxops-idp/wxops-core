@@ -8,11 +8,11 @@ assignees: ''
 ---
 
 **Affected package**
-Which one — `platform-database-clusters`, `tenant-database`, `tenant-app`,
+Which one — `database-cluster`, `database`, `app`, `policy`,
 `scm-connection`, `scm-repository`, `scm-oauth-app`, or not sure?
 
 **Package / Crossplane version**
-- Package version: [e.g. tenant-app v0.2.5 — from `spec.package` or `VERSIONS.yaml`]
+- Package version: [e.g. app release-2026-11-09 — from `spec.package` or `VERSIONS.yaml`]
 - Crossplane version: [e.g. v2.3.1 — `crossplane version`]
 
 **Describe the bug**

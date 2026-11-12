@@ -34,7 +34,7 @@ The shape of the change:
 
 - **API surface** — new/changed XRD fields (sketch the YAML)
 - **Composition behaviour** — what gets emitted, under which conditions
-- **Affected packages** — `tenant-app` / `tenant-database` / `platform-database-clusters` / `gitea-*` / new package
+- **Affected packages** — `app` / `database` / `database-cluster` / `policy` / `scm-*` / `oidc-*` / new package
 - **Provider RBAC** — any new API group the composed resources need
 
 ```yaml

@@ -187,13 +187,13 @@ alongside the reference stack.
 ## Adding a case
 
 ```bash
-mkdir -p tests/cases/tenant-app/my-case
-$EDITOR tests/cases/tenant-app/my-case/xr.yaml
+mkdir -p tests/cases/app/my-case
+$EDITOR tests/cases/app/my-case/xr.yaml
 
 # optional: mock observed state so readiness derivation is exercised
-python3 tests/lib/mkobserved.py tenant-app my-case
-python3 tests/lib/mkobserved.py tenant-app my-case --unready certificate
-python3 tests/lib/mkobserved.py tenant-app my-case --unsynced certificate   # Ready stays True, Synced=False
+python3 tests/lib/mkobserved.py app my-case
+python3 tests/lib/mkobserved.py app my-case --unready certificate
+python3 tests/lib/mkobserved.py app my-case --unsynced certificate   # Ready stays True, Synced=False
 
 make test-update && git diff tests/ && make test
 ```

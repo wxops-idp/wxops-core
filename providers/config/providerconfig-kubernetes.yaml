@@ -8,23 +8,18 @@ spec:
   # ScheduledBackup) and ExternalSecret/PushSecret resources across cluster and
   # tenant namespaces.
   #
-  # platform-database-clusters also wraps a postgresql.sql.crossplane.io/v1alpha1
+  # database-cluster also wraps a postgresql.sql.crossplane.io/v1alpha1
   # ProviderConfig (cluster-scoped, named after clusterName) via this provider,
-  # and tenant-database wraps a postgresql.sql.crossplane.io/v1alpha1 Role
+  # and database wraps a postgresql.sql.crossplane.io/v1alpha1 Role
   # (cluster-scoped) the same way. The Crossplane SA needs RBAC for
   # providerconfigs.postgresql.sql.crossplane.io and roles.postgresql.sql.crossplane.io
   # (create/get/update/delete) for these to apply successfully — see
   # providers/packages/provider-sql.yaml.
   #
-  # tenant-app additionally wraps deployments.apps, services, and
-  # ingresses.networking.k8s.io (always), plus
-  # externalsecrets.external-secrets.io (if externalSecrets.enabled) — all in
-  # the tenant's own namespace, via this provider. The same RBAC already
-  # granted for tenant-database's ExternalSecret/PushSecret usage covers the
-  # external-secrets.io group here. When database.enabled is set, the
-  # Composition also emits a composed XTenantDatabase XR directly (not
-  # wrapped via this provider) — Crossplane core needs RBAC for
-  # xtenantdatabases.platform.wxops.cloud (already granted for
-  # tenant-database) to manage it.
+  # app wraps deployments.apps, services, and the Traefik, cert-manager and
+  # Prometheus Operator kinds — all in the tenant's own namespace — through the
+  # namespaced twin of this config, providerconfig-kubernetes-m.yaml: its Objects are
+  # kubernetes.m.crossplane.io. The same RBAC (providers/rbac/provider-kubernetes.yaml)
+  # is the ceiling of both.
   credentials:
     source: InjectedIdentity

@@ -1,0 +1,9 @@
+# environment: prod — only a shared cluster whose environment is prod is a candidate, so the dev cluster is never chosen.
+apiVersion: tenant.wxops.cloud/v1alpha1
+kind: XDatabase
+metadata:
+  name: payment-db
+  namespace: rocket-team-production
+spec:
+  parameters:
+    environment: prod

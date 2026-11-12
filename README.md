@@ -14,7 +14,7 @@ Standing up a new tenant app or database today usually means: click through Gite
 Deployment Service/Ingress from the last app that looked similar, and wire the secrets together by hand. Every step is a manual, undocumented, tribal-knowledge
 operation.
 
-W'xOps Core turns each of those into a Kubernetes object with a schema: `XScmRepository`, `XTenantDatabase`, `XTenantApp`, and more. Crossplane reconciles
+W'xOps Core turns each of those into a Kubernetes object with a schema: `XScmRepository`, `XDatabase`, `XApp`, and more. Crossplane reconciles
 them the same way it reconciles anything else — continuously, declaratively, with `status` fields you can poll instead of watching an apply scroll by. What
 actually executes underneath (HCL run in-cluster against a Gitea or GitHub provider, or Kubernetes objects composed via KCL) is an implementation detail the schema hides.
 
@@ -39,23 +39,68 @@ actually executes underneath (HCL run in-cluster against a Gitea or GitHub provi
 
 ## Packages
 
+Packages are grouped by API group, one group per purpose; open a group to see what it can do. **Namespaced** kinds belong to a team and are created in its own
+namespace. **Cluster** kinds are the platform team's, one object for the whole cluster ([ADR-005](development-docs/adr/005-kind-ownership-scope-and-naming.md)).
+
 <!-- packages-table-start -->
-| Package | Kind | Group | API Versions | Last changed in |
-|---|---|---|---|---|
-| [`platform-database-clusters`](package/platform/platform-database-clusters/) | `XPlatformDatabaseCluster` | `platform.wxops.cloud` | `v1alpha1` | `release-2026-10-16` |
-| [`tenant-database`](package/platform/tenant-database/) | `XTenantDatabase` | `platform.wxops.cloud` | `v1alpha1` | `release-2026-10-16` |
-| [`tenant-app`](package/platform/tenant-app/) | `XTenantApp` | `platform.wxops.cloud` | `v1alpha1` | `release-2026-10-16` |
-| [`scm-connection`](package/scm/connection/) | `XScmConnection` | `scm.wxops.cloud` | `v1alpha1` | `release-2026-10-16` |
-| [`scm-repository`](package/scm/repository/) | `XScmRepository` | `scm.wxops.cloud` | `v1alpha1` | `release-2026-10-16` |
-| [`scm-oauth-app`](package/scm/oauth-app/) | `XScmOAuthApp` | `scm.wxops.cloud` | `v1alpha1` | `release-2026-10-16` |
-| [`scm-team`](package/scm/team/) | `XScmTeam` | `scm.wxops.cloud` | `v1alpha1` | `release-2026-10-16` |
-| [`oidc-connection`](package/auth/oidc-connection/) | `XOIDCConnection` | `auth.wxops.cloud` | `v1alpha1` | `release-2026-10-16` |
-| [`oidc-static-password`](package/auth/oidc-static-password/) | `XOIDCStaticPassword` | `auth.wxops.cloud` | `v1alpha1` | `release-2026-10-16` |
-| [`oidc-client`](package/auth/oidc-client/) | `XOIDCClient` | `auth.wxops.cloud` | `v1alpha1` | `release-2026-10-16` |
-| [`oidc-connector`](package/auth/oidc-connector/) | `XOIDCConnector` | `auth.wxops.cloud` | `v1alpha1` | `release-2026-10-16` |
-| [`persona`](package/auth/persona/) | `XPersona` | `auth.wxops.cloud` | `v1alpha1` | `release-2026-11-09` |
-| [`persona-binding`](package/auth/persona-binding/) | `XPersonaBinding` | `auth.wxops.cloud` | `v1alpha1` | `release-2026-11-09` |
-| [`platform-policy`](package/auth/platform-policy/) | `XPlatformPolicy` | `auth.wxops.cloud` | `v1alpha1` | `release-2026-11-09` |
+<details>
+<summary><b><code>tenant.wxops.cloud</code></b> · <b>Namespaced</b> · 2 packages — what a team runs</summary>
+
+What a team runs: its applications and their databases. Each one is created in the team's own namespace, which decides whose it is and where it runs, so there is no owner, namespace or cluster to type.
+
+**Scope:** `Namespaced` — a team's own, created in its namespace; the namespace's `wxops.cloud/owner` owns it.
+
+| Package | Kind | What it does | API | Last changed in | Docs |
+|---|---|---|---|---|---|
+| [`app`](package/tenant/app/) | `XApp` | Namespaced tenant application scaffold (Deployment, Service, Traefik IngressRoute, Darlane debug-twin) owned by the namespace it runs in — owner and target come from the namespace, never a field. | `v1alpha1` | `unreleased` | [API](docs/api-reference/tenant/app.md) |
+| [`database`](package/tenant/database/) | `XDatabase` | Namespaced tenant PostgreSQL database on a platform CNPG cluster (Role, Database, credentials pushed to OpenBao) owned by the namespace it is created in — owner and cluster are never fields. | `v1alpha1` | `unreleased` | [API](docs/api-reference/tenant/database.md) |
+
+</details>
+<details>
+<summary><b><code>platform.wxops.cloud</code></b> · <b>Cluster</b> · 1 package — shared capacity</summary>
+
+Capacity the platform team provides to every team: PostgreSQL clusters, either a shared pool per environment or one dedicated to a single database.
+
+**Scope:** `Cluster` — one object for the whole cluster, written by the platform team.
+
+| Package | Kind | What it does | API | Last changed in | Docs |
+|---|---|---|---|---|---|
+| [`database-cluster`](package/platform/database-cluster/) | `XDatabaseCluster` | Platform-managed CloudNativePG cluster with pooler, Vault credential seeding, and shared-cluster labeling for dynamic tenant pool discovery. | `v1alpha1` | `unreleased` | [API](docs/api-reference/platform/database-cluster.md) |
+
+</details>
+<details>
+<summary><b><code>scm.wxops.cloud</code></b> · <b>Cluster</b> · 4 packages — Git hosting</summary>
+
+Git hosting through OpenTofu: register a Gitea or GitHub service once, then create or observe its repositories, teams and OAuth apps. One module per resource serves every vendor.
+
+**Scope:** `Cluster` — one object for the whole cluster, written by the platform team.
+
+| Package | Kind | What it does | API | Last changed in | Docs |
+|---|---|---|---|---|---|
+| [`scm-connection`](package/scm/connection/) | `XScmConnection` | Registers one Git hosting service (vendor, base URL, org, token) and renders the credential every other scm resource reads. | `v1alpha1` | `release-2026-10-16` | [API](docs/api-reference/scm/connection.md) |
+| [`scm-repository`](package/scm/repository/) | `XScmRepository` | Creates (managed) or reads (observed) a repository on Gitea or GitHub through one generic OpenTofu module. | `v1alpha1` | `release-2026-10-16` | [API](docs/api-reference/scm/repository.md) |
+| [`scm-oauth-app`](package/scm/oauth-app/) | `XScmOAuthApp` | Registers a host-side OAuth application (Gitea) or adopts an operator-registered one (GitHub), and publishes its credentials to the secret store. | `v1alpha1` | `release-2026-10-16` | [API](docs/api-reference/scm/oauth-app.md) |
+| [`scm-team`](package/scm/team/) | `XScmTeam` | Creates (managed) or reads (observed) a team and its membership on Gitea or GitHub, through one generic OpenTofu module. | `v1alpha1` | `release-2026-10-16` | [API](docs/api-reference/scm/team.md) |
+
+</details>
+<details>
+<summary><b><code>auth.wxops.cloud</code></b> · <b>Cluster</b> · 7 packages — identity and rules</summary>
+
+Identity and rules: the records the OIDC broker logs people in with (its connection, static users, clients and upstream connectors), personas that turn SCM teams into RBAC subjects and the bindings that grant them roles, and reviewed Kyverno policies.
+
+**Scope:** `Cluster` — one object for the whole cluster, written by the platform team.
+
+| Package | Kind | What it does | API | Last changed in | Docs |
+|---|---|---|---|---|---|
+| [`oidc-connection`](package/auth/oidc-connection/) | `XOIDCConnection` | Observes the dexidp chart's config ExternalSecret and publishes which broker, issuer and remote-key prefix every other oidc-* resource writes under. | `v1alpha1` | `release-2026-10-16` | [API](docs/api-reference/auth/oidc-connection.md) |
+| [`oidc-static-password`](package/auth/oidc-static-password/) | `XOIDCStaticPassword` | A local broker user (bootstrap admin, break-glass), ESO-generated or operator-defined, pushed to OpenBao as a bcrypt-hashed record. | `v1alpha1` | `release-2026-10-16` | [API](docs/api-reference/auth/oidc-static-password.md) |
+| [`oidc-client`](package/auth/oidc-client/) | `XOIDCClient` | A downstream OAuth client that logs in through the broker, ESO-generated or operator-defined, pushed to OpenBao. | `v1alpha1` | `release-2026-10-16` | [API](docs/api-reference/auth/oidc-client.md) |
+| [`oidc-connector`](package/auth/oidc-connector/) | `XOIDCConnector` | An upstream Git vendor connector, with its team allow-list generated from labelled XScmTeams, credentials read from an XScmOAuthApp, pushed to OpenBao. | `v1alpha1` | `release-2026-10-16` | [API](docs/api-reference/auth/oidc-connector.md) |
+| [`persona`](package/auth/persona/) | `XPersona` | A persona — a title that collects SCM teams, users and agents into RBAC subjects, with the environments it applies on. | `v1alpha1` | `release-2026-11-09` | [API](docs/api-reference/auth/persona.md) |
+| [`persona-binding`](package/auth/persona-binding/) | `XPersonaBinding` | Binds a persona's subjects to a standard, persona or Platform API ClusterRole — RoleBindings in the namespaces a team owns, or one ClusterRoleBinding. | `v1alpha1` | `release-2026-11-09` | [API](docs/api-reference/auth/persona-binding.md) |
+| [`policy`](package/auth/policy/) | `XPolicy` | One reviewed Kyverno CEL policy per resource — owner-stamp, owner-seal, secret-guard, exec-guard, protected, rbac-guard, sa-guard, namespace-guard or env-gate — matching SCM users only, Deny by default. | `v1alpha1` | `unreleased` | [API](docs/api-reference/auth/policy.md) |
+
+</details>
 <!-- packages-table-end -->
 
 > [!NOTE]
@@ -104,7 +149,7 @@ The current approach combines two tools with clear roles:
 - **OpenTofu** (via `provider-opentofu`) owns the infrastructure execution: each `Workspace` resource runs a plan/apply cycle in-cluster against a vendor's Terraform-compatible provider. OpenTofu is the open-source (MPL-2.0) fork of Terraform and reads the same HCL, which keeps the whole runtime stack open source — see [ADR-003](development-docs/adr/003-opentofu-workspace-engine.md). `provider-terraform` is archived (`providers/archive/`), not installed by `make providers`; the four `gitea-*` packages that ran on it are themselves archived, not migrated — no cluster ever ran them (see [RFC-003](development-docs/rfc/003-scm-connections-and-resources.md)).
 
 Composition functions may be written in Python, Go, CEL, KCL, or Go templating. The `kcl/` directory holds KCL-based composition logic for
-`platform-database-clusters`, `tenant-database`, and `tenant-app` — see [KCL composition functions](#kcl-composition-functions) below.
+`database-cluster`, `database`, `app`, `policy` and more — see [KCL composition functions](#kcl-composition-functions) below.
 
 ---
 
@@ -112,25 +157,27 @@ Composition functions may be written in Python, Go, CEL, KCL, or Go templating. 
 
 ```
 package/                      ← Crossplane Configuration packages, grouped by API group (RFC-007)
-  platform/
-    platform-database-clusters/
+  tenant/                     ← kinds a team owns, namespaced (ADR-005)
+    app/
       xrd.yaml                ← XCompositeResourceDefinition (schema)
-      composition.yaml        ← Composition (function-kcl)
+      composition.yaml        ← Composition (function-extra-resources + function-kcl)
       crossplane.yaml         ← Package descriptor for xpkg build (meta.pkg.crossplane.io/v1)
       kustomization.yaml      ← dev kustomize root (xrd + composition only)
       README.md
-    tenant-database/
-    tenant-app/
-    archives/                 ← retired, not deleted: gitea-user/-org/-team/-repository, random-password
+    database/
+  platform/
+    database-cluster/
+    archives/                 ← retired, not deleted: tenant-app, tenant-database, platform-database-clusters, gitea-user/-org/-team/-repository, random-password
+  auth/
+    policy/ · persona/ · persona-binding/ · oidc-*/
+    archives/                 ← retired, not deleted: platform-policy
   scm/
     connection/                ← XScmConnection — patch-and-transform + ESO ExternalSecret
     repository/                ← XScmRepository — patch-and-transform + inline HCL
     oauth-app/                 ← XScmOAuthApp  — patch-and-transform + inline HCL + ESO PushSecret
   install/                    ← Production install: OCI registry-based (pkg.crossplane.io/v1)
-    platform/
-      platform-database-clusters.yaml  ← Configuration resource; spec.package pinned by `make release`
-      tenant-database.yaml
-      tenant-app.yaml
+    <group>/
+      <package>.yaml          ← Configuration resource; spec.package pinned by `make release`
       kustomization.yaml
     kustomization.yaml        ← kubectl apply -k package/install/
   dev/
@@ -141,27 +188,22 @@ providers/                    ← shared Provider + Function installs + Provider
   archive/                    ← provider-terraform, function-go-templating — kept, not installed
 docs/                         ← generic documentation hub (docs/README.md): using, operating, building on Core
   learn/                      ← Crossplane, OpenTofu and KCL as this repo uses them
-  api-reference/              ← the reconcile loop, the status contract, one page per Kind in <group>/ (platform, scm, auth)
+  api-reference/              ← the reconcile loop, the status contract, one page per Kind in <group>/ (tenant, platform, scm, auth)
     _archives/                ← retired Kinds' reference docs
   user-guide/                 ← setup, app onboarding, portal integration
 development-docs/             ← development hub (development-docs/README.md): matrix, decisions, process
   core-ideas/                 ← Darlane, multi-cluster, observability, self-service, access model, security
   adr/ · rfc/ · development/ (guide, releasing) · _archives/ (ROADMAP.md, superseded by the RFC index)
-examples/                     ← one minimal xr.yaml per package, in <group>/<name>/ (platform, scm, auth) — more variants on each API page
-  platform/tenant-database/xr.yaml
+examples/                     ← one minimal xr.yaml per package, in <group>/<name>/ (tenant, platform, scm, auth) — more variants on each API page
+  tenant/database/xr.yaml
   scm/oauth-app/xr.yaml
-  auth/platform-policy/xr.yaml · auth/platform-policy/scenarios/ (cluster acceptance kit)
+  auth/policy/xr.yaml · auth/policy/scenarios/ (cluster acceptance kit)
   _archives/                  ← examples for retired packages
 kcl/                          ← KCL composition functions (source of truth, embedded via kcl-sync)
-  platform-database-clusters/
+  database-cluster/ · database/ · app/ · policy/ · persona/ · …
     kcl.mod
     main.k
-  tenant-database/
-    kcl.mod
-    main.k
-  tenant-app/
-    kcl.mod
-    main.k
+  _archives/                  ← retired: tenant-app, tenant-database
 .github/workflows/
   publish-packages.yaml       ← CI: build + push changed packages on a release-* tag
   pr-validate.yaml            ← merge gate
@@ -310,9 +352,9 @@ are in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## KCL composition functions
 
-`platform-database-clusters`, `tenant-database`, and `tenant-app` use [`function-kcl`](https://github.com/crossplane-contrib/function-kcl) instead of
+`database-cluster`, `database`, `app` and `policy` use [`function-kcl`](https://github.com/crossplane-contrib/function-kcl) instead of
 `function-go-templating`, since their Compositions need real branching/looping across multiple optional resources (conditional resource sets, dict merges, list
-comprehensions over arrays like `managedRoles[]`, and — for `tenant-app` — composing a nested `XTenantDatabase` XR). The `scm-*` packages are simple enough
+comprehensions over arrays like `managedRoles[]`, and reading the XR's own namespace for its owner). The `scm-*` packages are simple enough
 that inline HCL via `function-patch-and-transform` is sufficient — no KCL, no vendor logic in the composition.
 
 `kcl/{pkg}/main.k` is the source of truth and is embedded into `package/platform/{pkg}/composition.yaml` via `make kcl-sync` / `make kcl-check`.

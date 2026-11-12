@@ -1,0 +1,240 @@
+apiVersion: platform.wxops.cloud/v1alpha1
+kind: XTenantDatabase
+metadata:
+  name: rocket-team-payment-db
+spec:
+  crossplane:
+    resourceRefs:
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: 8def287e-cnpg-database
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: 8def287e-conn-bundle
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: 8def287e-push-secret
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: 8def287e-pwd-gen
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: 8def287e-sql-role
+status:
+  clusterNamespace: cnpg-system
+  clusterRef: cluster-a
+  conditions:
+    - reason: WatchCircuitClosed
+      status: 'True'
+      type: Responsive
+    - reason: ReconcileSuccess
+      status: 'True'
+      type: Synced
+    - message: 'Unready resources: 8def287e-cnpg-database, 8def287e-conn-bundle, 8def287e-push-secret, and 2 more'
+      reason: Creating
+      status: 'False'
+      type: Ready
+  created: false
+  dbName: payment-db
+  ready: false
+  tier: shared
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: 8def287e-cnpg-database
+  labels:
+    crossplane.io/composite: rocket-team-payment-db
+  name: 8def287e-cnpg-database
+  ownerReferences:
+    - apiVersion: platform.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XTenantDatabase
+      name: rocket-team-payment-db
+      uid: 8def287e-1861-5c43-8aeb-ebf56b9faace
+spec:
+  forProvider:
+    manifest:
+      apiVersion: postgresql.cnpg.io/v1
+      kind: Database
+      metadata:
+        labels: {}
+        name: rocket-team-payment-db
+        namespace: cnpg-system
+      spec:
+        cluster:
+          name: cluster-a
+        databaseReclaimPolicy: retain
+        extensions:
+          - ensure: present
+            name: uuid-ossp
+          - ensure: present
+            name: pgcrypto
+        name: payment-db
+        owner: rocket-team-payment-db
+  providerConfigRef:
+    name: default
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: 8def287e-conn-bundle
+  labels:
+    crossplane.io/composite: rocket-team-payment-db
+  name: 8def287e-conn-bundle
+  ownerReferences:
+    - apiVersion: platform.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XTenantDatabase
+      name: rocket-team-payment-db
+      uid: 8def287e-1861-5c43-8aeb-ebf56b9faace
+spec:
+  deletionPolicy: Orphan
+  forProvider:
+    manifest:
+      apiVersion: external-secrets.io/v1
+      kind: ExternalSecret
+      metadata:
+        labels: {}
+        name: rocket-team-payment-db-conn-es
+        namespace: cnpg-system
+      spec:
+        dataFrom:
+          - sourceRef:
+              generatorRef:
+                apiVersion: generators.external-secrets.io/v1alpha1
+                kind: Password
+                name: rocket-team-payment-db-pwd-gen
+        refreshInterval: '0'
+        refreshPolicy: CreatedOnce
+        target:
+          creationPolicy: Owner
+          deletionPolicy: Retain
+          name: rocket-team-payment-db-connection-creds
+          template:
+            data:
+              connectionString: postgresql://rocket-team-payment-db:{{ .password }}@cluster-a-rw.cnpg-system.svc.cluster.local:5432/payment-db
+              database: payment-db
+              endpoint: cluster-a-rw.cnpg-system.svc.cluster.local
+              password: '{{ .password }}'
+              port: '5432'
+              username: rocket-team-payment-db
+            engineVersion: v2
+  providerConfigRef:
+    name: default
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: 8def287e-push-secret
+  labels:
+    crossplane.io/composite: rocket-team-payment-db
+  name: 8def287e-push-secret
+  ownerReferences:
+    - apiVersion: platform.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XTenantDatabase
+      name: rocket-team-payment-db
+      uid: 8def287e-1861-5c43-8aeb-ebf56b9faace
+spec:
+  forProvider:
+    manifest:
+      apiVersion: external-secrets.io/v1alpha1
+      kind: PushSecret
+      metadata:
+        labels: {}
+        name: rocket-team-payment-db-push
+        namespace: cnpg-system
+      spec:
+        data:
+          - match:
+              remoteRef:
+                remoteKey: rocket-team/databases/payment-db/connection-creds
+        deletionPolicy: None
+        refreshInterval: '0'
+        secretStoreRefs:
+          - kind: ClusterSecretStore
+            name: vault-tenant
+        selector:
+          secret:
+            name: rocket-team-payment-db-connection-creds
+  providerConfigRef:
+    name: default
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: 8def287e-pwd-gen
+  labels:
+    crossplane.io/composite: rocket-team-payment-db
+  name: 8def287e-pwd-gen
+  ownerReferences:
+    - apiVersion: platform.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XTenantDatabase
+      name: rocket-team-payment-db
+      uid: 8def287e-1861-5c43-8aeb-ebf56b9faace
+spec:
+  deletionPolicy: Orphan
+  forProvider:
+    manifest:
+      apiVersion: generators.external-secrets.io/v1alpha1
+      kind: Password
+      metadata:
+        labels: {}
+        name: rocket-team-payment-db-pwd-gen
+        namespace: cnpg-system
+      spec:
+        allowRepeat: false
+        digits: 8
+        length: 32
+        noUpper: false
+        symbolCharacters: ''
+        symbols: 0
+  providerConfigRef:
+    name: default
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: 8def287e-sql-role
+  labels:
+    crossplane.io/composite: rocket-team-payment-db
+  name: 8def287e-sql-role
+  ownerReferences:
+    - apiVersion: platform.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XTenantDatabase
+      name: rocket-team-payment-db
+      uid: 8def287e-1861-5c43-8aeb-ebf56b9faace
+spec:
+  forProvider:
+    manifest:
+      apiVersion: postgresql.sql.crossplane.io/v1alpha1
+      kind: Role
+      metadata:
+        labels: {}
+        name: rocket-team-payment-db
+      spec:
+        deletionPolicy: Orphan
+        forProvider:
+          passwordSecretRef:
+            key: password
+            name: rocket-team-payment-db-connection-creds
+            namespace: cnpg-system
+          privileges:
+            login: true
+        providerConfigRef:
+          name: cluster-a
+  providerConfigRef:
+    name: default

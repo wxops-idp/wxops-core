@@ -9,7 +9,7 @@ event, just a resource that never reconciles or a series that never appears.
 
 Usage:
     python3 tests/invariants.py            # all cases
-    python3 tests/invariants.py tenant-app # one package
+    python3 tests/invariants.py app        # one package
 """
 from __future__ import annotations
 
@@ -281,6 +281,46 @@ def providerconfig_follows_cluster(docs, ctx):
     return bad
 
 
+# Cluster-scoped kinds a tenant composition wraps on purpose, as (API group, kind): the provider-sql Role is cluster-scoped.
+_CLUSTER_SCOPED_WRAPPED = {("postgresql.sql.crossplane.io", "Role")}
+
+
+@rule("tenant-kind-composes-namespaced-only",
+      "A namespaced tenant kind (group tenant.wxops.cloud, ADR-005) composes only into its own namespace: kubernetes.m.crossplane.io Objects through the platform's "
+      "ClusterProviderConfig, and namespaced Usages. A cluster-scoped Object or ClusterUsage would escape the namespace that is the owner, and a ProviderConfig a tenant "
+      "could name would let the XR choose where it lands.")
+def tenant_kind_namespaced_only(docs, ctx):
+    import packages as P
+    if P.group(ctx["package"]) != "tenant":
+        return []
+    xr_ns = (_xr(docs).get("metadata") or {}).get("namespace")
+    bad = []
+    for d in _composed(docs):
+        api = str(d.get("apiVersion", "")).split("/")[0]
+        if d.get("kind") == "Object":
+            if api != "kubernetes.m.crossplane.io":
+                bad.append(f"{_name(d)} is a {d.get('apiVersion')} Object — a tenant kind composes kubernetes.m.crossplane.io Objects")
+            ref = (d.get("spec") or {}).get("providerConfigRef") or {}
+            if ref.get("kind") != "ClusterProviderConfig":
+                bad.append(f"{_name(d)} references {ref.get('kind')!r}, not a platform ClusterProviderConfig")
+            # Crossplane v2's namespaced managed resources have no spec.deletionPolicy (provider-kubernetes v1.2.1's kubernetes.m.crossplane.io Object has none): the field would be
+            # pruned and the Object deleted with its resource. An Object that must outlive its XR leaves Delete out of spec.managementPolicies instead.
+            if "deletionPolicy" in (d.get("spec") or {}):
+                bad.append(f"{_name(d)} sets spec.deletionPolicy, which a namespaced Object does not have — leave Delete out of spec.managementPolicies to orphan")
+        elif d.get("kind") != "Usage" or api != "protection.crossplane.io":
+            bad.append(f"{_name(d)} is a {d.get('kind')} ({d.get('apiVersion')}) — only namespaced Objects and Usages")
+        ns = (d.get("metadata") or {}).get("namespace")
+        if ns and xr_ns and ns != xr_ns:
+            bad.append(f"{_name(d)} is in namespace {ns}, not the XR's {xr_ns}")
+        # What an Object wraps: provider-kubernetes applies the manifest's namespace as written and does NOT default a missing one to the Object's, so every namespaced
+        # manifest must set it. The few cluster-scoped kinds a tenant composition wraps are listed.
+        manifest = _wrapped(d)
+        if manifest and (str(manifest.get("apiVersion", "")).split("/")[0], manifest.get("kind")) not in _CLUSTER_SCOPED_WRAPPED \
+                and not (manifest.get("metadata") or {}).get("namespace"):
+            bad.append(f"{_name(d)} wraps a {manifest.get('kind')} with no metadata.namespace — provider-kubernetes does not default it to the Object's namespace")
+    return bad
+
+
 @rule("composed-has-resource-name",
       "crossplane.io/composition-resource-name is the composed resource's stable "
       "identity. Without it Crossplane cannot correlate desired with observed, so "
@@ -539,6 +579,55 @@ def certificate_wiring(docs, ctx):
     return bad
 
 
+# ── Kind names (ADR-005) ────────────────────────────────────────────────────
+
+REFERENCE_PLURALS = R.ROOT / "tests" / "reference-plurals.yaml"
+
+
+def kind_name_problems() -> list[str]:
+    """Plural collisions and the `wxops` category, over every XRD in VERSIONS.yaml. Not per case: it reads the XRDs themselves.
+
+    The category marks the tenant kinds only — namespaced, a team's own (ADR-005 decision 4): a new namespaced XRD must carry it, a cluster-scoped XRD
+    must not. Crossplane holds the whole `spec.names` immutable, so a released XRD cannot gain it ("spec.names: Invalid value: Value is immutable") —
+    `tests/api_compat.py` refuses that change — which is why the rule asks only XRDs the last release did not have.
+    """
+    import yaml
+    sys.path.insert(0, str(R.ROOT / "tests" / "lib"))
+    import packages as P
+    import releases as REL
+    baseline = REL.previous_tag()
+
+    def released(name: str, xrd_name: str) -> bool:
+        if baseline is None:  # no tag to compare against (a shallow clone): don't guess, assume released
+            return True
+        for d in P.baseline_paths(name):
+            old = REL.show(baseline, f"{d}/xrd.yaml")
+            if old and (yaml.safe_load(old) or {}).get("metadata", {}).get("name") == xrd_name:
+                return True
+        return False
+    reference = {p: who for who, ps in (yaml.safe_load(REFERENCE_PLURALS.read_text()) or {}).items() for p in ps}
+    seen: dict[str, str] = {}
+    bad = []
+    for name in P.names():
+        xrd = yaml.safe_load((P.path(name) / "xrd.yaml").read_text())
+        names = (xrd.get("spec") or {}).get("names") or {}
+        plural = names.get("plural", "")
+        if plural in reference:
+            bad.append(f"{name}: plural '{plural}' is also served by {reference[plural]}")
+        if plural in seen:
+            bad.append(f"{name}: plural '{plural}' is also served by W'xOps package {seen[plural]}")
+        seen[plural] = name
+        if not str(names.get("kind", "")).startswith("X"):
+            bad.append(f"{name}: kind '{names.get('kind')}' does not start with X")
+        has_wxops = "wxops" in (names.get("categories") or [])
+        namespaced = (xrd.get("spec") or {}).get("scope") == "Namespaced"
+        if namespaced and not has_wxops and not released(name, (xrd.get("metadata") or {}).get("name")):
+            bad.append(f"{name}: a new namespaced XRD without names.categories [wxops] — add it now, it can never be added once released")
+        if not namespaced and has_wxops:
+            bad.append(f"{name}: a cluster-scoped XRD carries names.categories [wxops] — the category is for namespaced tenant kinds only")
+    return bad
+
+
 # ── Runner ──────────────────────────────────────────────────────────────────
 
 def main() -> int:
@@ -553,6 +642,15 @@ def main() -> int:
     print(f"invariants — {len(RULES)} rule(s) × {len(cases)} case(s)\n")
     violations: dict[str, list[str]] = {}
     checked = 0
+
+    if not args:
+        problems = kind_name_problems()
+        for m in problems:
+            print(f"  {R.RED}FAIL{R.RESET}         kind names — {m}")
+        if problems:
+            violations["kind-names"] = problems
+        else:
+            print(f"  {R.GREEN}ok{R.RESET}           kind names (plurals, X prefix, wxops category on tenant kinds only)")
 
     for package, case, case_dir in cases:
         label = f"{package}/{case}"

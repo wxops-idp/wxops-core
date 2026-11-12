@@ -1,0 +1,8 @@
+# A namespace with no wxops.cloud/owner is not a tenant namespace.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: rocket-team-production
+  labels:
+    kubernetes.io/metadata.name: rocket-team-production
+    auth.wxops.cloud/tenant-namespace: "true"

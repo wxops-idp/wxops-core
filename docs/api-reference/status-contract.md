@@ -24,8 +24,8 @@ from the earlier success, so an XR could read `ready: true` while its resource w
 `ready` is narrowed accordingly: where it was already set, it is also `false` while a gating resource is not synced, and the XR's native `Ready` shows
 `Unready resources: <name>`. Two things to know when reading it:
 
-- **Informational resources do not gate.** A resource a package deliberately leaves out of `ready` (the credential pushes in `tenant-database` and
-  `platform-database-clusters`, the org inspection in `scm-connection`) still appears in `syncMessage`, but leaves `synced` and `ready` alone.
+- **Informational resources do not gate.** A resource a package deliberately leaves out of `ready` (the credential pushes in `database` and
+  `database-cluster`, the org inspection in `scm-connection`) still appears in `syncMessage`, but leaves `synced` and `ready` alone.
 - **Absent stays absent.** A package whose `ready` is absent-until-apply keeps it absent; `synced` is also absent until something has been observed.
 
 Poll `ready` for "usable", `synced` for "the last apply worked", and show `syncMessage` to a human.
@@ -45,8 +45,9 @@ gap to work around.
 | [`gitea-org`](_archives/gitea-org.md#status) (archived) | `XGiteaOrg` | bool, absent-until-apply | bool, absent-until-apply | `orgId`, `orgName` | Same absent-not-false caveat. |
 | [`gitea-team`](_archives/gitea-team.md#status) (archived) | `XGiteaTeam` | bool, absent-until-apply | bool, absent-until-apply | `teamId`, `teamName` | Same absent-not-false caveat. |
 | [`gitea-repository`](_archives/gitea-repository.md#status) (archived) | `XGiteaRepository` | bool, absent-until-apply | bool, absent-until-apply | `repoId`, `cloneUrl`, `sshUrl`, `htmlUrl` | Same absent-not-false caveat. |
-| [`platform-database-clusters`](platform/platform-database-clusters.md#status) | `XPlatformDatabaseCluster` | bool, explicit `false` | bool, explicit `false` | `clusterName`, `namespace`, `shared`, `environment`, `synced`, `syncMessage` | `ready` excludes Vault seeding and scheduled backups on purpose — neither stops a running cluster serving. |
-| [`tenant-database`](platform/tenant-database.md#status) | `XTenantDatabase` | bool, explicit `false` | bool, explicit `false` | `clusterRef`, `clusterNamespace`, `tier`, `dbName`, `synced`, `syncMessage` | `ready` excludes the Vault credential push — a lagging push doesn't stop the app connecting. |
+| [`database-cluster`](platform/database-cluster.md#status) | `XDatabaseCluster` | bool, explicit `false` | bool, explicit `false` | `clusterName`, `namespace`, `shared`, `environment`, `synced`, `syncMessage` | `ready` excludes Vault seeding and scheduled backups on purpose — neither stops a running cluster serving. |
+| [`database`](tenant/database.md#status) | `XDatabase` | bool, explicit `false` | bool, explicit `false` | `clusterRef`, `clusterNamespace`, `tier`, `dbName`, `databaseName`, `owner`, `synced`, `syncMessage` | The dedicated tier's cluster must be ready too. A new XR in an owner-less namespace stays `ready: false` with the reason in `syncMessage`. |
+| [`tenant-database`](_archives/tenant-database.md#status) (archived) | `XTenantDatabase` | bool, explicit `false` | bool, explicit `false` | `clusterRef`, `clusterNamespace`, `tier`, `dbName`, `synced`, `syncMessage` | `ready` excludes the Vault credential push — a lagging push doesn't stop the app connecting. |
 | [`scm-connection`](scm/connection.md#status) | `XScmConnection` | bool, absent-until-synced | bool, absent-until-synced | `secretName`, `org`, `repositories`, `teams`, `synced`, `syncMessage` | Same absent-not-false caveat. `ready` means the credential Secret exists — it does not say the token works; for an org connection `org.exists` does, and `repositories` / `teams` carry names and counts only. The org inspection is informational: it never gates `ready`. |
 | [`scm-repository`](scm/repository.md#status) | `XScmRepository` | bool, absent-until-apply | bool, absent-until-apply | `exists`, `repoId`, `cloneUrl`, `sshUrl`, `htmlUrl`, `fullName`, `synced`, `syncMessage` | Same absent-not-false caveat. In `observed` mode `exists` is the field that matters. |
 | [`scm-oauth-app`](scm/oauth-app.md#status) | `XScmOAuthApp` | bool, absent-until-apply | bool, absent-until-apply | `clientId`, `vaultKey`, `generation`, `synced`, `syncMessage` | Same absent-not-false caveat. The client secret is never in status — it goes to the store and to a Secret. |
@@ -55,16 +56,17 @@ gap to work around.
 | [`oidc-static-password`](auth/oidc-static-password.md#status) | `XOIDCStaticPassword` | bool, absent-until-apply | bool, absent-until-apply | `userId`, `vaultKey`, `synced`, `syncMessage` | Same absent-not-false caveat. The password is never in status — only the pushed record's key. |
 | [`oidc-client`](auth/oidc-client.md#status) | `XOIDCClient` | bool, absent-until-apply | bool, absent-until-apply | `clientId`, `vaultKey`, `synced`, `syncMessage` | Same absent-not-false caveat. The secret is never in status. |
 | [`oidc-connector`](auth/oidc-connector.md#status) | `XOIDCConnector` | bool, absent-until-apply | bool, absent-until-apply | `vaultKey`, `teams`, `synced`, `syncMessage` | Same absent-not-false caveat. |
-| [`tenant-app`](platform/tenant-app.md#status) | `XTenantApp` | bool, explicit `false` | bool, explicit `false`, **workload-scoped** | `dependenciesReady`, `darlane.*`, `url`, `namespace`, `image`, `synced`, `syncMessage` | See the split below — `ready` alone is not the full health picture for this package. |
+| [`app`](tenant/app.md#status) | `XApp` | bool, explicit `false` | bool, explicit `false`, **workload-scoped** | `dependenciesReady`, `url`, `namespace`, `owner`, `image`, `darlane.*`, `synced`, `syncMessage` | Same two-field split as before — see [below](#app--the-one-package-that-needs-two-fields-not-one). |
+| [`tenant-app`](_archives/tenant-app.md#status) (archived) | `XTenantApp` | bool, explicit `false` | bool, explicit `false`, **workload-scoped** | `dependenciesReady`, `darlane.*`, `url`, `namespace`, `image`, `synced`, `syncMessage` | See the split below — `ready` alone is not the full health picture for this package. |
 
 The **absent-vs-`false`** split is real and package-group-wide: the four `gitea-*` packages use `function-patch-and-transform`, patching values out of Terraform
 outputs via `ToCompositeFieldPath` with an `Optional` policy — the patch simply doesn't run before the first successful apply, so the field is missing from the
 object rather than present-and-`false`. The three function-kcl packages compute an explicit boolean every reconcile, so they're always present. **A portal
 client should treat a missing field the same as `false`, not as an error.**
 
-## `tenant-app` — the one package that needs two fields, not one
+## `app` — the one package that needs two fields, not one
 
-`ready` on `XTenantApp` is deliberately **scoped to the core workload** (Deployment, Service, Ingress) and excludes the cert-manager `Certificate`. Polling
+`ready` on `XApp` is deliberately **scoped to the core workload** (Deployment, Service, Ingress) and excludes the cert-manager `Certificate`. Polling
 `ready` alone means the portal can render "Ready ✅" while TLS is still issuing.
 
 ```yaml
@@ -80,8 +82,8 @@ status:
 **Render both fields, not one.** The honest UI state is three-valued in practice: not ready / ready but dependencies pending / fully ready — collapsing to a
 single boolean loses the middle state, which is a real and common one (a freshly-applied XR with `ingress.tls.clusterIssuer` set spends real time in it).
 
-`XTenantApp` does **not** compose an `XTenantDatabase`. `secretsFrom.database` only wires an existing Secret in by name and is never waited on, so database
-readiness is not — and cannot be — reflected in either field. If the portal needs combined app+database health, it polls `XTenantDatabase.status.ready`
+`XApp` does **not** compose an `XDatabase`. `secretsFrom.database` only wires an existing Secret in by name and is never waited on, so database
+readiness is not — and cannot be — reflected in either field. If the portal needs combined app+database health, it polls `XDatabase.status.ready`
 separately and combines client-side.
 
 ### Darlane sub-status
@@ -108,7 +110,7 @@ status:
 If the portal offers an "open shell into Darlane" action, `serviceAccountName` is what a GitOps-authored `RoleBinding` targets — the composition itself grants
 nothing.
 
-## Monitoring — `tenant-app` only, input not status
+## Monitoring — `app` only, input not status
 
 `spec.parameters.monitoring` is a **write path**, not something the portal polls — flagged here because it's the field most likely to be confused with a status
 field, and because the portal's own toggle for it was previously wired to a mechanism that never worked.
@@ -133,12 +135,10 @@ else about the toggle's UX needs to change.
 There is no status-side confirmation that a `ServiceMonitor`/`PodMonitor` was actually created and is scraping successfully — that lives in Prometheus's own
 `/targets` page, outside this API. The portal can infer "the field was accepted" from the XR's `Synced` condition, but not "metrics are flowing."
 
-## `cluster` — every package, input not status
+## `cluster` — gone from the tenant kinds, input not status
 
-`spec.parameters.cluster` (`platform-database-clusters`, `tenant-database`, `tenant-app` — the four `gitea-*` packages and the `scm-*`/`oidc-*` families don't have it,
-since a Gitea `Workspace` targets a Gitea server over HTTP, not a Kubernetes cluster). Defaults to `"default"`, the local hub. **Behaviour-neutral until a spoke
-`ProviderConfig` exists** — see [multi-cluster.md](../../development-docs/core-ideas/multi-cluster.md). Not yet consumed anywhere; safe for the portal to ignore
-until multi-cluster work lands, at which point it becomes the field that selects a target cluster per XR.
+`spec.parameters.cluster` was an input on `XTenantApp`, `XTenantDatabase` and `XPlatformDatabaseCluster`, and is on none of the active kinds: `XApp` and `XDatabase` run on the hub,
+and the platform decides where an environment runs once [multi-cluster](../../development-docs/core-ideas/multi-cluster.md) exists. Nothing the portal reads depends on it.
 
 ## See also
 

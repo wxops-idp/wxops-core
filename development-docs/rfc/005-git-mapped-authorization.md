@@ -2,9 +2,11 @@
 
 ## Status
 <!-- Draft | In review | Accepted | Declined | Withdrawn | Implemented — and the GitHub issue that carries the discussion, e.g. "Draft · #42" -->
-Implemented (Phase 1) — the Platform API roles, shipping in `release-2026-11-04`; the spike run and `owner-seal`'s Core options built, labelling Core XRs
-is next. Aligned 2026-10-24 with [RFC-009](009-scm-personas.md): personas, bindings and the policy package are RFC-009's; this RFC is what is specific to
-Core's own kinds
+Implemented (Phase 1) — closed 2026-11-11. The Platform API roles shipped in `release-2026-11-04`, and the spike ran with `owner-seal`'s Core options built.
+The other phases moved to the RFCs that deliver them ([Rollout Plan](#rollout-plan)). [RFC-010](010-namespaced-tenant-kinds.md) and
+[ADR-005](../adr/005-kind-ownership-scope-and-naming.md) make the tenant kinds namespaced, superseding this RFC's "cluster scope kept" for them. The Argo
+path and redirect domains go to [RFC-008](008-built-in-tools-identity-and-catalog.md). Phase 3 is not needed, because the Portal never writes to Kubernetes.
+Aligned 2026-10-24 with [RFC-009](009-scm-personas.md): personas, bindings and the policy package are RFC-009's; this RFC is what is specific to Core's own kinds.
 
 ## Summary
 
@@ -94,7 +96,7 @@ form is [open question 11](#open-questions).
 | **A person directly** (`kubectl`) | the person, through Pinniped (bootstrap; the impersonation proxy where in use) | the five rules |
 | **Portal** on a person's behalf | the person — the Portal impersonates them and their groups | the five rules. The Portal's own account holds only `impersonate`, restricted by `resourceNames` to Dex-shaped group names |
 | **AI agent** (later) | its ServiceAccount, listed in its persona | the rules, once [RFC-009 Phase 7](009-scm-personas.md#rollout-plan) matches agents |
-| **Argo CD** applying a commit | its controller — **not matched by any rule** | Argo CD's own model ([RFC-008](008-built-in-tools-identity-and-catalog.md#argo-cd)): `AppProject` sources, destinations and roles bound to SCM groups. The person was authorized when the commit was **merged** (branch protection, CODEOWNERS on `tenants/<owner>/`) |
+| **Argo CD** applying a commit | its controller — **not matched by any rule** | Argo CD's own model ([RFC-008](008-built-in-tools-identity-and-catalog.md#what-renders-per-tool)): `AppProject` sources, destinations and roles bound to SCM groups. The person was authorized when the commit was **merged** (branch protection, CODEOWNERS on `tenants/<owner>/`) |
 
 This is deliberate: on the GitOps path the strongest "1-to-1 with Git" is the Git vendor's own permission on the merge, enforced by Argo CD's projects. A
 second check of Argo's writes in Kyverno would duplicate Argo's model and couple every sync to Kyverno's availability. The cost is that an owner label inside
@@ -205,22 +207,28 @@ Each phase rides on an [RFC-009 phase](009-scm-personas.md#rollout-plan):
   `request.userInfo` reaches a `ValidatingPolicy` unchanged through Pinniped's impersonation proxy, by real logins; an unavailable Kyverno never blocks
   system writes, and a graceful Kyverno shutdown leaves people's writes unchecked for a short window — answered by Kyverno in high availability. Not yet
   exercised: `owner-seal` on a cluster-scoped Core XR itself — the run sealed namespaced objects.
-- [x] **Decision on namespaced XRs** — cluster scope kept, 2026-10-24.
+- [x] **Decision on namespaced XRs** — cluster scope kept, 2026-10-24. Reversed for the tenant kinds 2026-11-10 by RFC-010 and ADR-005.
 - [x] **Phase 1 — the Platform API roles.** Built 2026-10-26: `wxops:platform-view`, `-edit` and `-admin`, aggregated from one piece per level over the
   three W'xOps groups (`providers/rbac/aggregate-platform.yaml`) — read every kind, write the tenant kinds, write the platform-only kinds — and bound by
   `XPersonaBinding` with `scope: platform` (RFC-009 Phase 2). Live on the hub as the `platform` persona's `wxops:platform-admin` binding.
-- [ ] **Phase 2 — the label.** `owner-seal`'s Core options are built — `ownerPattern` and `immutableOwner`, with a golden case (`owner-seal-core`) and an
-  example on the [API page](../../docs/api-reference/auth/platform-policy.md#owner-seal) (RFC-009 Phase 3). Still to do: the inventory, label the existing Core XRs, then
-  apply it in `Deny` — no `Audit` step ([rollout safety](#rollout-safety)). For the tenant kinds this phase may shrink to nothing:
-  [RFC-010](010-namespaced-tenant-kinds.md)'s namespaced `XApp` and `XDatabase` take their owner from the namespace, so only the platform-run Core XRs
-  would still need a label.
-- [ ] **Phase 3 — the Portal.** Impersonation, so the Portal's writes are the person's.
-- [ ] **Phase 4 — environments and OIDC redirects.** `environment-gate` and `oidc-redirect-domains`, inventory first, then `Deny` (no audit phase). The
-  per-namespace environment gate now exists as `env-gate` (RFC-009, `release-2026-11-09`); what is left here is the gate on a Core XR's own
-  `environment` field.
-- [ ] **The Argo path, outside Kyverno** — team `AppProject`s and CODEOWNERS, per [RFC-008](008-built-in-tools-identity-and-catalog.md#argo-cd).
+- [x] **Phase 2 — the label — resolved 2026-11-11 by RFC-010 and ADR-005.** `owner-seal`'s Core options are built — `ownerPattern` and `immutableOwner`,
+  with a golden case (`owner-seal-core`) and an example on the [API page](../../docs/api-reference/auth/policy.md#owner-seal) (RFC-009 Phase 3).
+  The labelling is not needed: RFC-010's namespaced `XApp` and `XDatabase` take their owner from the namespace, and the platform-run kinds are written only
+  by `wxops:platform-admin` (ADR-005 decision 11), so a seal on them adds nothing RBAC does not already do.
+- [x] **Phase 3 — the Portal — not needed (2026-11-11).** The Portal reads as the person, through Pinniped, and writes nothing to Kubernetes: every change
+  is a commit to the GitOps repository, made with the person's own Git identity. There is no Portal write to impersonate.
+- [x] **Phase 4 — environments and OIDC redirects — moved 2026-11-11.** A namespace's environment is gated by `env-gate` (RFC-009, `release-2026-11-09`).
+  An app's environment is chosen per app, not per namespace, so the gate on it moves to RFC-010. `oidc-redirect-domains` moves to RFC-008: `XOIDCClient` is
+  platform-written today, and once a tenant may request a login client, the allowed domains belong in its `XWorkspaceClass` (open question 10 goes with it).
+- [x] **The Argo path, outside Kyverno — moved to [RFC-008](008-built-in-tools-identity-and-catalog.md) Phase 3:** the `AppProject` per workspace.
+  CODEOWNERS stays in the GitOps repository.
 
-On acceptance, ADRs for: the Git team slug as the tenant identifier, and cluster-scoped Core kinds sealed by owner.
+Open questions after closing: 9 is settled by RFC-010 §5 (`XDatabase` reaches only the shared pool or a cluster labelled with its owner). 11 is enforced by
+a composition check on `XScmTeam`, since the `XScm*` kinds keep their names (ADR-005) and a new pattern on a released XRD would be breaking. 8 stays open
+in the [access model](../core-ideas/access-model.md#open-decisions).
+
+The two ADRs planned for acceptance were not written: the team slug as the owner is recorded in [ADR-006](../adr/006-team-owner-mapping.md)'s context, and
+cluster-scoped tenant kinds are superseded by ADR-005.
 
 ## Open Questions
 

@@ -1,0 +1,9 @@
+# The namespace has no wxops.cloud/owner, so it is not a tenant namespace: nothing is rendered, the XR is not ready, and syncMessage says why.
+apiVersion: tenant.wxops.cloud/v1alpha1
+kind: XDatabase
+metadata:
+  name: payment-db
+  namespace: rocket-team-production
+spec:
+  parameters:
+    environment: dev

@@ -1,0 +1,112 @@
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPolicy
+metadata:
+  name: protected
+spec:
+  crossplane:
+    resourceRefs:
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: dce296e8-policy
+status:
+  conditions:
+    - reason: WatchCircuitClosed
+      status: 'True'
+      type: Responsive
+    - reason: ReconcileSuccess
+      status: 'True'
+      type: Synced
+    - message: 'Unready resources: dce296e8-policy'
+      reason: Creating
+      status: 'False'
+      type: Ready
+  created: false
+  policyKind: ValidatingPolicy
+  policyName: wxops-protected
+  ready: false
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: dce296e8-policy
+  labels:
+    crossplane.io/composite: protected
+  name: dce296e8-policy
+  ownerReferences:
+    - apiVersion: auth.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XPolicy
+      name: protected
+      uid: dce296e8-1c07-5600-9cef-4cc782cedb8c
+spec:
+  forProvider:
+    manifest:
+      apiVersion: policies.kyverno.io/v1
+      kind: ValidatingPolicy
+      metadata:
+        labels:
+          auth.wxops.cloud/policy: protected
+          auth.wxops.cloud/template: protected
+          wxops.cloud/managed-by: platform-policy
+        name: wxops-protected
+      spec:
+        evaluation:
+          background:
+            enabled: false
+        failurePolicy: Fail
+        matchConditions:
+          - expression: '!(request.resource.group in [''authentication.k8s.io'', ''authorization.k8s.io'', ''login.concierge.pinniped.dev'', ''identity.concierge.pinniped.dev'']) && !(request.resource.resource in [''events'', ''leases''])'
+            name: not-excluded
+          - expression: '!request.userInfo.username.startsWith(''system:'') && request.userInfo.groups.exists(g, [''wxops-idp:''].exists(p, g.startsWith(p)))'
+            name: scm-user
+          - expression: '!(request.userInfo.groups.exists(g, g in [''wxops-idp:platform'']) || request.userInfo.username in [''root''])'
+            name: not-exempt
+        matchConstraints:
+          excludeResourceRules:
+            - apiGroups:
+                - authentication.k8s.io
+                - authorization.k8s.io
+                - login.concierge.pinniped.dev
+                - identity.concierge.pinniped.dev
+              apiVersions:
+                - '*'
+              operations:
+                - '*'
+              resources:
+                - '*'
+            - apiGroups:
+                - ''
+                - events.k8s.io
+              apiVersions:
+                - '*'
+              operations:
+                - '*'
+              resources:
+                - events
+            - apiGroups:
+                - coordination.k8s.io
+              apiVersions:
+                - '*'
+              operations:
+                - '*'
+              resources:
+                - leases
+          resourceRules:
+            - apiGroups:
+                - '*'
+              apiVersions:
+                - '*'
+              operations:
+                - UPDATE
+                - DELETE
+              resources:
+                - '*'
+        validationActions:
+          - Deny
+        validations:
+          - expression: '!(has(oldObject.metadata.labels) && ''wxops.cloud/protected'' in oldObject.metadata.labels && oldObject.metadata.labels[''wxops.cloud/protected''] == ''true'')'
+            message: "auth.wxops.cloud: this object is protected (wxops.cloud/protected) \u2014 the platform team changes it"
+  providerConfigRef:
+    name: default

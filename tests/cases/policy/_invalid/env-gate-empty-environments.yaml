@@ -1,0 +1,13 @@
+# expect: environments
+# expect: non-empty
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPolicy
+metadata:
+  name: nope
+spec:
+  parameters:
+    template: env-gate
+    scmOrgs: [wxops-idp]
+    environments: []
+    personaRef:
+      name: owners

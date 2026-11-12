@@ -35,7 +35,7 @@ XRD declared. Applying it is exactly like applying any other Kubernetes object �
 
 **3. The Composition says what to build.** Open `package/scm/connection/composition.yaml`. Strip away the YAML wrapper and it says, in effect: *"for an
 `XScmConnection`, create one `Object` wrapping an ESO `ExternalSecret`, with these fields patched in from the XR."* That's it — one composed resource, one patch
-list. Bigger packages (`tenant-app`) compose a dozen resources conditionally; the mechanism is identical, just longer.
+list. Bigger packages (`app`) compose a dozen resources conditionally; the mechanism is identical, just longer.
 
 **4. Crossplane keeps it that way.** Once you apply the XR, Crossplane doesn't just run this once — it reconciles continuously. Change the XR, and the
 Composition re-renders and patches the `ExternalSecret` in place. Delete the XR, and the rendered Secret is deleted too.
@@ -66,6 +66,6 @@ Two more names worth knowing:
 ## Next
 
 - Touching a `scm-*` package? → [OpenTofu and HCL, the way this repo uses them](02-opentofu-here.md)
-- Touching `platform-database-clusters`, `tenant-database` or `tenant-app`? →
+- Touching `database-cluster`, `database` or `app`? →
   [KCL, the way this repo uses it](03-kcl-here.md)
 - Ready to make a real edit? → [Your first change](04-your-first-change.md)

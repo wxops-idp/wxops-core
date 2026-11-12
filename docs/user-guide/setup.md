@@ -51,7 +51,7 @@ W'xOps Core composes resources that other operators reconcile. Install what the 
 |---|---|
 | `scm-connection`, `scm-repository`, `scm-oauth-app` | A reachable Gitea or GitHub host and an admin/API token, written to the secret store (step 2) |
 | `platform-database-clusters` | CloudNativePG operator; External Secrets Operator with a Vault `ClusterSecretStore`; provider-sql (installed by step 1) |
-| `tenant-database` | Everything `platform-database-clusters` needs, plus a cluster labelled for discovery; see [Required discovery labels](../api-reference/platform/tenant-database.md#required-discovery-labels) |
+| `tenant-database` | Everything `platform-database-clusters` needs, plus a cluster labelled for discovery; see [Required discovery labels](../api-reference/_archives/tenant-database.md#required-discovery-labels) |
 | `tenant-app` | Only what the XR enables: cert-manager for `ingress.tls`, Traefik CRDs for `ingress`, Prometheus Operator CRDs for `monitoring`, Stakater Reloader for `reloader` |
 | Darlane TTL enforcement **(Not Enforced)** | ~~Kyverno, plus `providers/policies/darlane-ttl.yaml`~~ |
 

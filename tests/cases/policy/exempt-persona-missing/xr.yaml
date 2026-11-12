@@ -1,0 +1,11 @@
+# The exempt persona does not exist (yet). A missing persona makes a policy STRICTER, never looser: the policy is rendered with no exemption, and syncMessage says why.
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPolicy
+metadata:
+  name: exempt-persona-missing
+spec:
+  parameters:
+    template: rbac-guard
+    scmOrgs: [wxops-idp]
+    exemptPersonaRef:
+      name: ghost

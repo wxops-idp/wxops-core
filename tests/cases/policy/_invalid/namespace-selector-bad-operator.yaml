@@ -1,0 +1,13 @@
+# expect: operator
+# expect: is not one of
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPolicy
+metadata:
+  name: nope
+spec:
+  parameters:
+    template: exec-guard
+    scmOrgs: [wxops-idp]
+    namespaceSelector:
+      matchExpressions:
+        - {key: wxops.cloud/environment, operator: Equals, values: [prod]}

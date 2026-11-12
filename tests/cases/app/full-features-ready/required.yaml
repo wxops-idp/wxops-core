@@ -1,0 +1,9 @@
+# The XR's namespace, as function-extra-resources fetches it: found by its name label, owned by a team. XApp takes its owner from here.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: rocket-team-production
+  labels:
+    kubernetes.io/metadata.name: rocket-team-production
+    auth.wxops.cloud/tenant-namespace: "true"
+    wxops.cloud/owner: rocket-team

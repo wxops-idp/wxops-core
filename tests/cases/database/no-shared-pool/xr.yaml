@@ -1,0 +1,9 @@
+# No shared cluster serves environment staging: a new XR says so and renders nothing.
+apiVersion: tenant.wxops.cloud/v1alpha1
+kind: XDatabase
+metadata:
+  name: payment-db
+  namespace: rocket-team-production
+spec:
+  parameters:
+    environment: staging

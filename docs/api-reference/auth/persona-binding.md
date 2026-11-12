@@ -1,7 +1,7 @@
 # XPersonaBinding
 
 Binds an [`XPersona`](persona.md)'s subjects to one `ClusterRole`. Kubernetes RBAC then decides which kinds those subjects can reach; an
-[`XPlatformPolicy`](platform-policy.md) narrows which objects. Design: [RFC-009](../../../development-docs/rfc/009-scm-personas.md).
+[`XPolicy`](policy.md) narrows which objects. Design: [RFC-009](../../../development-docs/rfc/009-scm-personas.md).
 
 | | |
 |---|---|
@@ -42,7 +42,7 @@ The built-in `view`, `edit` and `admin` are not bindable. `view` is `wxops:perso
 
 **No team persona is built on the built-in `edit` or `admin`, and neither is bindable.** Both grant `impersonate` on ServiceAccounts and
 `create serviceaccounts/token`: a person holding them acts as any ServiceAccount in the namespace, holds that account's permissions, and — arriving as
-`system:serviceaccount:…` — is matched by no [`XPlatformPolicy`](platform-policy.md). So team personas read through `view` and write only through the
+`system:serviceaccount:…` — is matched by no [`XPolicy`](policy.md). So team personas read through `view` and write only through the
 pieces in [`providers/rbac/aggregate-persona.yaml`](../../../providers/rbac/aggregate-persona.yaml): no ServiceAccounts, Secrets, Roles, RoleBindings or Pods
 by hand. Only `wxops:persona-platform` keeps `admin`. An invariant in `tests/invariants.py` keeps it that way.
 
@@ -106,7 +106,7 @@ More bindings — one per default persona, and each scope:
 
 ```yaml
 # The Platform API, cluster-wide: read every W'xOps kind. Core kinds are cluster-scoped today, so this is a ClusterRoleBinding — which is why it accepts
-# wxops:platform-* roles only; ownership of each XR is sealed by an XPlatformPolicy, not by this binding.
+# wxops:platform-* roles only; ownership of each XR is sealed by an XPolicy, not by this binding.
 apiVersion: auth.wxops.cloud/v1alpha1
 kind: XPersonaBinding
 metadata:

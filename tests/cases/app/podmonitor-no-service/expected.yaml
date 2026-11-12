@@ -1,0 +1,154 @@
+apiVersion: tenant.wxops.cloud/v1alpha1
+kind: XApp
+metadata:
+  name: payment-api
+  namespace: rocket-team-production
+spec:
+  crossplane:
+    resourceRefs:
+      - apiVersion: kubernetes.m.crossplane.io/v1alpha1
+        kind: Object
+        name: payment-api-deployment
+      - apiVersion: kubernetes.m.crossplane.io/v1alpha1
+        kind: Object
+        name: payment-api-podmonitor
+status:
+  conditions:
+    - reason: WatchCircuitClosed
+      status: 'True'
+      type: Responsive
+    - reason: ReconcileSuccess
+      status: 'True'
+      type: Synced
+    - message: 'Unready resources: payment-api-deployment, payment-api-podmonitor'
+      reason: Creating
+      status: 'False'
+      type: Ready
+  created: false
+  dependenciesReady: true
+  image: ghcr.io/rocket-team/payment-api:1.4.0
+  namespace: rocket-team-production
+  owner: rocket-team
+  ready: false
+  url: ''
+---
+apiVersion: kubernetes.m.crossplane.io/v1alpha1
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: payment-api-deployment
+  labels:
+    crossplane.io/composite: payment-api
+  name: payment-api-deployment
+  namespace: rocket-team-production
+  ownerReferences:
+    - apiVersion: tenant.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XApp
+      name: payment-api
+      uid: fbd3b9f8-094f-5e59-aed2-1bf0a6a9774d
+spec:
+  forProvider:
+    manifest:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        annotations: {}
+        labels:
+          app.kubernetes.io/component: app
+          app.kubernetes.io/instance: payment-api
+          app.kubernetes.io/managed-by: crossplane
+          app.kubernetes.io/name: payment-api
+          wxops.cloud/app-flavor: webapp
+          wxops.cloud/environment: dev
+          wxops.cloud/owner: rocket-team
+        name: payment-api
+        namespace: rocket-team-production
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app.kubernetes.io/component: app
+            app.kubernetes.io/instance: payment-api
+            app.kubernetes.io/name: payment-api
+        strategy:
+          rollingUpdate:
+            maxSurge: 25%
+            maxUnavailable: 25%
+          type: RollingUpdate
+        template:
+          metadata:
+            annotations: {}
+            labels:
+              app.kubernetes.io/component: app
+              app.kubernetes.io/instance: payment-api
+              app.kubernetes.io/managed-by: crossplane
+              app.kubernetes.io/name: payment-api
+              wxops.cloud/app-flavor: webapp
+              wxops.cloud/environment: dev
+          spec:
+            containers:
+              - env: []
+                image: ghcr.io/rocket-team/payment-api:1.4.0
+                imagePullPolicy: IfNotPresent
+                name: payment-api
+                ports:
+                  - containerPort: 8080
+  providerConfigRef:
+    kind: ClusterProviderConfig
+    name: default
+---
+apiVersion: kubernetes.m.crossplane.io/v1alpha1
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: payment-api-podmonitor
+  labels:
+    crossplane.io/composite: payment-api
+  name: payment-api-podmonitor
+  namespace: rocket-team-production
+  ownerReferences:
+    - apiVersion: tenant.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XApp
+      name: payment-api
+      uid: fbd3b9f8-094f-5e59-aed2-1bf0a6a9774d
+spec:
+  forProvider:
+    manifest:
+      apiVersion: monitoring.coreos.com/v1
+      kind: PodMonitor
+      metadata:
+        annotations: {}
+        labels:
+          app.kubernetes.io/component: app
+          app.kubernetes.io/instance: payment-api
+          app.kubernetes.io/managed-by: crossplane
+          app.kubernetes.io/name: payment-api
+          release: kube-prometheus-stack
+          wxops.cloud/app-flavor: webapp
+          wxops.cloud/environment: dev
+          wxops.cloud/owner: rocket-team
+        name: payment-api
+        namespace: rocket-team-production
+      spec:
+        namespaceSelector:
+          matchNames:
+            - rocket-team-production
+        podMetricsEndpoints:
+          - honorLabels: false
+            interval: 30s
+            path: /metrics
+            scrapeTimeout: 10s
+            targetPort: 8080
+        sampleLimit: 5000
+        selector:
+          matchLabels:
+            app.kubernetes.io/component: app
+            app.kubernetes.io/instance: payment-api
+            app.kubernetes.io/name: payment-api
+  providerConfigRef:
+    kind: ClusterProviderConfig
+    name: default

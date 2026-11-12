@@ -295,10 +295,10 @@ What to hold to:
 ## Guardrail templates — built and next
 
 RBAC answers *which kinds, where*; it cannot say *only your team's object*, *not if it is protected*, or *only this persona, only where its team owns*. Those
-are the templates. Each is one reviewed KCL function in [`platform-policy`](../../docs/api-reference/auth/platform-policy.md), matches SCM users only, and denies —
+are the templates. Each is one reviewed KCL function in [`policy`](../../docs/api-reference/auth/policy.md), matches SCM users only, and denies —
 it never grants. Free-form policies are not offered: [RFC-009](../rfc/009-scm-personas.md#open-questions) keeps it to templates.
 
-**Built (2026-10-26; `sa-guard`, `namespace-guard` 2026-11-03), exercised by [`examples/auth/platform-policy/scenarios/`](../../examples/auth/platform-policy/scenarios):**
+**Built (2026-10-26; `sa-guard`, `namespace-guard` 2026-11-03), exercised by [`examples/auth/policy/scenarios/`](../../examples/auth/policy/scenarios):**
 
 | Template | Protects |
 |---|---|
@@ -527,7 +527,9 @@ worth a store when sharing outgrows labels, or the Portal must explain every gra
 
 1. **Kubernetes RBAC: GitOps or Crossplane? — decided 2026-10-24:** Crossplane, bindings only, through `XPersonaBinding`; roles stay static manifests
    ([RFC-009](../rfc/009-scm-personas.md)). An ADR records it on acceptance.
-2. **Namespaced XRs — decided 2026-10-24:** Core kinds stay cluster-scoped, sealed by owner ([RFC-005](../rfc/005-git-mapped-authorization.md#open-questions)).
+2. **Namespaced XRs — reversed 2026-11-10 for tenant kinds.** Decided cluster-scoped on 2026-10-24 ([RFC-005](../rfc/005-git-mapped-authorization.md#open-questions)).
+   Now a kind that serves one owner is namespaced in `tenant.wxops.cloud`, and the rest stay cluster-scoped and platform-written
+   ([ADR-005](../adr/005-kind-ownership-scope-and-naming.md), [RFC-010](../rfc/010-namespaced-tenant-kinds.md)).
 3. **Token lifetimes** — [RFC-005 open question 8](../rfc/005-git-mapped-authorization.md#open-questions).
 4. **Grafana per-team access** — [RFC-008 open question 4](../rfc/008-built-in-tools-identity-and-catalog.md#open-questions); `XWorkspace` renders the
    folder, and how far open source Grafana's per-team permissions go is the spike.

@@ -1,0 +1,9 @@
+# tier: dedicated and the platform team has not created rocket-team-analytics-db-cluster: a new XR says so and renders nothing.
+apiVersion: tenant.wxops.cloud/v1alpha1
+kind: XDatabase
+metadata:
+  name: analytics-db
+  namespace: rocket-team-production
+spec:
+  parameters:
+    tier: dedicated
