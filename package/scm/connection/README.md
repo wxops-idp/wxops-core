@@ -12,7 +12,7 @@ host: an in-cluster Gitea, a GitHub org, and later a GitLab instance are three c
 Install these once per cluster:
 
 ```bash
-kubectl apply -k providers/
+make providers                     # functions, provider packages, RBAC, ProviderConfigs — in order
 ```
 
 That brings `provider-kubernetes` and its ProviderConfig. External Secrets Operator and a

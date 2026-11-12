@@ -19,7 +19,7 @@ field, so use a connection whose token is the identity the application should be
 ## Prerequisites
 
 ```bash
-kubectl apply -k providers/
+make providers                     # functions, provider packages, RBAC, ProviderConfigs — in order
 ```
 
 That brings `provider-opentofu` and `provider-kubernetes`. You also need External Secrets Operator, a

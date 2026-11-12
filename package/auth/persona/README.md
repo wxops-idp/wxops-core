@@ -2,12 +2,12 @@
 
 A persona is a title that collects who it applies to — SCM teams, hand-listed groups and users, and in-cluster agents — and the environments it applies on. It
 **grants nothing** and composes no resource: it resolves its members into `status.subjects`, in the exact shape of an RBAC subject, for
-[`persona-binding`](../persona-binding) and [`platform-policy`](../archives/platform-policy) to read. See [RFC-009](../../../development-docs/rfc/009-scm-personas.md).
+[`persona-binding`](../persona-binding) and [`policy`](../policy) to read. See [RFC-009](../../../development-docs/rfc/009-scm-personas.md).
 
 ## Prerequisites
 
 ```bash
-kubectl apply -k providers/
+make providers                     # functions, provider packages, RBAC, ProviderConfigs — in order
 ```
 
 Only if members come from teams: `XScmTeam`s ([`scm-team`](../../scm/team)) labelled `scm.wxops.cloud/oidc-login: "true"`, so they can sign in.
@@ -52,6 +52,20 @@ labels:
 ## Parameters
 
 See [`docs/api-reference/auth/persona.md`](../../../docs/api-reference/auth/persona.md).
+
+## Status
+
+| Field | Description |
+|---|---|
+| `created` / `ready` | True once the members are resolved. A persona composes nothing, so the two are equal |
+| `synced` / `syncMessage` | Always true / absent — there is no composed resource that could fail to apply |
+| `environments` | The environments this persona applies on, as declared |
+| `groups` | Every `Group` subject, sorted and without duplicates — what a policy matches on |
+| `teams` | The `XScmTeam`s that contributed a group, by name |
+| `subjects` | Every member as an RBAC subject, in the exact shape a `RoleBinding` takes — `XPersonaBinding` copies these |
+| `owners` | Member teams mapped to a second owner by the `wxops.cloud/owner` label on their `XScmTeam` (ADR-006); `scope: owned` bindings and every `XPolicy` read it |
+
+Full reference: [`docs/api-reference/auth/persona.md`](../../../docs/api-reference/auth/persona.md#status).
 
 ## Build and publish
 

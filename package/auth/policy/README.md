@@ -10,7 +10,7 @@ and [RFC-005](../../../development-docs/rfc/005-git-mapped-authorization.md).
 ## Prerequisites
 
 ```bash
-kubectl apply -k providers/        # includes provider-kubernetes's grant on policies.kyverno.io
+make providers        # includes provider-kubernetes's grant on policies.kyverno.io
 ```
 
 The Kyverno controller (v1.19+), installed with the cluster — a bootstrap prerequisite, not installed by W'xOps. An [`XPersona`](../persona) for the templates that name one
@@ -52,6 +52,18 @@ Examples, one per template: [`examples/auth/policy/`](../../../examples/auth/pol
 ## Parameters
 
 See [`docs/api-reference/auth/policy.md`](../../../docs/api-reference/auth/policy.md).
+
+## Status
+
+| Field | Description |
+|---|---|
+| `created` / `ready` | True once the policy has been applied at least once / while it is applied and in sync. `created` is absent until the first apply — treat absent as false |
+| `synced` / `syncMessage` | `synced` is false while the policy failed its last apply or a referenced persona cannot be found; `syncMessage` says what, truncated |
+| `policyName` | The Kyverno policy this resource renders, `wxops-<name>` |
+| `policyKind` | `ValidatingPolicy` or `MutatingPolicy` |
+| `appPolicyName` | `env-gate` only — the second policy, on an application's own environment (`<policyName>-apps`) |
+
+Full reference: [`docs/api-reference/auth/policy.md`](../../../docs/api-reference/auth/policy.md#status).
 
 ## Build and publish
 
