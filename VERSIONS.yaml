@@ -60,7 +60,7 @@ packages:
     group: platform
     path: package/platform/database-cluster
     package:
-      current: unreleased
+      current: release-2026-11-12
     api:
       served: [v1alpha1]
       storage: v1alpha1
@@ -130,7 +130,7 @@ packages:
     group: auth
     path: package/auth/oidc-static-password
     package:
-      current: release-2026-10-16
+      current: release-2026-11-12
     api:
       served: [v1alpha1]
       storage: v1alpha1
@@ -161,7 +161,7 @@ packages:
     group: auth
     path: package/auth/persona
     package:
-      current: release-2026-11-09
+      current: release-2026-11-12
     api:
       served: [v1alpha1]
       storage: v1alpha1
@@ -181,7 +181,7 @@ packages:
     group: auth
     path: package/auth/policy
     package:
-      current: unreleased
+      current: release-2026-11-12
     api:
       served: [v1alpha1]
       storage: v1alpha1
@@ -193,7 +193,7 @@ packages:
     group: tenant
     path: package/tenant/app
     package:
-      current: unreleased
+      current: release-2026-11-12
     api:
       served: [v1alpha1]
       storage: v1alpha1
@@ -203,7 +203,7 @@ packages:
     group: tenant
     path: package/tenant/database
     package:
-      current: unreleased
+      current: release-2026-11-12
     api:
       served: [v1alpha1]
       storage: v1alpha1

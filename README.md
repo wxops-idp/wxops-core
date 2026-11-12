@@ -18,6 +18,8 @@ W'xOps Core turns each of those into a Kubernetes object with a schema: `XScmRep
 them the same way it reconciles anything else — continuously, declaratively, with `status` fields you can poll instead of watching an apply scroll by. What
 actually executes underneath (HCL run in-cluster against a Gitea or GitHub provider, or Kubernetes objects composed via KCL) is an implementation detail the schema hides.
 
+![W'xOps IDP Landscape](./images/w'xops-idp-landscape.png)
+
 ---
 **Table of Contents**
 
@@ -52,8 +54,8 @@ What a team runs: its applications and their databases. Each one is created in t
 
 | Package | Kind | What it does | API | Last changed in | Docs |
 |---|---|---|---|---|---|
-| [`app`](package/tenant/app/) | `XApp` | Namespaced tenant application scaffold (Deployment, Service, Traefik IngressRoute, Darlane debug-twin) owned by the namespace it runs in — owner and target come from the namespace, never a field. | `v1alpha1` | `unreleased` | [API](docs/api-reference/tenant/app.md) |
-| [`database`](package/tenant/database/) | `XDatabase` | Namespaced tenant PostgreSQL database on a platform CNPG cluster (Role, Database, credentials pushed to OpenBao) owned by the namespace it is created in — owner and cluster are never fields. | `v1alpha1` | `unreleased` | [API](docs/api-reference/tenant/database.md) |
+| [`app`](package/tenant/app/) | `XApp` | Namespaced tenant application scaffold (Deployment, Service, Traefik IngressRoute, Darlane debug-twin) owned by the namespace it runs in — owner and target come from the namespace, never a field. | `v1alpha1` | `release-2026-11-12` | [API](docs/api-reference/tenant/app.md) |
+| [`database`](package/tenant/database/) | `XDatabase` | Namespaced tenant PostgreSQL database on a platform CNPG cluster (Role, Database, credentials pushed to OpenBao) owned by the namespace it is created in — owner and cluster are never fields. | `v1alpha1` | `release-2026-11-12` | [API](docs/api-reference/tenant/database.md) |
 
 </details>
 <details>
@@ -65,7 +67,7 @@ Capacity the platform team provides to every team: PostgreSQL clusters, either a
 
 | Package | Kind | What it does | API | Last changed in | Docs |
 |---|---|---|---|---|---|
-| [`database-cluster`](package/platform/database-cluster/) | `XDatabaseCluster` | Platform-managed CloudNativePG cluster with pooler, Vault credential seeding, and shared-cluster labeling for dynamic tenant pool discovery. | `v1alpha1` | `unreleased` | [API](docs/api-reference/platform/database-cluster.md) |
+| [`database-cluster`](package/platform/database-cluster/) | `XDatabaseCluster` | Platform-managed CloudNativePG cluster with pooler, Vault credential seeding, and shared-cluster labeling for dynamic tenant pool discovery. | `v1alpha1` | `release-2026-11-12` | [API](docs/api-reference/platform/database-cluster.md) |
 
 </details>
 <details>
@@ -93,12 +95,12 @@ Identity and rules: the records the OIDC broker logs people in with (its connect
 | Package | Kind | What it does | API | Last changed in | Docs |
 |---|---|---|---|---|---|
 | [`oidc-connection`](package/auth/oidc-connection/) | `XOIDCConnection` | Observes the dexidp chart's config ExternalSecret and publishes which broker, issuer and remote-key prefix every other oidc-* resource writes under. | `v1alpha1` | `release-2026-10-16` | [API](docs/api-reference/auth/oidc-connection.md) |
-| [`oidc-static-password`](package/auth/oidc-static-password/) | `XOIDCStaticPassword` | A local broker user (bootstrap admin, break-glass), ESO-generated or operator-defined, pushed to OpenBao as a bcrypt-hashed record. | `v1alpha1` | `release-2026-10-16` | [API](docs/api-reference/auth/oidc-static-password.md) |
+| [`oidc-static-password`](package/auth/oidc-static-password/) | `XOIDCStaticPassword` | A local broker user (bootstrap admin, break-glass), ESO-generated or operator-defined, pushed to OpenBao as a bcrypt-hashed record. | `v1alpha1` | `release-2026-11-12` | [API](docs/api-reference/auth/oidc-static-password.md) |
 | [`oidc-client`](package/auth/oidc-client/) | `XOIDCClient` | A downstream OAuth client that logs in through the broker, ESO-generated or operator-defined, pushed to OpenBao. | `v1alpha1` | `release-2026-10-16` | [API](docs/api-reference/auth/oidc-client.md) |
 | [`oidc-connector`](package/auth/oidc-connector/) | `XOIDCConnector` | An upstream Git vendor connector, with its team allow-list generated from labelled XScmTeams, credentials read from an XScmOAuthApp, pushed to OpenBao. | `v1alpha1` | `release-2026-10-16` | [API](docs/api-reference/auth/oidc-connector.md) |
-| [`persona`](package/auth/persona/) | `XPersona` | A persona — a title that collects SCM teams, users and agents into RBAC subjects, with the environments it applies on. | `v1alpha1` | `release-2026-11-09` | [API](docs/api-reference/auth/persona.md) |
+| [`persona`](package/auth/persona/) | `XPersona` | A persona — a title that collects SCM teams, users and agents into RBAC subjects, with the environments it applies on. | `v1alpha1` | `release-2026-11-12` | [API](docs/api-reference/auth/persona.md) |
 | [`persona-binding`](package/auth/persona-binding/) | `XPersonaBinding` | Binds a persona's subjects to a standard, persona or Platform API ClusterRole — RoleBindings in the namespaces a team owns, or one ClusterRoleBinding. | `v1alpha1` | `release-2026-11-09` | [API](docs/api-reference/auth/persona-binding.md) |
-| [`policy`](package/auth/policy/) | `XPolicy` | One reviewed Kyverno CEL policy per resource — owner-stamp, owner-seal, secret-guard, exec-guard, protected, rbac-guard, sa-guard, namespace-guard or env-gate — matching SCM users only, Deny by default. | `v1alpha1` | `unreleased` | [API](docs/api-reference/auth/policy.md) |
+| [`policy`](package/auth/policy/) | `XPolicy` | One reviewed Kyverno CEL policy per resource — owner-stamp, owner-seal, secret-guard, exec-guard, protected, rbac-guard, sa-guard, namespace-guard or env-gate — matching SCM users only, Deny by default. | `v1alpha1` | `release-2026-11-12` | [API](docs/api-reference/auth/policy.md) |
 
 </details>
 <!-- packages-table-end -->
@@ -216,9 +218,9 @@ release-notes/                ← hand-written notes; required for careful/break
 ## Quick start
 
 > [!NOTE]
-> To run these packages, you require to had the Kubernetes Cluster (>= v1.34.x), that quite be compatible with any distribution deployed, e.g: EKS, K3s, or Kind.
+> To run these packages, you require to had the Kubernetes Cluster (>= v1.36.x), that quite be available with any Kubernetes distribution deployed, e.g: EKS, K3s, or Kind.
 > **Kubernetes v1.36 is recommended** for the full stack: the login path (Pinniped v0.46.0) is built on the Kubernetes 1.36 libraries, and on an older cluster
-> its impersonation proxy runs with failing watches — see [Kubernetes version](docs/user-guide/setup.md). If you want find the solution to self-hosted cluster (Kind, K3s, or RKE2), you can use project [Kubewekend](https://github.com/Xeus-Territory/kubewekend) and follow the instruction.
+> its impersonation proxy runs with failing watches — see [Kubernetes version](docs/user-guide/setup.md). If you want find the solution to self-hosted cluster (Kind, K3s, or RKE2), you can consider to use project **[Kubewekend](https://github.com/Xeus-Territory/kubewekend)** with the instruction.
 
 For easier to test, you can use [Kind](https://kind.sigs.k8s.io/) as the local Kubernetes Cluster to run with only [Docker](https://docs.docker.com/engine/install/), that will cost you few step to completely. Explore more at [Kind - QuickStart](https://kind.sigs.k8s.io/docs/user/quick-start/)
 

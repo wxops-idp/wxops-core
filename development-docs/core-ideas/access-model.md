@@ -6,7 +6,7 @@
 > [RFC-004](../rfc/004-dex-identity-and-portal-authentication.md)), and so are personas, bindings and Kubernetes guardrails (RFC-009, proven on a cluster
 > 2026-11-04). Still design: projection into the platform tools (RFC-008), Core XR labelling (RFC-005), agents and audit. Written 2026-10-20 from a design
 > discussion; revised 2026-10-24 when RFC-009 replaced the persona file and its CI compiler with three `auth.wxops.cloud` kinds — `XPersona`, `XPersonaBinding`,
-> `XPlatformPolicy`.
+> `XPolicy`.
 
 ---
 
@@ -50,7 +50,7 @@ XPersona
 XPersonaBinding
 **RFC-009**`"]
         GUARD{{"`**ABAC** — policies enforce
-XPlatformPolicy → Kyverno
+XPolicy → Kyverno
 **RFC-009 · RFC-005**`"}}
         PERSONA --> RBAC --> GUARD
     end
@@ -95,7 +95,7 @@ native objects + catalog
 | Who you are | `username`, `groups` | the SCM itself, read at login | Dex connector |
 | Your persona | who belongs, which environments | `XPersona` | Crossplane |
 | Coarse RBAC | which kinds, where | `XPersonaBinding` | Crossplane → `RoleBinding`s; aggregation extends the roles |
-| Guardrails | which objects | `XPlatformPolicy` | Crossplane → Kyverno CEL |
+| Guardrails | which objects | `XPolicy` | Crossplane → Kyverno CEL |
 | Tools | the grant inside each tool | each tool's native objects | GitOps; `provider-vault` for OpenBao |
 | Enforce | every request | each tool's own model | RBAC, OpenBao policy, Argo `policy.csv`, Grafana roles, Kyverno |
 | See | what happened | logs | Loki (the API server audit log); `PolicyReport` not supported yet |
@@ -115,7 +115,7 @@ flowchart LR
     P["XPersona developers<br/>payment, checkout · dev, staging"]
     B["XPersonaBinding<br/>edit, owned"]
     RB["RoleBinding<br/>per owned namespace"]
-    PP["XPlatformPolicy<br/>owner-seal"]
+    PP["XPolicy<br/>owner-seal"]
     VP["Kyverno<br/>ValidatingPolicy"]
 
     P --> B --> RB
@@ -147,7 +147,7 @@ flowchart LR
     ARGO["Argo syncs<br/>every cluster"]
     PERS["XPersona<br/>resolves members"]
     BIND["XPersonaBinding<br/>→ RoleBindings"]
-    POL["XPlatformPolicy<br/>→ Kyverno policies"]
+    POL["XPolicy<br/>→ Kyverno policies"]
 
     PR --> MERGE --> ARGO --> PERS
     PERS --> BIND
@@ -215,7 +215,7 @@ So **reads stop at the namespace boundary**: a team reads its own namespaces, `S
 **Kyverno guards people, not the system:** SCM users today, AI agents (by their listed ServiceAccounts) later. Controllers, Crossplane and ESO answer to their
 own RBAC, and Argo CD to its own projects, group-bound roles and merge review — Kyverno never matches their requests.
 
-**Multi-cluster** — every cluster receives the same `XPersona`, `XPersonaBinding` and `XPlatformPolicy` XRs through Argo; its own Crossplane renders them
+**Multi-cluster** — every cluster receives the same `XPersona`, `XPersonaBinding` and `XPolicy` XRs through Argo; its own Crossplane renders them
 against a small per-cluster identity object (`env`, `cluster-name`, `role: hub|spoke`), defined with the multi-cluster feature
 ([RFC-009 open question 7](../rfc/009-scm-personas.md#open-questions)). The hub additionally runs the policies guarding Core XRs.
 
@@ -320,7 +320,7 @@ it never grants. Free-form policies are not offered: [RFC-009](../rfc/009-scm-pe
 | **`env-gate` — built 2026-11-08, optional** | In namespaces whose `wxops.cloud/environment` is listed (say `prod`), only members of `personaRef` whose `environments` include it create, update, delete or exec; everyone else goes through Git. Per namespace — the per-cluster gate waits for multi-cluster |
 
 **What a template brings with it:** its KCL function, golden cases, a row in the scenario kit, and an offline `kyverno test` case built from the same rows.
-Workload rules — allowed registries, resource limits, pod security — are good Kyverno policies but not authorization, and stay out of `XPlatformPolicy` so the
+Workload rules — allowed registries, resource limits, pod security — are good Kyverno policies but not authorization, and stay out of `XPolicy` so the
 kind keeps one meaning.
 
 **Sources to check a new template against:**
@@ -394,10 +394,10 @@ Every Kyverno rule above trusts a label. Today ([inventory](#appendix--labels-an
 authorization meaning, and it is not yet trustworthy:
 
 1. **`owner` is a convention.** Required by nothing, immutable by nothing, read by no composition.
-2. **It never reaches workloads.** `tenant-app` stamps `environment` and `app-flavor` onto what it composes, not `owner`, so there is nothing on a pod to compare
-   with the caller's groups.
-3. **It can be forged.** `XTenantApp.spec.parameters.labels` flows into pod labels; the composition's own `wxops.cloud/*` keys win only where it sets them.
-   The KCL must set `owner` itself, and a policy must reject any `wxops.cloud/*` key in `spec.parameters.labels`.
+2. **It never reached workloads** — `XTenantApp` stamped `environment` and `app-flavor`, not `owner`. *Addressed for the tenant kinds (release-2026-11-12):*
+   `XApp` and `XDatabase` set `wxops.cloud/owner` from their namespace on what they compose, and `owner-stamp` labels the Pods.
+3. **It could be forged** through `XTenantApp.spec.parameters.labels`. *Addressed the same way:* `XApp` drops any `wxops.cloud/*` key a user puts in
+   `spec.parameters.labels`, so the composition's own keys are the only ones.
 4. **`scm.wxops.cloud/oidc-login` is a login gate** writable by anyone who can write an `XScmTeam`. It, and the persona membership labels, are platform-only.
 
 Fixing these comes **first** — before any policy enforces.
@@ -448,11 +448,11 @@ packages. Four rules keep it that way:
 4. **Kyverno denies**, mutates only to copy a namespace's owner, and generates only objects that narrow — never a grant; Crossplane makes
    every third-party write and every binding.
 
-### Kyverno alone, or behind `XPlatformPolicy`
+### Kyverno alone, or behind `XPolicy`
 
 Kyverno enforces on its own; the layer above it is about where a policy's inputs come from and how a change to them is tested and delivered.
 
-| | Kyverno alone | Behind `XPlatformPolicy` |
+| | Kyverno alone | Behind `XPolicy` |
 |---|---|---|
 | Who is an SCM user, who is exempt | Group lists hand-written into each policy's CEL, edited as teams change | Resolved from `XScmTeam` and `XPersona`, rendered in — a team joining is a label, not a policy edit |
 | What a rule may say | Any CEL, per author | Reviewed templates with parameters; one definition of *SCM user* and *owner* |
@@ -592,14 +592,13 @@ OpenBao on `provider-vault` → Argo CD's default projects → Grafana → the c
 
 | Key | On | Purpose |
 |---|---|---|
-| `wxops.cloud/owner` | XRs (examples, READMEs) | ownership — convention only, see [the label foundation](#the-label-foundation) |
+| `wxops.cloud/owner` | XRs (examples, READMEs); what `XApp` and `XDatabase` compose (from their namespace) | ownership — see [the label foundation](#the-label-foundation) |
 | `scm.wxops.cloud/oidc-login` | `XScmTeam` | opt the team into `XOIDCConnector`'s generated allow-list |
-| `wxops.cloud/managed-by: platform-database-clusters` | `XPlatformDatabaseCluster` | `tenant-database` pool discovery |
-| `wxops.cloud/tenant-database` | `XTenantDatabase` (stamped by its KCL) | per-pool database count |
+| `wxops.cloud/managed-by: platform-database-clusters` | `XDatabaseCluster` (in the manifest) | `XDatabase` finds shared pools and dedicated clusters — this exact value |
 | `crossplane.io/composite` | every XR (stamped by Crossplane) | `oidc-*` packages look up a referenced XR by name |
-| `wxops.cloud/environment`, `wxops.cloud/app-flavor` | `tenant-app` workloads | classification |
-| `app.kubernetes.io/{name,instance,component,managed-by}` | `tenant-app` workloads | selectors and conventions |
+| `wxops.cloud/environment`, `wxops.cloud/app-flavor` | `XApp` workloads | classification |
+| `app.kubernetes.io/{name,instance,component,managed-by}` | `XApp` workloads | selectors and conventions |
 | `wxops.cloud/darlane-ttl` (annotation) | Darlane Deployment | lifetime — still stamped, **not enforced** (expiry dropped 2026-10-22; the old policy is removed) |
-| `wxops.cloud/template-id`, `wxops.cloud/repo-url` (annotations) | `tenant-app` resources | catalog links |
+| `wxops.cloud/template-id`, `wxops.cloud/repo-url` (annotations) | `XApp` resources | catalog links |
 | `auth.wxops.cloud/generation`, `auth.wxops.cloud/callback-url` | `oidc-*` internals | rotation trigger; status round-trip — not for policy |
 | `crossplane.io/composition-resource-name`, `krm.kcl.dev/ready`, `channel` | compositions | Crossplane plumbing — not for policy |

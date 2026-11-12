@@ -4,7 +4,7 @@ This document has two halves, at different maturities.
 
 | | Scope | Status |
 |---|---|---|
-| **[Part 1 — Emission](#part-1--emission-servicemonitor--podmonitor)** | How one `XTenantApp` exposes metrics on one cluster | ✅ **Implemented** in `package/platform/tenant-app/` as `spec.parameters.monitoring` |
+| **[Part 1 — Emission](#part-1--emission-servicemonitor--podmonitor)** | How one `XApp` exposes metrics on one cluster | ✅ **Implemented** in `package/tenant/app/` as `spec.parameters.monitoring` (built first in `XTenantApp`, now archived) |
 | **[Part 2 — Collection](#part-2--collection-architecture-single-cluster-fleet-multi-cluster)** | Where signals go once there is more than one cluster, and what an SRE agent needs to diagnose across a fleet | 📋 **Option space, nothing implemented** |
 
 > **Part 1 deviation from the design below:** the app Service port is still unnamed, so the emitted endpoint targets `targetPort` rather than a port name. That
@@ -155,7 +155,7 @@ Release chores: bump `VERSIONS.yaml` (`tenant-app.package.current`), run `make k
 
 # Part 2 — Collection architecture: single cluster, fleet, multi-cluster
 
-> Part 1 above is the **emission** contract: what one `XTenantApp` exposes, on one cluster. Part 2 is the **collection** question that starts the moment a
+> Part 1 above is the **emission** contract: what one `XApp` exposes, on one cluster. Part 2 is the **collection** question that starts the moment a
 > second cluster exists — where signals go, who queries them, and what an SRE (or an agent acting as one) needs in order to diagnose across a fleet. Nothing in
 > Part 2 is implemented; it is the option space, written to be argued with.
 
@@ -601,7 +601,7 @@ deploys it, not after.
 
 ## See also
 
-- [`tenant-app.md`](../../docs/api-reference/_archives/tenant-app.md) — the full `XTenantApp` schema
+- [`app.md`](../../docs/api-reference/tenant/app.md) — the full `XApp` schema
 - [`development-docs/_archives/ROADMAP.md`](../_archives/ROADMAP.md) — archived; the work item this describes
 - [`release-notes/README.md`](../../release-notes/README.md) — the `safe`/`careful`/`breaking` change-tier taxonomy
 - [`multi-cluster.md`](multi-cluster.md) — Alloy pushing over mTLS to the LGTM stack on the hub (or a dedicated observability cluster) reached by name; the archived

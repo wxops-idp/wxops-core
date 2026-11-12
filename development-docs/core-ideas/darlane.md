@@ -1,8 +1,8 @@
 # Darlane — a production-context twin for debugging, validation and agents
 
 > [!NOTE]
-> **Status: shipped inside `XTenantApp`** (`spec.parameters.darlane`); the standalone `XDarlane` is the future. Every field is in the
-> [API reference](../../docs/api-reference/_archives/tenant-app.md#darlane-debug-twin-deployment). This page is the why, what ships, and what comes next — the
+> **Status: shipped inside `XApp`** (`spec.parameters.darlane`); the standalone `XDarlane` is the future. Every field is in the
+> [API reference](../../docs/api-reference/tenant/app.md#darlane-debug-twin-deployment). This page is the why, what ships, and what comes next — the
 > [detailed edition](../_archives/darlane-detailed.md) keeps every workflow pattern, scenario playbook and trade-off for anyone diving deeper.
 
 ---
@@ -173,23 +173,24 @@ the rules in [the access model](access-model.md#data-boundary-and-audit).
 
 ### `XDarlane` — a workspace claim of its own
 
-Today Darlane is a field of an all-in-one `XTenantApp`, so its lifecycle is the app's: one twin per app, every session is an edit to the app's XR, and a
+Today Darlane is a field of an all-in-one `XApp`, so its lifecycle is the app's: one twin per app, every session is an edit to the app's XR, and a
 developer, a hotfix and an agent cannot hold workspaces at the same time — and nothing can expire it without touching the app. `XDarlane` belongs to the
-**`XTenantApp` redesign**: smaller packages with their own maturity instead of one all-in-one kind, the twin among them as a claim of its own.
+**app redesign**: smaller packages with their own maturity instead of one all-in-one kind, the twin among them as a claim of its own.
 
-**The redesign is namespace-scoped.** The new tenant kinds — the app, its database (`XTenantDatabase`'s successor), a future monitoring kind, and `XDarlane` —
-are namespaced XRs, the shape Crossplane v2 defaults to. The namespace is the owner: a persona's `RoleBinding` per owned namespace grants them, and another
-team cannot even read them — which cluster scope cannot give. Most of [RFC-005](../rfc/005-git-mapped-authorization.md)'s owner rules then reduce to plain
-RBAC. Platform kinds (`XPlatformDatabaseCluster`, `XScm*`, `XOIDC*`, `auth.wxops.cloud`) stay cluster-scoped. Two things to settle first:
+**The redesign is namespace-scoped.** The tenant kinds — `XApp` and `XDatabase` (shipped in `tenant.wxops.cloud`,
+[RFC-010](../rfc/010-namespaced-tenant-kinds.md)), a future monitoring kind, and `XDarlane` — are namespaced XRs, the shape Crossplane v2 defaults to. The
+namespace is the owner: a persona's `RoleBinding` per owned namespace grants them, and another team cannot even read them — which cluster scope cannot give.
+Most of [RFC-005](../rfc/005-git-mapped-authorization.md)'s owner rules then reduce to plain RBAC. Platform kinds (`XDatabaseCluster`, `XScm*`, `XOIDC*`,
+`auth.wxops.cloud`) stay cluster-scoped. Two things settled on the way to `XApp`:
 
 - **Namespaced managed resources in every provider a tenant kind uses** — a namespaced XR composes only namespaced resources in its own namespace. All three
   installed providers ship them (checked on the cluster 2026-10-26): `objects.kubernetes.m.crossplane.io`, `workspaces.opentofu.m.upbound.io`, and the
   `postgresql.sql.m.crossplane.io` family — and `provider-vault` v4 does too. What is left is writing the compositions against the `.m` kinds and their
   namespaced `ProviderConfig`s.
-- **Migration** — a scope change is a new kind with no conversion from the old one, so existing `XTenantApp` and `XTenantDatabase` XRs move over, not
-  upgrade in place.
+- **Migration** — a scope change is a new kind with no conversion from the old one, so existing `XTenantApp` and `XTenantDatabase` XRs move over by the
+  handover in [migrating to the new kinds](../../docs/user-guide/migrating-to-new-kinds.md), not upgrade in place. `XDarlane` will be new, with nothing to move.
 
-| Today (`darlane.*` on `XTenantApp`) | `XDarlane` |
+| Today (`darlane.*` on `XApp`) | `XDarlane` |
 |---|---|
 | One twin per app | Several concurrent claims per app |
 | Lifecycle tied to the app XR | Its own lifecycle; `ttl` mandatory |

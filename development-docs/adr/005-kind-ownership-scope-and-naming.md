@@ -6,7 +6,8 @@ Accepted — 2026-11-06. Amended 2026-11-10: each kind's group and scope are dec
 Amended 2026-11-11: the `XScm*` kinds keep their names (decision 2), so there is no `scm` rename batch. Later the same day: all four renames are built and the old kinds archived
 (see [When names change](#when-names-change)).
 Amended 2026-11-12: `categories: [wxops]` goes on **new namespaced tenant kinds only** (decision 4) — `XApp` and `XDatabase` today. Crossplane holds an XRD's whole
-`spec.names` immutable, so a released XRD can never gain it, and the platform's cluster-scoped kinds stay out of it on purpose.
+`spec.names` immutable, so a released XRD can never gain it, and the platform's cluster-scoped kinds stay out of it on purpose. All four renames and the archive ship in
+`release-2026-11-12`; a cluster takes the archive only after its XRs are handed over.
 
 ## Context
 
@@ -104,10 +105,10 @@ twice, and three problems show that the scope is wrong today:
 
 | Today | New name | Group, scope | Package | When |
 |---|---|---|---|---|
-| `XPlatformPolicy` | `XPolicy` | `auth`, cluster | `policy` | **Done** — archived once every XR had moved by the handover |
-| RFC-010's tenant kinds | `XApp`, `XDatabase` | `tenant`, namespaced | `package/tenant/app`, `package/tenant/database` | **Done** — new kinds, no rename cost |
-| `XPlatformDatabaseCluster` | `XDatabaseCluster` | `platform`, cluster | `database-cluster` | **Done** — archived with the others |
-| `XTenantApp`, `XTenantDatabase` | — (replaced by `XApp`, `XDatabase`) | — | archived | **Done** — RFC-010 Phase 6 |
+| `XPlatformPolicy` | `XPolicy` | `auth`, cluster | `policy` | **Done** — `release-2026-11-12`; the old kind archived in the same release |
+| RFC-010's tenant kinds | `XApp`, `XDatabase` | `tenant`, namespaced | `package/tenant/app`, `package/tenant/database` | **Done** — `release-2026-11-12`, new kinds |
+| `XPlatformDatabaseCluster` | `XDatabaseCluster` | `platform`, cluster | `database-cluster` | **Done** — `release-2026-11-12`, archived with the others |
+| `XTenantApp`, `XTenantDatabase` | — (replaced by `XApp`, `XDatabase`) | — | archived | **Done** — `release-2026-11-12` (RFC-010 Phase 6) |
 | Planned | `XWorkspace`; `XWorkspaceClass` | `tenant`, namespaced; `platform`, cluster | per RFC-008 | With RFC-008 |
 | Planned | `XDarlane` | `tenant`, namespaced | per `darlane.md` | With the Darlane split |
 | `XScmConnection`, `XScmRepository`, `XScmOAuthApp`, `XScmTeam` | — | `scm`, cluster | — | Already conform (decision 2) |

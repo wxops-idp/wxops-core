@@ -81,8 +81,8 @@ For a runbook to serve humans *and* the agent, structure beats prose. Machine-re
 
 ```markdown
 ---
-id: rb-tenant-app-cert-pending
-kind: XTenantApp
+id: rb-app-cert-pending
+kind: XApp
 trigger:                       # the status shape that selects this runbook
   status: { ready: true, dependenciesReady: false }
 severity: warning              # page vs ticket vs FYI
@@ -155,7 +155,7 @@ flowchart LR
 
     subgraph ACC["Access — XR status · designed"]
         direction TB
-        PERSONA["XPersona<br/>XPersonaBinding · XPlatformPolicy"]
+        PERSONA["XPersona<br/>XPersonaBinding · XPolicy"]
         TGT["namespace · OpenBao path<br/>Argo project · Grafana folder"]
     end
 

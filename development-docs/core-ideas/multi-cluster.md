@@ -333,8 +333,9 @@ already installed, as a [bootstrap prerequisite](#the-management-plane).
 
 ### Where compositions run
 
-`spec.parameters.cluster` exists on `XTenantApp`, `XTenantDatabase` and `XPlatformDatabaseCluster` today, threaded to a `provider-kubernetes`
-`ProviderConfig` — the hub applying resources **into** a spoke's API. That is exactly the hub → spoke credential this design removes. Two ways forward:
+`spec.parameters.cluster` exists on `XDatabaseCluster` today (it was also on the archived `XTenantApp` and `XTenantDatabase`; `XApp` and `XDatabase` have none),
+threaded to a `provider-kubernetes` `ProviderConfig` — the hub applying resources **into** a spoke's API. That is exactly the hub → spoke credential this design
+removes. Two ways forward:
 
 | | Crossplane on each spoke (recommended) | Hub `ProviderConfig` per spoke |
 |---|---|---|
@@ -429,7 +430,7 @@ itself, such as ESO against a cloud secret manager instead of OpenBao.
 
 1. **The fleet CA** — OpenBao PKI, or cert-manager with a shared CA; per cluster or per ServiceAccount certificates. Per ServiceAccount points at
    [SPIFFE/SPIRE](https://spiffe.io/) (CNCF graduated): one identity format for workloads, agents and the gateway's export rules, issued per workload.
-2. **The gateway** — Traefik, already in the stack (`XTenantApp` routes through it) and able to require client certificates; or Envoy Gateway, for
+2. **The gateway** — Traefik, already in the stack (`XApp` routes through it) and able to require client certificates; or Envoy Gateway, for
    authorisation per calling identity.
 3. **Location-transparent names later?** CoreDNS ≥ 1.12.2 serves the Multi-Cluster Services `clusterset.local` names from its `kubernetes` plugin, but
    something must create the `ServiceImport`s. Start with explicit per-cluster names.

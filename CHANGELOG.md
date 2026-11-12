@@ -19,6 +19,40 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 > latest state.
 
 ---
+## [release-2026-11-12] — 2026-11-12
+
+### Breaking Changes
+
+- **platform**: Archive XPlatformPolicy, XPlatformDatabaseCluster, XTenantApp and XTenantDatabase ⚠️ **BREAKING** ([`2e8df72`](https://github.com/wxops-idp/wxops-core/commit/2e8df727c2e7bfcae2eb52e8590cca6500349363))
+
+
+### Chores
+
+- **kcl**: Correct comments that still name the archived kinds ([`ce59e14`](https://github.com/wxops-idp/wxops-core/commit/ce59e1491b380f1c3304974171a990e01c27c3aa))
+
+
+### Documentation
+
+- **package**: Update outdated docs for packages and kcl development ([`d3e6eb4`](https://github.com/wxops-idp/wxops-core/commit/d3e6eb4e02d83379c464da226312baa5e54fb20c))
+- ADR-005, RFC-010 and the guides for the new kinds, including migrate guideline ([`0eb5806`](https://github.com/wxops-idp/wxops-core/commit/0eb580649bb9b3ac4fe33c92c2bf4539b1a21a8a))
+
+
+### Features
+
+- **tenant**: Migrate and rename XTenantDatabase to XDatabase to new namespace target instead cluster ([`b6f9dd3`](https://github.com/wxops-idp/wxops-core/commit/b6f9dd378b811dd742e6d3a07af4eb4842675aa3))
+- **tenant**: Migrate and rename XTenantApp to XApp for changing target package to namespace,and assume providerconfig at namespace level instead cluster ([`93ef284`](https://github.com/wxops-idp/wxops-core/commit/93ef2841656e79eaa7ce168324e8d92e0562d208))
+- **platform**: Add XDatabaseCluster, same as XPlatformDatabaseCluster, to help package show more clearly meaning ([`0a93d0d`](https://github.com/wxops-idp/wxops-core/commit/0a93d0d20eaabc7fcf3ea1741d2c80fbfc8e7c96))
+- **auth**: Add XPolicy, same as XPlatformPolicy, to make package more clearly meaning ([`dacc569`](https://github.com/wxops-idp/wxops-core/commit/dacc5699b009ff241fcf01a565dd0d72107089fd))
+
+
+### Testing
+
+- Guard kind names and immutable XRD names before the new kinds ([`e2e16b5`](https://github.com/wxops-idp/wxops-core/commit/e2e16b554896866d7512fc8557cfeea63747f416))
+
+
+
+📖 [API reference](https://github.com/wxops-idp/wxops-core/tree/release-2026-11-12/docs) · [`VERSIONS.yaml`](https://github.com/wxops-idp/wxops-core/blob/release-2026-11-12/VERSIONS.yaml)
+🔍 [Diff vs release-2026-11-09](https://github.com/wxops-idp/wxops-core/compare/release-2026-11-09...release-2026-11-12)
 ## [release-2026-11-09] — 2026-11-09
 
 ### Breaking Changes
@@ -375,6 +409,7 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 
 📖 [API reference](https://github.com/wxops-idp/wxops-core/tree/v0.1.0/docs) · [`VERSIONS.yaml`](https://github.com/wxops-idp/wxops-core/blob/v0.1.0/VERSIONS.yaml)
 ---
+[release-2026-11-12]: https://github.com/wxops-idp/wxops-core/releases/tag/release-2026-11-12
 [release-2026-11-09]: https://github.com/wxops-idp/wxops-core/releases/tag/release-2026-11-09
 [release-2026-11-04]: https://github.com/wxops-idp/wxops-core/releases/tag/release-2026-11-04
 [release-2026-10-16]: https://github.com/wxops-idp/wxops-core/releases/tag/release-2026-10-16
@@ -396,5 +431,5 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 [0.2.0]: https://github.com/wxops-idp/wxops-core/releases/tag/v0.2.0
 [0.1.1]: https://github.com/wxops-idp/wxops-core/releases/tag/v0.1.1
 [0.1.0]: https://github.com/wxops-idp/wxops-core/releases/tag/v0.1.0
-[Unreleased]: https://github.com/wxops-idp/wxops-core/compare/release-2026-11-09...HEAD
+[Unreleased]: https://github.com/wxops-idp/wxops-core/compare/release-2026-11-12...HEAD
 

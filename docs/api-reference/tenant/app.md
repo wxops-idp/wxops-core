@@ -9,7 +9,7 @@ the `app.kubernetes.io/*` label conventions used by the Kubewekend and Bitnami H
 `app.kubernetes.io/managed-by: crossplane`).
 
 This XR deliberately stops at the application workload. Vault-backed secrets (`ExternalSecret`/`PushSecret`) and databases
-([`XDatabase`](../_archives/tenant-database.md)) are platform-level concerns wired up separately — point `envFrom` at the Secret(s) they produce.
+([`XDatabase`](database.md)) are wired up separately — point `envFrom` at the Secret(s) they produce.
 
 | | |
 |---|---|
@@ -55,7 +55,7 @@ template, so a running Deployment adopted from an `XTenantApp` does not restart.
 | `environment` | `string` | | | Optional, any name (lowercase letters, digits and `-`). A team may run one environment, two, or none. Applied as the `wxops.cloud/environment` label on created resources, and read by the [`env-gate`](../auth/policy.md) policy and by Darlane's production guard. Absent: no label, and no environment rule applies. Promotion between environments is a Git change between overlays, one `XApp` each; the platform decides where an environment runs ([RFC-010 §2b](../../../development-docs/rfc/010-namespaced-tenant-kinds.md)). |
 | `appFlavor` | `string` | | `"webapp"` | One of `webapp`, `ai`, `ai-webapp`, `geo-webapp`, `search-webapp`. Applied as the `wxops.cloud/app-flavor` label on created resources — purely metadata for platform-level automation (e.g. a separate `XDatabase` claim choosing `pgvector`/`postgis` extensions) to key off. Does not affect any resource composed by this XR. |
 | `templateId` | `string` | | | Backstage/IDP software-template identifier this app was scaffolded from. Applied as the `wxops.cloud/template-id` annotation on all composed resources — catalog-linking metadata only. |
-| `repository.url` | `string` | | | URL of the application's source repository (e.g. a Gitea repo created or imported by the platform/portal — `tenant-app` doesn't manage repositories). Applied as the `wxops.cloud/repo-url` annotation on all composed resources. |
+| `repository.url` | `string` | | | URL of the application's source repository (e.g. a Gitea repo created or imported by the platform/portal — `XApp` doesn't manage repositories). Applied as the `wxops.cloud/repo-url` annotation on all composed resources. |
 | `image` | `string` | yes | | Container image reference (`repository:tag`). e.g. `ghcr.io/org/app:1.0.0`. Use this single-string form so Kustomize image-updater can target it directly. |
 | `imagePullPolicy` | `string` | | `"IfNotPresent"` | One of `Always`, `IfNotPresent`, `Never`. |
 | `imagePullSecrets` | `array<string>` | | `[]` | Names of existing Secrets (type `kubernetes.io/dockerconfigjson`) for pulling from private registries. Added to `spec.imagePullSecrets` on both the main Deployment and darlane. The Secrets must already exist in the target namespace — this XR does not create them. |
@@ -114,7 +114,7 @@ not provision or wait for the Secret to exist (the Deployment will fail to start
 |---|---|---|---|
 | `secretsFrom.app.enabled` | `boolean` | `false` | If true, adds a `secretRef` to `secretsFrom.app.secretName` — e.g. the Secret a platform-managed `ExternalSecret`/`PushSecret` writes app secrets from Vault into. |
 | `secretsFrom.app.secretName` | `string` | `"{appName}-env"` | |
-| `secretsFrom.database.enabled` | `boolean` | `false` | If true, adds a `secretRef` to `secretsFrom.database.secretName` — e.g. a platform-provisioned [`XDatabase`](../_archives/tenant-database.md)'s connection-creds Secret. |
+| `secretsFrom.database.enabled` | `boolean` | `false` | If true, adds a `secretRef` to `secretsFrom.database.secretName` — e.g. the connection-creds Secret of an [`XDatabase`](database.md) in the same namespace. |
 | `secretsFrom.database.secretName` | `string` | `"{appName}-db-creds"` | |
 
 ### `reloader` ([Stakater Reloader](https://github.com/stakater/Reloader))
@@ -313,7 +313,7 @@ ForwardAuth endpoint and redirect unauthenticated users (`401`) to the login pag
 (not via annotation, as `IngressRoute` uses native Middleware CRD references).
 
 Both `Middleware` CRDs are expected to exist in the `kube-system` namespace. Requires Traefik configured with
-`--providers.kubernetescrd.allowCrossNamespace=true`. `tenant-app` does not provision or manage these `Middleware` CRDs.
+`--providers.kubernetescrd.allowCrossNamespace=true`. `XApp` does not provision or manage these `Middleware` CRDs.
 
 ### `monitoring`
 
@@ -429,8 +429,8 @@ provisioning is not reflected in either field.
 
 ## Vault secrets & databases
 
-`tenant-app` does not provision Vault-backed secrets or databases itself. Environment variables sourced from Vault (`ExternalSecret`/`PushSecret`) and tenant
-databases ([`XDatabase`](../_archives/tenant-database.md)) are provisioned separately at the platform level. Reference the resulting Kubernetes `Secret`(s) via
+`XApp` does not provision Vault-backed secrets or databases itself. Environment variables sourced from Vault (`ExternalSecret`/`PushSecret`) and tenant
+databases ([`XDatabase`](database.md)) are provisioned separately. Reference the resulting Kubernetes `Secret`(s) via
 [`secretsFrom`](#secretsfrom) (simple enable + default naming convention):
 
 ```yaml
@@ -443,17 +443,17 @@ secretsFrom:
 
 or via `envFrom` directly for any other Secret/ConfigMap name.
 
-> **Go-live ordering contract**: `tenant-app` does not wait for or validate that `secretsFrom.{app,database}.secretName` exist — it only adds
+> **Go-live ordering contract**: `XApp` does not wait for or validate that `secretsFrom.{app,database}.secretName` exist — it only adds
 > `envFrom.secretRef` entries by name. The referenced Secret(s) **must be created before (or alongside) this XR**, or the Deployment's Pods will fail to start
 > (`CreateContainerConfigError: secret "..." not found`). This is the platform/GitOps's responsibility — when enabling `secretsFrom`, make sure the
 > corresponding `ExternalSecret`/`PushSecret`/ `XDatabase` is applied first.
 
 `appFlavor` remains purely a label (`wxops.cloud/app-flavor`) for portal filtering and platform automation — e.g. the portal/platform layer can use it to pick
-`pgvector`/`postgis`/etc. extensions when provisioning a database for this app, without `tenant-app` itself knowing anything about databases.
+`pgvector`/`postgis`/etc. extensions when provisioning a database for this app, without `XApp` itself knowing anything about databases.
 
 ## Golden Path Contract
 
-`tenant-app` defaults `probes.liveness` and `probes.readiness` to **enabled** whenever `service.enabled` is true (the default), targeting:
+`XApp` defaults `probes.liveness` and `probes.readiness` to **enabled** whenever `service.enabled` is true (the default), targeting:
 
 - `GET /healthz` — liveness
 - `GET /readyz` — readiness

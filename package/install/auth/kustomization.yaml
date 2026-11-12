@@ -7,3 +7,4 @@ resources:
   - oidc-connector.yaml
   - persona.yaml
   - persona-binding.yaml
+  - policy.yaml

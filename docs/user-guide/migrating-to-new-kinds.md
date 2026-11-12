@@ -1,8 +1,8 @@
 # Migrating to the new kinds
 
-[ADR-005](../../development-docs/adr/005-kind-ownership-scope-and-naming.md) renamed four kinds and moved two of them to a new API group. Each new kind was added **beside**
-the old one, so nothing broke the day it shipped. You moved your XRs across one at a time, and one release then archived the old kinds. This page is the runbook, kept for
-the record — and for any cluster still on an earlier release, where it is run **before** upgrading to the archive release.
+[ADR-005](../../development-docs/adr/005-kind-ownership-scope-and-naming.md) renamed four kinds and moved two of them to a new API group. Each new kind is built **beside**
+the old one, and a live XR moves across by a handover: the old XR stops writing, the new one takes over the same resources, and the old one is deleted with nothing behind it.
+`release-2026-11-12` ships the new kinds and archives the old ones together. This page is the runbook, run on each cluster **before** that cluster takes the archive.
 
 | Old kind (archived) | New kind | API group | Scope | Runbook |
 |---|---|---|---|---|
@@ -10,6 +10,15 @@ the record — and for any cluster still on an earlier release, where it is run 
 | `XPlatformDatabaseCluster` | `XDatabaseCluster` | `platform.wxops.cloud` | Cluster | [Move](#xplatformdatabasecluster--xdatabasecluster) |
 | `XTenantApp` | `XApp` | `tenant.wxops.cloud` (new) | **Namespaced** | [Move](#xtenantapp--xapp) |
 | `XTenantDatabase` | `XDatabase` | `tenant.wxops.cloud` (new) | **Namespaced** | [Move](#xtenantdatabase--xdatabase) |
+
+## Where the handover runs
+
+The handover is the `wxops.cloud/handover: "true"` annotation, and only the old packages as this release's source has them honour it — `release-2026-11-09`'s do not.
+
+| How the cluster is installed | How it hands over |
+|---|---|
+| From source, `make install-dev` | `make install-dev` for the new kinds, plus `kubectl apply -k package/dev/archived/` for the old ones with the handover. Run the runbook, then stop applying `package/dev/archived/`. |
+| From the registry, `make install` | Not with this release alone: no registry image carries the old packages with the handover. Such a cluster needs a release that still ships them beside the new kinds before it takes the archive. |
 
 ## Order, and what must be true before the archive release
 

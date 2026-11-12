@@ -1,0 +1,8 @@
+apiVersion: pkg.crossplane.io/v1
+kind: Configuration
+metadata:
+  name: wxops-core-app
+spec:
+  package: ghcr.io/wxops-idp/wxops-core/app:release-2026-11-12
+  packagePullPolicy: IfNotPresent
+  revisionActivationPolicy: Automatic

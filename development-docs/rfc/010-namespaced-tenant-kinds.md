@@ -2,11 +2,12 @@
 
 ## Status
 <!-- Draft | In review | Accepted | Declined | Withdrawn | Implemented — and the GitHub issue that carries the discussion, e.g. "Draft · #42" -->
-Draft — 2026-11-05, updated 2026-11-11. Builds on [RFC-009](009-scm-personas.md) (personas, bindings, the policy templates) and takes over what
-[RFC-005](005-git-mapped-authorization.md) left for the tenant kinds. Group, scope and field ownership are decided in
-[ADR-005](../adr/005-kind-ownership-scope-and-naming.md), and the environment is chosen per app (§2b). **Built in full 2026-11-11, unreleased:** the new kinds (Phases 2 and 3),
-the migration runbook (5) and the archive (6) are in the tree; the cluster checks (Phases 1 and 4) are run on the sandbox and the status flips with the release. This RFC draws
-the boundaries on the hub alone; multi-cluster and Argo CD across clusters will revisit placement when they arrive.
+Implemented (Phases 0, 2–3, 5–6) — shipped in `release-2026-11-12`; drafted 2026-11-05. Builds on [RFC-009](009-scm-personas.md) (personas, bindings, the policy
+templates) and takes over what [RFC-005](005-git-mapped-authorization.md) left for the tenant kinds. Group, scope and field ownership are decided in
+[ADR-005](../adr/005-kind-ownership-scope-and-naming.md), and the environment is chosen per app (§2b). `release-2026-11-12` ships the new kinds (Phases 2 and
+3), the migration runbook (5) and the archive (6). The cluster checks stay open (Phases 1 and 4): the handovers of a database cluster, an app and a database,
+and the lifecycle rows through real logins. This RFC draws the boundaries on the hub alone; multi-cluster and Argo CD across clusters will revisit placement
+when they arrive.
 
 ## Summary
 
@@ -215,7 +216,9 @@ cases for an app's own environment, including an update that changes it.
 
 - [x] **Phase 0 — decide.** Group, scope and Q1–Q4 are settled in [ADR-005](../adr/005-kind-ownership-scope-and-naming.md). The order is policies, database clusters, apps, then
   databases; the style is handover in place, with one breaking archive at the end.
-- [ ] **Phase 1 — spike** on the test cluster, by hand, before any package:
+- [ ] **Phase 1 — spike** on the test cluster, by hand, before any package. *Seen on the sandbox 2026-11-12:* all four packages install; an `XDatabase` composes —
+  its namespaced `Object`s through the `ClusterProviderConfig`, and its owner read from the `Namespace` — and pushes its credentials through `vault-tenant`. Still open: the
+  adoptions below, and the namespaced `Usage`:
   - a namespaced XR composing `kubernetes.m.crossplane.io` `Object`s through a `ClusterProviderConfig`, on provider-kubernetes v1.2.1 (and v1.4.x, P1 #6);
   - a namespaced `Object` whose manifest targets another namespace (the CNPG one) and a cluster-scoped kind;
   - `function-extra-resources` reading the XR's `Namespace` — Crossplane's own RBAC to get Namespaces;
@@ -223,18 +226,19 @@ cases for an app's own environment, including an update that changes it.
   - a namespaced `Usage` ordering the Role after the Database;
   - **adoption**: an old `XTenantApp`'s `Object`s set to orphan, the XR deleted, a `XApp` of the same name taking the Deployment over by server-side
     apply — no Pod restart, no selector change.
-- [ ] **Phase 2 — `XApp`.** Package, tests, API page, persona piece, `ClusterProviderConfig` for the hub, and `env-gate` on an app's own environment (§2b).
-  Release `safe` for the new package, and for the `platform-policy` change (additive, though it widens what `env-gate` enforces — say so in the release notes). **Built 2026-11-11, unreleased**, `env-gate` on the app's environment included and proven on the sandbox on 2026-11-12
+- [x] **Phase 2 — `XApp`.** Package, tests, API page, persona piece, `ClusterProviderConfig` for the hub, and `env-gate` on an app's own environment (§2b).
+  Release `safe` for the new package, and for the `platform-policy` change (additive, though it widens what `env-gate` enforces — say so in the release notes). **Shipped in `release-2026-11-12`**, `env-gate` on the app's environment included and proven on the sandbox on 2026-11-12
   (`./run.sh env-gate`, 21 of 21 rows); the Phase 1 spike items for `XApp` (the `.m` Objects, the Namespace lookup, adoption with no restart) are still to run on a cluster. The package takes `appName` as an
   optional field, so a migrated application keeps the resource names its `XTenantApp` gave it.
-- [ ] **Phase 3 — `XDatabase`.** Package with the pool and dedicated-cluster checks, tests, API page. Release `safe`. `namespace-guard` in `Deny` first.
-  **Built 2026-11-11, unreleased.** The cluster spike items for it (the cross-namespace `Object`, the namespaced `Usage`, adoption with no password rotation and no new OpenBao
+- [x] **Phase 3 — `XDatabase`.** Package with the pool and dedicated-cluster checks, tests, API page. Release `safe`. `namespace-guard` in `Deny` first.
+  **Shipped in `release-2026-11-12`**, writing through the `ClusterSecretStore` `vault-tenant`. The cluster spike items for it (the cross-namespace `Object`, the namespaced `Usage`, adoption with no password rotation and no new OpenBao
   version, the dedicated handover) are still to run on a cluster.
 - [ ] **Phase 4 — the lifecycle rows** of §3 on the cluster, through real logins: CREATE / UPDATE / DELETE by the owner, by another team, by Argo CD; label
-  forging through `labels`; a non-tenant namespace; a guarded environment, written and renamed by someone outside the gate's persona.
-- [x] **Phase 5 — migrate** (the runbook — running it is the user's). A migration page in `docs/user-guide/`: per XR, orphan → create the new kind → verify adoption → delete the old XR; in Git,
+  forging through `labels`; a non-tenant namespace; a guarded environment, written and renamed by someone outside the gate's persona. *The guarded-environment rows pass by
+  impersonation* (`./run.sh env-gate`, 21 of 21, 2026-11-12); the rest are open.
+- [x] **Phase 5 — migrate** (the runbook — running it is the user's; policies are moved on the sandbox, database clusters, apps and databases are next). A migration page in `docs/user-guide/`: per XR, orphan → create the new kind → verify adoption → delete the old XR; in Git,
   sync waves so Argo CD creates the new kind before it prunes the old. Portal switches kinds (`docs/user-guide/portal-integration.md`).
-- [x] **Phase 6 — archive** (in the tree, 2026-11-11 — the release is the user's) `XPlatformPolicy`, `XPlatformDatabaseCluster`, `XTenantApp`, `XTenantDatabase` in a breaking release; `wxops:platform-edit` loses the tenant kinds; RFC-005 Phase 2 drops the
+- [x] **Phase 6 — archive** (shipped in `release-2026-11-12`, breaking — a cluster takes it only after its own handover) `XPlatformPolicy`, `XPlatformDatabaseCluster`, `XTenantApp`, `XTenantDatabase` in a breaking release; `wxops:platform-edit` loses the tenant kinds; RFC-005 Phase 2 drops the
   tenant kinds from its "label Core XRs" step.
 
 ## Open Questions

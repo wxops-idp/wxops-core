@@ -113,7 +113,7 @@ a Kubernetes Secret instead, via `writeConnectionSecretToRef`. Never write a pat
 
 `scmRef` on the XR names an `XScmConnection`, and the composition derives that connection's rendered Secret name itself (`scm-connection-<name>`) — there's no
 `credentialsSecretRef` field for a tenant to set. That Secret is tfvars-formatted, which is what `varFiles: [{source: SecretKey, ...}]` in the module expects.
-See [setup — seed a connection token](../user-guide/setup.md#2--seed-a-connection-token) for the exact format.
+See [setup — seed a connection token](../user-guide/setup.md#2---seed-a-connection-token) for the exact format.
 
 ## Next
 

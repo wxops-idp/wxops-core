@@ -55,7 +55,7 @@ gate — for reasons the rest of this document develops. The one-line version: *
 ### What exists, and why it matters more than it looks
 
 **The XR status contract is the top of the diagnostic funnel.** Every one of the fourteen packages exposes `created`, `ready`, `synced` and `syncMessage` —
-`synced: false` with the provider's own error in `syncMessage` the moment an apply fails (plus `dependenciesReady` and `darlane.*` on `tenant-app`) — see [`status-contract.md`](../../docs/api-reference/status-contract.md). Before any dashboard is
+`synced: false` with the provider's own error in `syncMessage` the moment an apply fails (plus `dependenciesReady` and `darlane.*` on `app`) — see [`status-contract.md`](../../docs/api-reference/status-contract.md). Before any dashboard is
 opened, the portal can already narrow an incident to *which composed thing is unhealthy*:
 
 ```
@@ -70,7 +70,7 @@ plainly: every app is an XR whose `spec.crossplane.resourceRefs` lists its compo
 status, and each wrapped resource has events and pods beneath it. Diagnosis is a **tree walk with no guesswork about what belongs to what**:
 
 ```
-XTenantApp payment-api            status.ready=false
+XApp payment-api                  status.ready=false
  ├─ resourceRefs → Object payment-api-deployment    Ready=False  ← descend here
  │    └─ Deployment → ReplicaSet → Pod              ImagePullBackOff
  │         └─ events: "manifest for arm64 not found"
@@ -153,9 +153,9 @@ What that means concretely for W'xOps:
 
 | Signal | Runbook |
 |---|---|
-| `XTenantApp` `ready=true, dependenciesReady=false` | Certificate not issuing: check ClusterIssuer, DNS01/HTTP01 path, rate limits |
-| `XTenantApp` `created=false` > 5 min | Provisioning stuck: read `notReady`, check provider RBAC (`forbidden` events on Objects — the known silent failure), check package health |
-| `XTenantDatabase` `ready=false`, `tier: shared` | Pool resolution: does a shared `XPlatformDatabaseCluster` for this environment exist and carry the discovery label? |
+| `XApp` `ready=true, dependenciesReady=false` | Certificate not issuing: check ClusterIssuer, DNS01/HTTP01 path, rate limits |
+| `XApp` `created=false` > 5 min | Provisioning stuck: read `notReady`, check provider RBAC (`forbidden` events on Objects — the known silent failure), check package health |
+| `XDatabase` `ready=false`, `tier: shared` | Pool resolution: does a shared `XDatabaseCluster` for this environment exist and carry the discovery label? |
 | `XGitea* ` `ready` absent, `Synced=False` | Terraform apply failing: Workspace conditions hold the plan error verbatim |
 | Monitor emitted but no targets | The four silent-failure modes already tabled in [`observability.md`](observability.md) — release label, component selector, port, provider RBAC |
 

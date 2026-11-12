@@ -79,7 +79,7 @@ Use package names as scopes, to keep per-package history readable:
 ```
 feat(gitea-team): add includeAllRepositories field to XRD v1alpha1
 fix(gitea-user): correct must_change_password terraform variable default
-feat(tenant-app): add optional monitoring.alerts block to XRD v1alpha1
+feat(app): add optional monitoring.alerts block to XRD v1alpha1
 chore(ci): pin crossplane CLI to v2.3.1 in publish workflow
 ```
 

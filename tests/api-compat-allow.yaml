@@ -14,20 +14,4 @@
 # An entry without a reason is ignored. `make release` requires release notes
 # while any entry is in use and clears this list in the release commit — an
 # allowance covers one release, never a standing exemption.
-allow:
-  - package: platform-policy
-    rule: package-removed
-    path: platform-policy
-    reason: Archived (ADR-005, RFC-010) — replaced by XPolicy (package policy), served beside it since the release that added it. Every XPlatformPolicy was moved by the handover in docs/user-guide/migrating-to-new-kinds.md and checked gone with kubectl get before this release; removing the package deletes the XRD, and an XRD takes its XRs with it.
-  - package: platform-database-clusters
-    rule: package-removed
-    path: platform-database-clusters
-    reason: Archived (ADR-005, RFC-010) — replaced by XDatabaseCluster (package database-cluster), served beside it since the release that added it. Every XPlatformDatabaseCluster was moved by the handover in docs/user-guide/migrating-to-new-kinds.md and checked gone with kubectl get before this release; removing the package deletes the XRD, and an XRD takes its XRs with it.
-  - package: tenant-app
-    rule: package-removed
-    path: tenant-app
-    reason: Archived (ADR-005, RFC-010) — replaced by XApp (package app), served beside it since the release that added it. Every XTenantApp was moved by the handover in docs/user-guide/migrating-to-new-kinds.md and checked gone with kubectl get before this release; removing the package deletes the XRD, and an XRD takes its XRs with it.
-  - package: tenant-database
-    rule: package-removed
-    path: tenant-database
-    reason: Archived (ADR-005, RFC-010) — replaced by XDatabase (package database), served beside it since the release that added it. Every XTenantDatabase was moved by the handover in docs/user-guide/migrating-to-new-kinds.md and checked gone with kubectl get before this release; removing the package deletes the XRD, and an XRD takes its XRs with it.
+allow: []

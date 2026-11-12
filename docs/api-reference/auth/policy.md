@@ -73,7 +73,7 @@ is never overwritten. Never refuses anything.
 - ✓ alice updates a Deployment in `payment-api`.
 - ✗ alice deletes a Deployment in `checkout-web` → `auth.wxops.cloud: owner checkout is not one of your teams [payment]`.
 - ✗ alice relabels her own Deployment `wxops.cloud/owner: checkout` — handing it to another team is refused, because the new *and* the old owner must both be hers.
-- With `ownerPattern` and `immutableOwner` (Core XRs, which have no namespace): ✗ creating an `XTenantApp` with no owner label, ✗ changing its owner later.
+- With `ownerPattern` and `immutableOwner` (Core XRs, which have no namespace): ✗ creating an `XScmRepository` with no owner label, ✗ changing its owner later.
 
 **`secret-guard`** — people do not write Secrets; External Secrets Operator does, from OpenBao. Teams write `ExternalSecret`s and read values in OpenBao.
 - ✗ alice runs `kubectl create secret generic db --from-literal=password=…` → `Secrets are written by External Secrets Operator from OpenBao, not by hand`.
