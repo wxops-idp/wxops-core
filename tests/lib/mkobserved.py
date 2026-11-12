@@ -63,7 +63,7 @@ def build(package: str, case: str, unready: list[str], unsynced: list[str] = ())
                 # Must equal metadata.name — see docstring.
                 "annotations": {"crossplane.io/composition-resource-name": name},
                 "labels": {"crossplane.io/composite": composite},
-            },
+            } | ({"namespace": meta["namespace"]} if meta.get("namespace") else {}),
             "status": {
                 "conditions": [{
                     "type": "Ready",

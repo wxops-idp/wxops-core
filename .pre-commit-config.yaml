@@ -108,6 +108,7 @@ repos:
             \.gitlab/.*|
             VERSIONS\.yaml|
             tests/api-compat-allow\.yaml|
+            tests/reference-plurals\.yaml|
             CHANGELOG\.md|
             .pre-commit-config\.yaml|
             .yamllint\.yaml

@@ -30,7 +30,7 @@ These are our own schemas, so they are validated exactly. Three checks:
 
 Usage:
     python3 tests/xrd.py            # all packages
-    python3 tests/xrd.py tenant-app
+    python3 tests/xrd.py app
 """
 from __future__ import annotations
 

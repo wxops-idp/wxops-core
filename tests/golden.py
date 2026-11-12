@@ -10,7 +10,7 @@ Usage:
     python3 tests/golden.py              # verify — used by CI and pre-commit
     python3 tests/golden.py --update      # regenerate goldens after an
                                           # intentional composition change
-    python3 tests/golden.py tenant-app    # limit to one package
+    python3 tests/golden.py app           # limit to one package
 
 Adding a case: create tests/cases/<package>/<case>/xr.yaml (plus observed.yaml
 and required.yaml if the case needs them), then run --update and READ THE DIFF
