@@ -1,0 +1,12 @@
+# env-gate with a persona that does not exist: the gate allows nobody in prod (stricter, never looser), and syncMessage says why.
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPolicy
+metadata:
+  name: env-gate-persona-missing
+spec:
+  parameters:
+    template: env-gate
+    scmOrgs: [wxops-idp]
+    environments: [prod]
+    personaRef:
+      name: ghost

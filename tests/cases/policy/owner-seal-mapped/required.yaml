@@ -1,0 +1,52 @@
+# Fixture for `crossplane composition render --required-resources` — every XScmTeam labelled scm.wxops.cloud/oidc-login: "true".
+#
+# payment-maintainers — wxops.cloud/owner: payment — mapped
+# payment             — no owner label — owns its slug, nothing to map
+# checkout            — labelled with its own slug — nothing to map
+# partner-ops         — mapped, but in an org that is not in scmOrgs — ignored
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmTeam
+metadata:
+  name: payment-maintainers
+  labels:
+    scm.wxops.cloud/oidc-login: "true"
+    wxops.cloud/owner: payment
+status:
+  org: wxops-idp
+  dexTeam: payment-maintainers
+  oidcGroup: wxops-idp:payment-maintainers
+---
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmTeam
+metadata:
+  name: payment
+  labels:
+    scm.wxops.cloud/oidc-login: "true"
+status:
+  org: wxops-idp
+  dexTeam: payment
+  oidcGroup: wxops-idp:payment
+---
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmTeam
+metadata:
+  name: checkout
+  labels:
+    scm.wxops.cloud/oidc-login: "true"
+    wxops.cloud/owner: checkout
+status:
+  org: wxops-idp
+  dexTeam: checkout
+  oidcGroup: wxops-idp:checkout
+---
+apiVersion: scm.wxops.cloud/v1alpha1
+kind: XScmTeam
+metadata:
+  name: partner-ops
+  labels:
+    scm.wxops.cloud/oidc-login: "true"
+    wxops.cloud/owner: payment
+status:
+  org: partner
+  dexTeam: ops
+  oidcGroup: partner:ops

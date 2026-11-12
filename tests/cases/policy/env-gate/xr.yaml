@@ -1,0 +1,14 @@
+# env-gate: in namespaces labelled wxops.cloud/environment: prod, only members of `owners` whose environments include prod write or exec.
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPolicy
+metadata:
+  name: env-gate
+spec:
+  parameters:
+    template: env-gate
+    scmOrgs: [wxops-idp]
+    environments: [prod]
+    personaRef:
+      name: owners
+    exemptPersonaRef:
+      name: platform

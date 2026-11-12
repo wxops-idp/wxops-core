@@ -1,0 +1,9 @@
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPolicy
+metadata:
+  name: secret-guard
+spec:
+  parameters:
+    template: secret-guard
+    scmOrgs: [wxops-idp]
+    mode: Deny

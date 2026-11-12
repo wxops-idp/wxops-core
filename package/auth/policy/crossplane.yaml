@@ -1,0 +1,19 @@
+apiVersion: meta.pkg.crossplane.io/v1
+kind: Configuration
+metadata:
+  name: policy
+  annotations:
+    meta.crossplane.io/maintainer: W'xOps Platform Team
+    meta.crossplane.io/description: One reviewed Kyverno CEL policy per resource — owner-stamp, owner-seal, secret-guard, exec-guard, protected, rbac-guard, sa-guard, namespace-guard or env-gate — matching SCM users only, Deny by default. Kyverno refuses; it never grants.
+    meta.crossplane.io/source: github.com/wxops-idp/wxops-core
+    meta.crossplane.io/license: Apache-2.0
+spec:
+  crossplane:
+    version: ">=v2.3.0-0"
+  dependsOn:
+    - provider: xpkg.upbound.io/crossplane-contrib/provider-kubernetes
+      version: ">=v1.2.1"
+    - function: xpkg.upbound.io/crossplane-contrib/function-kcl
+      version: ">=v0.12.1"
+    - function: xpkg.upbound.io/crossplane-contrib/function-extra-resources
+      version: ">=v0.3.0"

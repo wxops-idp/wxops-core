@@ -1,0 +1,11 @@
+# The persona that may exec does not exist (yet): exec-guard is rendered with nobody allowed (fail closed), and syncMessage says why.
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPolicy
+metadata:
+  name: exec-guard-persona-missing
+spec:
+  parameters:
+    template: exec-guard
+    scmOrgs: [wxops-idp]
+    personaRef:
+      name: ghost
