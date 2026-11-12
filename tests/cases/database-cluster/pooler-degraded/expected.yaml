@@ -1,0 +1,294 @@
+apiVersion: platform.wxops.cloud/v1alpha1
+kind: XDatabaseCluster
+metadata:
+  name: cluster-a
+spec:
+  crossplane:
+    resourceRefs:
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: 09519a2a-app-push-secret
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: 09519a2a-cnpg-cluster
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: 09519a2a-cnpg-rw-pooler
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: 09519a2a-push-secret
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: 09519a2a-sql-creds
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: 09519a2a-sql-provider-config
+status:
+  clusterName: cluster-a
+  conditions:
+    - reason: WatchCircuitClosed
+      status: 'True'
+      type: Responsive
+    - reason: ReconcileSuccess
+      status: 'True'
+      type: Synced
+    - message: 'Unready resources: 09519a2a-app-push-secret, 09519a2a-cnpg-cluster, 09519a2a-cnpg-rw-pooler, and 3 more'
+      reason: Creating
+      status: 'False'
+      type: Ready
+  created: false
+  environment: dev
+  namespace: cnpg-system
+  ready: false
+  shared: true
+  synced: true
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: 09519a2a-app-push-secret
+  labels:
+    crossplane.io/composite: cluster-a
+  name: 09519a2a-app-push-secret
+  ownerReferences:
+    - apiVersion: platform.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XDatabaseCluster
+      name: cluster-a
+      uid: 09519a2a-f856-5e88-88d1-1424867d9687
+spec:
+  forProvider:
+    manifest:
+      apiVersion: external-secrets.io/v1alpha1
+      kind: PushSecret
+      metadata:
+        labels: {}
+        name: cluster-a-app-push
+        namespace: cnpg-system
+      spec:
+        data:
+          - match:
+              remoteRef:
+                remoteKey: database-clusters/cluster-a/app-creds
+        deletionPolicy: Delete
+        refreshInterval: 1h
+        secretStoreRefs:
+          - kind: ClusterSecretStore
+            name: vault-platform
+        selector:
+          secret:
+            name: cluster-a-app
+        template:
+          data:
+            pooler-host: cluster-a-rw-pooler.cnpg-system.svc.cluster.local
+            pooler-jdbc-uri: jdbc:postgresql://cluster-a-rw-pooler.cnpg-system.svc.cluster.local:5432/{{ .dbname }}?user={{ .username }}&password={{ .password }}
+            pooler-pgpass: cluster-a-rw-pooler.cnpg-system.svc.cluster.local:5432:{{ .dbname }}:{{ .username }}:{{ .password }}
+            pooler-port: '5432'
+            pooler-uri: postgresql://{{ .username }}:{{ .password }}@cluster-a-rw-pooler.cnpg-system.svc.cluster.local:5432/{{ .dbname }}
+          engineVersion: v2
+          mergePolicy: Merge
+  providerConfigRef:
+    name: default
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: 09519a2a-cnpg-cluster
+  labels:
+    crossplane.io/composite: cluster-a
+  name: 09519a2a-cnpg-cluster
+  ownerReferences:
+    - apiVersion: platform.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XDatabaseCluster
+      name: cluster-a
+      uid: 09519a2a-f856-5e88-88d1-1424867d9687
+spec:
+  forProvider:
+    manifest:
+      apiVersion: postgresql.cnpg.io/v1
+      kind: Cluster
+      metadata:
+        labels: {}
+        name: cluster-a
+        namespace: cnpg-system
+      spec:
+        bootstrap:
+          initdb:
+            database: postgres
+            owner: postgres
+        enableSuperuserAccess: true
+        imageName: ghcr.io/cloudnative-pg/postgresql:16
+        instances: 1
+        postgresql:
+          parameters:
+            max_connections: '200'
+        storage:
+          size: 8Gi
+  providerConfigRef:
+    name: default
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: 09519a2a-cnpg-rw-pooler
+  labels:
+    crossplane.io/composite: cluster-a
+  name: 09519a2a-cnpg-rw-pooler
+  ownerReferences:
+    - apiVersion: platform.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XDatabaseCluster
+      name: cluster-a
+      uid: 09519a2a-f856-5e88-88d1-1424867d9687
+spec:
+  forProvider:
+    manifest:
+      apiVersion: postgresql.cnpg.io/v1
+      kind: Pooler
+      metadata:
+        labels: {}
+        name: cluster-a-rw-pooler
+        namespace: cnpg-system
+      spec:
+        cluster:
+          name: cluster-a
+        instances: 1
+        pgbouncer:
+          poolMode: transaction
+        type: rw
+  providerConfigRef:
+    name: default
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: 09519a2a-push-secret
+  labels:
+    crossplane.io/composite: cluster-a
+  name: 09519a2a-push-secret
+  ownerReferences:
+    - apiVersion: platform.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XDatabaseCluster
+      name: cluster-a
+      uid: 09519a2a-f856-5e88-88d1-1424867d9687
+spec:
+  forProvider:
+    manifest:
+      apiVersion: external-secrets.io/v1alpha1
+      kind: PushSecret
+      metadata:
+        labels: {}
+        name: cluster-a-superuser-push
+        namespace: cnpg-system
+      spec:
+        data:
+          - match:
+              remoteRef:
+                remoteKey: database-clusters/cluster-a/superuser-creds
+        deletionPolicy: Delete
+        refreshInterval: 1h
+        secretStoreRefs:
+          - kind: ClusterSecretStore
+            name: vault-platform
+        selector:
+          secret:
+            name: cluster-a-superuser
+        template:
+          data:
+            pooler-host: cluster-a-rw-pooler.cnpg-system.svc.cluster.local
+            pooler-jdbc-uri: jdbc:postgresql://cluster-a-rw-pooler.cnpg-system.svc.cluster.local:5432/{{ .dbname }}?user={{ .username }}&password={{ .password }}
+            pooler-pgpass: cluster-a-rw-pooler.cnpg-system.svc.cluster.local:5432:{{ .dbname }}:{{ .username }}:{{ .password }}
+            pooler-port: '5432'
+            pooler-uri: postgresql://{{ .username }}:{{ .password }}@cluster-a-rw-pooler.cnpg-system.svc.cluster.local:5432/{{ .dbname }}
+          engineVersion: v2
+          mergePolicy: Merge
+  providerConfigRef:
+    name: default
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: 09519a2a-sql-creds
+  labels:
+    crossplane.io/composite: cluster-a
+  name: 09519a2a-sql-creds
+  ownerReferences:
+    - apiVersion: platform.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XDatabaseCluster
+      name: cluster-a
+      uid: 09519a2a-f856-5e88-88d1-1424867d9687
+spec:
+  forProvider:
+    manifest:
+      apiVersion: external-secrets.io/v1
+      kind: ExternalSecret
+      metadata:
+        labels: {}
+        name: cluster-a-app-sql
+        namespace: cnpg-system
+      spec:
+        dataFrom:
+          - extract:
+              key: database-clusters/cluster-a/app-creds
+        refreshInterval: 1h
+        secretStoreRef:
+          kind: ClusterSecretStore
+          name: vault-platform
+        target:
+          creationPolicy: Owner
+          name: cluster-a-app-sql
+          template:
+            data:
+              endpoint: cluster-a-rw.cnpg-system.svc.cluster.local
+              password: '{{ .password }}'
+              port: '{{ .port }}'
+              username: '{{ .username }}'
+            engineVersion: v2
+  providerConfigRef:
+    name: default
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: 09519a2a-sql-provider-config
+  labels:
+    crossplane.io/composite: cluster-a
+  name: 09519a2a-sql-provider-config
+  ownerReferences:
+    - apiVersion: platform.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XDatabaseCluster
+      name: cluster-a
+      uid: 09519a2a-f856-5e88-88d1-1424867d9687
+spec:
+  forProvider:
+    manifest:
+      apiVersion: postgresql.sql.crossplane.io/v1alpha1
+      kind: ProviderConfig
+      metadata:
+        labels: {}
+        name: cluster-a
+      spec:
+        credentials:
+          connectionSecretRef:
+            name: cluster-a-app-sql
+            namespace: cnpg-system
+          source: PostgreSQLConnectionSecret
+        sslMode: require
+  providerConfigRef:
+    name: default

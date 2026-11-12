@@ -1,0 +1,11 @@
+# expect: instances
+# expect: maximum
+apiVersion: platform.wxops.cloud/v1alpha1
+kind: XDatabaseCluster
+metadata:
+  name: too-many
+spec:
+  parameters:
+    clusterName: cluster-a
+    namespace: cnpg-system
+    instances: 42

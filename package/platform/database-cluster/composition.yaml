@@ -1,0 +1,871 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: xdatabaseclusters.platform.wxops.cloud
+  labels:
+    crossplane.io/xrd: xdatabaseclusters.platform.wxops.cloud
+    channel: stable
+spec:
+  compositeTypeRef:
+    apiVersion: platform.wxops.cloud/v1alpha1
+    kind: XDatabaseCluster
+
+  mode: Pipeline
+  pipeline:
+    - step: render
+      functionRef:
+        name: function-kcl
+      input:
+        apiVersion: krm.kcl.dev/v1alpha1
+        kind: KCLInput
+        metadata:
+          name: render
+        spec:
+          source: |
+            """
+            XDatabaseCluster — KCL composition source. It replaced XPlatformDatabaseCluster (ADR-005), which was archived once every XR had moved; the name no longer repeats
+            the API group.
+
+            Annotation (on the XR, never a parameter):
+              wxops.cloud/handover: "true"   Releases the CNPG cluster from this XR: every composed Object is rendered Observe-only with deletionPolicy Orphan, so it stops writing and
+                                             deleting the XR leaves the cluster, its Secrets and its Vault entries in place. It carried the XPlatformDatabaseCluster → XDatabaseCluster migration.
+
+            Inputs (via option("params").oxr.spec.parameters):
+              Core:
+                clusterName             string   CNPG cluster name; an XDatabase on it records it in status.clusterRef.
+                namespace               string   K8s namespace for all CNPG resources.
+                instances               int      PG instances (1 = standalone, 3 = HA). Default: 1.
+                postgresVersion         int      PostgreSQL major version. Default: 16.
+                storageSize             string   PVC size per instance. Default: "8Gi".
+                shared                  bool     Mark as shared multi-tenant pool. Default: false.
+                                                   Written to status.shared for discovery by
+                                                   XDatabase's pool filtering logic.
+                vaultPlatformSecretStore string  ESO ClusterSecretStore for PushSecret. Default: "vault-platform".
+                                                   NOTE: this store is itself scoped to the "platform/" KV2 path,
+                                                   so all paths below omit "platform/" (e.g. "database-clusters/...")
+                                                   to avoid writing to "platform/platform/...".
+
+              Pooler (RW):
+                enablePooler            bool     Deploy PgBouncer RW pooler. Default: true.
+                poolMode                string   "transaction" | "session". Default: "transaction".
+
+              PostgreSQL configuration (postgresql.conf + pg_hba.conf):
+                postgresConfig.tuning.*            object  Popular/common settings with sensible defaults
+                                                             (maxConnections, sharedBuffers, workMem,
+                                                             maintenanceWorkMem, effectiveCacheSize,
+                                                             maxWalSize, minWalSize,
+                                                             checkpointCompletionTarget, randomPageCost,
+                                                             logMinDurationStatement, logStatement,
+                                                             statementTimeout,
+                                                             idleInTransactionSessionTimeout).
+                postgresConfig.extraParameters     map     Free-form postgresql.conf parameters for
+                                                             cluster-specific needs. Overrides `tuning`
+                                                             on key collisions. Default: {}.
+                postgresConfig.pgHba               [str]   Extra pg_hba.conf rules appended after CNPG's
+                                                             defaults. Default: [].
+
+              Monitoring:
+                monitoring.enablePodMonitor  bool  Create PodMonitor for Prometheus Operator. Default: false.
+
+              Backup:
+                backup.enabled               bool    Enable WAL archiving + ScheduledBackup. Default: false.
+                backup.destinationPath       string  Object store path (s3://... or gs://...).
+                backup.endpointURL           string  Override endpoint (MinIO / Ceph). Optional.
+                backup.credentialsSecretRef  object  {name, namespace} of existing K8s Secret with S3/GCS credentials.
+                backup.schedule              string  ScheduledBackup 6-field cron. Default: "0 0 2 * * *".
+                backup.retentionPolicy       string  Retention window. Default: "30d".
+
+              Read replica:
+                readReplica.enablePooler     bool  Deploy a read-only PgBouncer Pooler. Default: false.
+                readReplica.poolerInstances  int   RO pooler replica count. Default: 1.
+
+              Managed roles (cluster-wide, e.g. "readonly"):
+                managedRoles[].name        string  Postgres role name. Required.
+                managedRoles[].ensure      string  "present" | "absent". Default: "present".
+                managedRoles[].login       bool    Grant LOGIN. Default: true.
+                managedRoles[].superuser   bool    Grant SUPERUSER. Default: false.
+                Each entry gets an ESO Password generator + a STABLE ExternalSecret
+                ({clusterName}-{name}-creds, refreshInterval "0" — never auto-rotated;
+                delete the Secret manually to force regeneration, including the
+                connection-string keys described below) + a PushSecret to Vault at
+                database-clusters/{clusterName}/roles/{name}/creds, and is added
+                to spec.managed.roles[] with passwordSecret pointing at that Secret.
+
+              Bootstrap / Import  (https://cloudnative-pg.io/docs/1.29/database_import):
+                bootstrapFrom.type             string  "initdb" | "import-microservices" | "import-monolith". Default: "initdb".
+                bootstrapFrom.sourceHost       string  Source PG hostname.
+                bootstrapFrom.sourcePort       int     Source PG port. Default: 5432.
+                bootstrapFrom.sourceDatabase   string  Database to import (microservices).
+                bootstrapFrom.sourceDatabases  [str]   Databases to import (monolith).
+                bootstrapFrom.sourceRoles      [str]   Roles to import (monolith). Default: [].
+                bootstrapFrom.sourceUser       string  Source superuser. Default: "postgres".
+                bootstrapFrom.sourceSSLMode    string  SSL mode. Default: "require".
+                bootstrapFrom.sourcePasswordSecretRef  {name, namespace}  Existing K8s Secret with key "password".
+
+            Superuser & app credentials — owned entirely by CNPG, never generated by us:
+              - `enableSuperuserAccess: true` + `bootstrap.initdb` (no `superuserSecret`
+                or `bootstrap.initdb.secret` ref) ⇒ CNPG creates and continuously manages
+                BOTH {clusterName}-superuser and {clusterName}-app as
+                kubernetes.io/basic-auth Secrets with the SAME 11 keys: username,
+                password, user, host, port, dbname, uri, jdbc-uri, pgpass, fqdn-uri,
+                fqdn-jdbc-uri (https://cloudnative-pg.io/docs/devel/applications/#secrets).
+              - A PushSecret mirrors each Secret to its own Vault path in real time —
+                superuser to database-clusters/{clusterName}/superuser-creds,
+                app to database-clusters/{clusterName}/app-creds. Each pushes
+                the WHOLE secret as a single write per reconcile (no per-key `property`)
+                so a single Vault KV2 version is created, instead of one version per key.
+                When `enablePooler` is true, `spec.template` (mergePolicy: Merge) adds
+                pooler-prefixed connection strings — computed from CNPG's own
+                host/port/username/password/dbname — pointing at the RW Pooler Service
+                ({clusterName}-rw-pooler), merged into that same single write.
+                `deletionPolicy: Delete` removes the Vault entry if the PushSecret/source
+                Secret is deleted. We only watch and republish CNPG's secrets, never
+                write either password.
+              - Vault is the single source of truth for both superuser-creds and
+                app-creds; other platforms/consumers read directly from Vault. The only
+                exception is a minimal {clusterName}-app-sql Secret (see Section 13)
+                that pairs the `app` user's username/password from Vault with the
+                literal FQDN endpoint for provider-sql's ProviderConfig — a dedicated
+                Secret distinct from {clusterName}-app, so it doesn't conflict with the
+                PushSecret above.
+
+            Connection-string bundles:
+              CNPG doesn't generate Secrets for managedRoles[] entries, so each of those
+              still gets a hand-built bundle via `_conn_strings`:
+                host       endpoint of the {clusterName}-rw Service.
+                uri        postgresql://{user}:{password}@{host}:5432/{database}
+                jdbc-uri   jdbc:postgresql://{host}:5432/{database}?user={user}&password={password}
+                pgpass     {host}:5432:{database}:{user}:{password}  (~/.pgpass line format)
+              When `enablePooler` is true, both the superuser/app Vault entries and
+              managed-role bundles repeat host/uri/jdbc-uri/pgpass with a `pooler-`
+              prefix (pooler-host, pooler-uri, ...) pointing at the RW Pooler Service
+              ({clusterName}-rw-pooler) on port 5432 — same credentials, routed through
+              PgBouncer. CNPG's Pooler sets up its own auth_query/cnpg_pooler_pgbouncer
+              role + TLS cert automatically; no additional provider-sql wiring is needed
+              for pooler auth itself
+              (https://cloudnative-pg.io/docs/1.29/connection_pooling#default-authentication-method).
+
+            """
+
+            oxr = option("params").oxr
+            params = oxr.spec.parameters
+            uid = oxr.metadata.uid
+            short = uid[:8:]
+
+            # `dict.get(key, default)` does not fall back to `default` for keys that are
+            # declared-but-unset on schema-typed objects from oxr.spec.parameters (it
+            # returns Undefined instead). Use membership checks via this helper instead.
+            _get = lambda d: any, k: str, default: any -> any {
+                _safe = d or {}
+                _safe[k] if k in _safe else default
+            }
+
+            _handover = _get(_get(oxr.metadata, "annotations", {}), "wxops.cloud/handover", "") == "true"
+
+            # ── ArgoCD resource tracking ─────────────────────────────────────────────────
+            _oxrLabels = oxr.metadata.labels if "labels" in oxr.metadata else {}
+            _argoInstance = _get(_oxrLabels, "app.kubernetes.io/instance", "")
+            _argoLabels = {"app.kubernetes.io/instance": _argoInstance} if _argoInstance else {}
+
+            # ── Section 1: Core parameters ────────────────────────────────────────────────
+            c = params.clusterName
+            ns = params.namespace
+
+            # ── Target cluster ──────────────────────────────────────────────────
+            # Every composed Object is applied through a provider-kubernetes
+            # ProviderConfig. "default" is the local (hub) cluster, which is the only
+            # one wired up today, so leaving spec.parameters.cluster unset keeps
+            # behaviour identical. Naming the ProviderConfig here rather than hardcoding
+            # it means adding a spoke later is a ProviderConfig + one field, not an edit
+            # to every resource in this file. See docs/core-ideas/multi-cluster.md.
+            targetCluster = _get(params, "cluster", "default")
+            instances = _get(params, "instances", 1)
+            postgresVersion = _get(params, "postgresVersion", 16)
+            storageSize = _get(params, "storageSize", "8Gi")
+            platformStore = _get(params, "vaultPlatformSecretStore", "vault-platform")
+
+            shared = _get(params, "shared", False)
+            environment = _get(params, "environment", "dev")
+
+            poolerEnabled = _get(params, "enablePooler", True)
+            poolMode = _get(params, "poolMode", "transaction")
+
+            # ── Section 2: Derived names ──────────────────────────────────────────────────
+            # CNPG generates both Secrets itself (kubernetes.io/basic-auth, 11 keys each:
+            # username, password, user, host, port, dbname, uri, jdbc-uri, pgpass,
+            # fqdn-uri, fqdn-jdbc-uri) once the Cluster is up — we never seed or own
+            # either password.
+            superuserSecretName = c + "-superuser"
+            appSecretName = c + "-app"
+            superuserVaultPath = "database-clusters/" + c + "/superuser-creds"
+            appVaultPath = "database-clusters/" + c + "/app-creds"
+            endpoint = c + "-rw." + ns + ".svc.cluster.local"
+            # RW Pooler Service — same name as the Pooler resource in Section 10.
+            poolerEndpoint = c + "-rw-pooler." + ns + ".svc.cluster.local"
+            imageName = "ghcr.io/cloudnative-pg/postgresql:" + str(postgresVersion)
+
+            # Ready-to-use connection strings for a given host/database/user, templated
+            # against ESO's "{{ .password }}" (and optionally "{{ .username }}") — `user`
+            # may be a literal role name or the "{{ .username }}" placeholder itself.
+            _conn_strings = lambda host: str, db: str, user: str -> {str:str} {
+                {
+                    "host" = host
+                    "port" = "5432"
+                    "uri" = "postgresql://" + user + ":{{ .password }}@" + host + ":5432/" + db
+                    "jdbc-uri" = "jdbc:postgresql://" + host + ":5432/" + db + "?user=" + user + "&password={{ .password }}"
+                    "pgpass" = host + ":5432:" + db + ":" + user + ":{{ .password }}"
+                }
+            }
+
+            # Re-key a connection-string dict with a prefix, e.g. for the "pooler-" variant.
+            _prefix_keys = lambda d: {str:str}, prefix: str -> {str:str} {
+                {prefix + k: v for k, v in d}
+            }
+
+            # ── Section 3: Feature flags ──────────────────────────────────────────────────
+            _mon = _get(params, "monitoring", {})
+            _bkp = _get(params, "backup", {})
+            _ro = _get(params, "readReplica", {})
+            _boot = _get(params, "bootstrapFrom", {})
+
+            monitoringEnabled = _get(_mon, "enablePodMonitor", False)
+            backupEnabled = _get(_bkp, "enabled", False)
+            roPoolerEnabled = _get(_ro, "enablePooler", False)
+            roPoolerInstances = _get(_ro, "poolerInstances", 1)
+            bootstrapType = _get(_boot, "type", "initdb")
+
+            # ── Section 4: Bootstrap config ───────────────────────────────────────────────
+            _srcRef = _get(_boot, "sourcePasswordSecretRef", {})
+            _srcName = _get(_boot, "sourceHost", "")
+            _srcPort = _get(_boot, "sourcePort", 5432)
+            _srcUser = _get(_boot, "sourceUser", "postgres")
+            _srcSSL = _get(_boot, "sourceSSLMode", "require")
+
+            # import-microservices: single database, no roles copied.
+            # import-monolith:      multiple databases + optional roles copied.
+            _importSrcName = c + "-import-src"
+
+            _bootstrap = {
+                initdb = {
+                    database = "postgres"
+                    owner = "postgres"
+                }
+            } if bootstrapType == "initdb" else {
+                initdb = {
+                    database = _get(_boot, "sourceDatabase", "postgres")
+                    owner = "postgres"
+                    import = {
+                        type = "microservices"
+                        databases = [_get(_boot, "sourceDatabase", "")]
+                        source = {externalCluster = _importSrcName}
+                    }
+                }
+            } if bootstrapType == "import-microservices" else {
+                initdb = {
+                    import = {
+                        type = "monolith"
+                        databases = _get(_boot, "sourceDatabases", [])
+                        roles = _get(_boot, "sourceRoles", [])
+                        source = {externalCluster = _importSrcName}
+                    }
+                }
+            }
+
+            # externalClusters entry for the import source (only for import types).
+            _externalClusters = [{
+                name = _importSrcName
+                connectionParameters = {
+                    host = _srcName
+                    port = str(_srcPort)
+                    user = _srcUser
+                    sslmode = _srcSSL
+                }
+                password = {
+                    name = _get(_srcRef, "name", "")
+                    key = "password"
+                }
+            }] if bootstrapType in ["import-microservices", "import-monolith"] else []
+
+            # ── Section 5: Backup config ──────────────────────────────────────────────────
+            _bkpCredsRef = _get(_bkp, "credentialsSecretRef", {})
+            _bkpCredsName = _get(_bkpCredsRef, "name", "")
+            _bkpDestPath = _get(_bkp, "destinationPath", "")
+            _bkpEndpoint = _get(_bkp, "endpointURL", "")
+            _bkpSchedule = _get(_bkp, "schedule", "0 0 2 * * *")
+            _bkpRetention = _get(_bkp, "retentionPolicy", "30d")
+
+            _barmanBase = {
+                serverName = c
+                destinationPath = _bkpDestPath
+                s3Credentials = {
+                    accessKeyId = {name = _bkpCredsName, key = "ACCESS_KEY_ID"}
+                    secretAccessKey = {name = _bkpCredsName, key = "ACCESS_SECRET_KEY"}
+                }
+                wal = {compression = "gzip"}
+                data = {compression = "gzip"}
+            }
+
+            # Merge endpointURL only when provided (MinIO / Ceph).
+            _barmanStore = _barmanBase | ({endpointURL = _bkpEndpoint} if _bkpEndpoint else {})
+
+            _cnpgBackupSpec = {
+                barmanObjectStore = _barmanStore
+                retentionPolicy = _bkpRetention
+            }
+
+            # ── Section 5b: PostgreSQL configuration (postgresql.conf + pg_hba) ──────────
+            # Two ways to configure, per the user's request:
+            #   tuning          - popular/common settings, typed fields with sane defaults.
+            #   extraParameters - free-form map for cluster-specific requirements not covered
+            #                      by `tuning`. Wins on key collisions (escape hatch).
+            #   pgHba           - extra pg_hba.conf rules appended after CNPG's own defaults.
+            # Note: some parameters are fixed by CNPG (e.g. archive_command, listen_addresses,
+            # wal_level, port, data_directory) and cannot be overridden here.
+            _pgcfg = _get(params, "postgresConfig", {})
+            _tuning = _get(_pgcfg, "tuning", {})
+            _extraParams = _get(_pgcfg, "extraParameters", {})
+            _pgHba = _get(_pgcfg, "pgHba", [])
+
+            # Popular settings: included only when the user sets them, so CNPG/PostgreSQL
+            # defaults apply otherwise. max_connections always has a default.
+            _tuningParams = {"max_connections": str(_get(_tuning, "maxConnections", 200))} | ({"shared_buffers": _tuning["sharedBuffers"]} if _get(_tuning, "sharedBuffers", "") else {}) | ({"work_mem": _tuning["workMem"]} if _get(_tuning, "workMem", "") else {}) | ({"maintenance_work_mem": _tuning["maintenanceWorkMem"]} if _get(_tuning, "maintenanceWorkMem", "") else {}) | ({"effective_cache_size": _tuning["effectiveCacheSize"]} if _get(_tuning, "effectiveCacheSize", "") else {}) | ({"max_wal_size": _tuning["maxWalSize"]} if _get(_tuning, "maxWalSize", "") else {}) | ({"min_wal_size": _tuning["minWalSize"]} if _get(_tuning, "minWalSize", "") else {}) | ({"checkpoint_completion_target": _tuning["checkpointCompletionTarget"]} if _get(_tuning, "checkpointCompletionTarget", "") else {}) | ({"random_page_cost": _tuning["randomPageCost"]} if _get(_tuning, "randomPageCost", "") else {}) | ({"log_min_duration_statement": _tuning["logMinDurationStatement"]} if _get(_tuning, "logMinDurationStatement", "") else {}) | ({"log_statement": _tuning["logStatement"]} if _get(_tuning, "logStatement", "") else {}) | ({"statement_timeout": _tuning["statementTimeout"]} if _get(_tuning, "statementTimeout", "") else {}) | ({"idle_in_transaction_session_timeout": _tuning["idleInTransactionSessionTimeout"]} if _get(_tuning, "idleInTransactionSessionTimeout", "") else {})
+
+            # extraParameters takes precedence over tuning on key collisions.
+            _pgParameters = _tuningParams | _extraParams
+
+            _postgresqlSection = {"parameters": _pgParameters} | ({"pg_hba": _pgHba} if _pgHba else {})
+
+            # ── Section 5c: Managed roles (cluster-wide, e.g. "readonly") ────────────────
+            # Platform fully owns spec.managed.roles[] (single composition writes the
+            # whole array — no SSA needed). Each entry's password lives in a stable,
+            # never-rotated Secret built in Section 15.
+            managedRoles = _get(params, "managedRoles", [])
+
+            _managedRoleEntries = [{
+                name = r.name
+                ensure = _get(r, "ensure", "present")
+                login = _get(r, "login", True)
+                superuser = _get(r, "superuser", False)
+                createdb = _get(r, "createdb", False)
+                createrole = _get(r, "createrole", False)
+                inherit = _get(r, "inherit", True)
+                replication = _get(r, "replication", False)
+                bypassrls = _get(r, "bypassrls", False)
+                connectionLimit = _get(r, "connectionLimit", -1)
+                passwordSecret = {name = c + "-" + r.name + "-creds"}
+            } | ({"inRoles": r.inRoles} if _get(r, "inRoles", []) else {}) for r in managedRoles]
+
+            # ── Section 6: CNPG Cluster spec (assembled from optional sections) ───────────
+            _cnpgSpec = {
+                instances = instances
+                imageName = imageName
+                postgresql = _postgresqlSection
+                # No superuserSecret ref — CNPG generates {clusterName}-superuser itself
+                # (kubernetes.io/basic-auth: username/password) and owns its lifecycle.
+                enableSuperuserAccess = True
+                bootstrap = _bootstrap
+                storage = {size = storageSize}
+            } | ({
+                "monitoring": {"enablePodMonitor": True}
+            } if monitoringEnabled else {}) | ({"backup": _cnpgBackupSpec} if backupEnabled else {}) | ({"externalClusters": _externalClusters} if _externalClusters else {}) | ({
+                "managed": {"roles": _managedRoleEntries}
+            } if managedRoles else {})
+
+            # ── Observed state (keyed by Object name, Crossplane v2 / function-kcl v0.12.x) ──
+            # Used for krm.kcl.dev/ready annotations on desired resources so function-kcl emits
+            # READY_TRUE — fixing the native type:Ready condition. String "True" is required;
+            # function-kcl v0.12.1 tightened type checks (boolean True no longer accepted).
+            _ocds = option("params").ocds or {}
+            # A composed resource whose last apply failed keeps Ready=True from the earlier success, so Ready
+            # alone cannot say the apply worked: Synced is the condition the provider sets False.
+            _syncConds = lambda name: str -> [any] {
+                _res = _get(_get(_ocds, name, {}), "Resource", {})
+                [c for c in _get(_get(_res, "status", {}), "conditions", []) if _get(c, "type", "") == "Synced" and _get(c, "status", "") == "False"]
+            }
+            _syncFailed = lambda name: str -> bool {
+                len(_syncConds(name)) > 0
+            }
+            _isReady = lambda name: str -> bool {
+                _ocd = _ocds[name] if name in _ocds else {}
+                _res = _get(_ocd, "Resource", {})
+                _conds = _get(_get(_res, "status", {}), "conditions", [])
+                len([c for c in _conds if _get(c, "type", "") == "Ready" and _get(c, "status", "") == "True"]) > 0 and not _syncFailed(name)
+            }
+
+            # ── Section 8: CNPG Cluster ───────────────────────────────────────────────────
+            _cnpg_cluster = {
+                apiVersion = "kubernetes.crossplane.io/v1alpha2"
+                kind = "Object"
+                metadata = {
+                    name = short + "-cnpg-cluster"
+                    annotations = {
+                        "crossplane.io/composition-resource-name" = "cnpg-cluster"
+                    } | ({"krm.kcl.dev/ready" = "True"} if _isReady(short + "-cnpg-cluster") else {})
+                }
+                spec = {
+                    providerConfigRef = {name = targetCluster}
+                    forProvider = {
+                        manifest = {
+                            apiVersion = "postgresql.cnpg.io/v1"
+                            kind = "Cluster"
+                            metadata = {name = c, namespace = ns, labels = _argoLabels}
+                            spec = _cnpgSpec
+                        }
+                    }
+                }
+            }
+
+            # ── Section 9: CNPG Pooler — RW (conditional) ───────────────────────────────
+            _cnpg_rw_pooler = {
+                apiVersion = "kubernetes.crossplane.io/v1alpha2"
+                kind = "Object"
+                metadata = {
+                    name = short + "-cnpg-rw-pooler"
+                    annotations = {
+                        "crossplane.io/composition-resource-name" = "cnpg-rw-pooler"
+                    } | ({"krm.kcl.dev/ready" = "True"} if _isReady(short + "-cnpg-rw-pooler") else {})
+                }
+                spec = {
+                    providerConfigRef = {name = targetCluster}
+                    forProvider = {
+                        manifest = {
+                            apiVersion = "postgresql.cnpg.io/v1"
+                            kind = "Pooler"
+                            metadata = {name = c + "-rw-pooler", namespace = ns, labels = _argoLabels}
+                            spec = {
+                                cluster = {name = c}
+                                instances = 1
+                                type = "rw"
+                                pgbouncer = {poolMode = poolMode}
+                            }
+                        }
+                    }
+                }
+            }
+
+            # ── Section 10: CNPG Pooler — RO (conditional) ───────────────────────────────
+            # Exposes read-only connections to replica instances only.
+            # Service: {clusterName}-ro-pooler
+            _cnpg_ro_pooler = {
+                apiVersion = "kubernetes.crossplane.io/v1alpha2"
+                kind = "Object"
+                metadata = {
+                    name = short + "-cnpg-ro-pooler"
+                    annotations = {
+                        "crossplane.io/composition-resource-name" = "cnpg-ro-pooler"
+                    } | ({"krm.kcl.dev/ready" = "True"} if _isReady(short + "-cnpg-ro-pooler") else {})
+                }
+                spec = {
+                    providerConfigRef = {name = targetCluster}
+                    forProvider = {
+                        manifest = {
+                            apiVersion = "postgresql.cnpg.io/v1"
+                            kind = "Pooler"
+                            metadata = {name = c + "-ro-pooler", namespace = ns, labels = _argoLabels}
+                            spec = {
+                                cluster = {name = c}
+                                instances = roPoolerInstances
+                                type = "ro"
+                                pgbouncer = {poolMode = poolMode}
+                            }
+                        }
+                    }
+                }
+            }
+
+            # ── Section 11: ScheduledBackup (conditional) ─────────────────────────────────
+            # CNPG ScheduledBackup uses a 6-field cron (sec min hr dom mon dow).
+            # Default schedule: daily at 02:00 UTC → "0 0 2 * * *".
+            _scheduled_backup = {
+                apiVersion = "kubernetes.crossplane.io/v1alpha2"
+                kind = "Object"
+                metadata = {
+                    name = short + "-scheduled-backup"
+                    annotations = {
+                        "crossplane.io/composition-resource-name" = "cnpg-scheduled-backup"
+                    } | ({"krm.kcl.dev/ready" = "True"} if _isReady(short + "-scheduled-backup") else {})
+                }
+                spec = {
+                    providerConfigRef = {name = targetCluster}
+                    forProvider = {
+                        manifest = {
+                            apiVersion = "postgresql.cnpg.io/v1"
+                            kind = "ScheduledBackup"
+                            metadata = {name = c + "-backup", namespace = ns, labels = _argoLabels}
+                            spec = {
+                                schedule = _bkpSchedule
+                                backupOwnerReference = "self"
+                                cluster = {name = c}
+                                method = "barmanObjectStore"
+                            }
+                        }
+                    }
+                }
+            }
+
+            # ── Section 12: ESO PushSecret — mirror CNPG's own secrets to Vault ──────────
+            # CNPG writes both {superuserSecretName} and {appSecretName} as
+            # kubernetes.io/basic-auth Secrets with the same 11 keys (username,
+            # password, user, host, port, dbname, uri, jdbc-uri, pgpass, fqdn-uri,
+            # fqdn-jdbc-uri). Each PushSecret pushes the WHOLE secret as a single write
+            # per reconcile (data[] entry has no secretKey/property) — listing each key
+            # individually would make ESO's Vault provider do one read-merge-write PER
+            # key, creating one KV2 version per key on every refresh. When `enablePooler`
+            # is true, `spec.template` (mergePolicy: Merge) computes pooler-prefixed
+            # connection strings from CNPG's own host/port/username/password/dbname,
+            # merged into that same single write. CNPG remains the sole owner/rotator of
+            # both passwords, this only republishes them. `deletionPolicy: Delete`
+            # removes the Vault entry if the PushSecret or its source Secret is deleted.
+            _pooler_template = {
+                engineVersion = "v2"
+                mergePolicy = "Merge"
+                data = _prefix_keys(_conn_strings(poolerEndpoint, "{{ .dbname }}", "{{ .username }}"), "pooler-")
+            }
+
+            _push_secret = {
+                apiVersion = "kubernetes.crossplane.io/v1alpha2"
+                kind = "Object"
+                metadata = {
+                    name = short + "-push-secret"
+                    annotations = {
+                        "crossplane.io/composition-resource-name" = "superuser-push-secret"
+                    } | ({"krm.kcl.dev/ready" = "True"} if _isReady(short + "-push-secret") else {})
+                }
+                spec = {
+                    providerConfigRef = {name = targetCluster}
+                    forProvider = {
+                        manifest = {
+                            apiVersion = "external-secrets.io/v1alpha1"
+                            kind = "PushSecret"
+                            metadata = {name = c + "-superuser-push", namespace = ns, labels = _argoLabels}
+                            spec = {
+                                refreshInterval = "1h"
+                                deletionPolicy = "Delete"
+                                secretStoreRefs = [{name = platformStore, kind = "ClusterSecretStore"}]
+                                selector = {
+                                    secret = {name = superuserSecretName}
+                                }
+                                data = [{
+                                    match = {
+                                        remoteRef = {remoteKey = superuserVaultPath}
+                                    }
+                                }]
+                            } | ({"template": _pooler_template} if poolerEnabled else {})
+                        }
+                    }
+                }
+            }
+
+            _app_push_secret = {
+                apiVersion = "kubernetes.crossplane.io/v1alpha2"
+                kind = "Object"
+                metadata = {
+                    name = short + "-app-push-secret"
+                    annotations = {
+                        "crossplane.io/composition-resource-name" = "app-push-secret"
+                    } | ({"krm.kcl.dev/ready" = "True"} if _isReady(short + "-app-push-secret") else {})
+                }
+                spec = {
+                    providerConfigRef = {name = targetCluster}
+                    forProvider = {
+                        manifest = {
+                            apiVersion = "external-secrets.io/v1alpha1"
+                            kind = "PushSecret"
+                            metadata = {name = c + "-app-push", namespace = ns, labels = _argoLabels}
+                            spec = {
+                                refreshInterval = "1h"
+                                deletionPolicy = "Delete"
+                                secretStoreRefs = [{name = platformStore, kind = "ClusterSecretStore"}]
+                                selector = {
+                                    secret = {name = appSecretName}
+                                }
+                                data = [{
+                                    match = {
+                                        remoteRef = {remoteKey = appVaultPath}
+                                    }
+                                }]
+                            } | ({"template": _pooler_template} if poolerEnabled else {})
+                        }
+                    }
+                }
+            }
+
+            # ── Section 13: provider-sql ProviderConfig — for XDatabase Roles ────────────
+            # provider-sql's ProviderConfig (source: PostgreSQLConnectionSecret) requires
+            # a Secret with the fixed keys endpoint/port/username/password. We base this
+            # on {appSecretName}/{appVaultPath} rather than the superuser — per the CNPG
+            # docs (https://cloudnative-pg.io/docs/devel/applications#secrets), the
+            # superuser is intended for local/management access and is disabled over the
+            # network by default, whereas the `app` user is reachable over the network.
+            # CNPG's `host`/Vault's copy of it is just the short Service name (e.g.
+            # "cluster-demo-rw"), which only resolves within {ns} — provider-sql runs in
+            # a different namespace, so DNS lookup fails. A minimal ExternalSecret pulls
+            # username/password/port back from {appVaultPath} and pairs them with the
+            # literal FQDN `endpoint` (Section 2: {c}-rw.{ns}.svc.cluster.local) into a
+            # dedicated {c}-app-sql Secret — distinct from {appSecretName}, so there's no
+            # ownership conflict with the PushSecret. The ProviderConfig (named `c`) is
+            # what XDatabase's per-tenant provider-sql Role references via
+            # providerConfigRef: {name: clusterRef}.
+            _sql_creds_secret = {
+                apiVersion = "kubernetes.crossplane.io/v1alpha2"
+                kind = "Object"
+                metadata = {
+                    name = short + "-sql-creds"
+                    annotations = {
+                        "crossplane.io/composition-resource-name" = "sql-creds"
+                    } | ({"krm.kcl.dev/ready" = "True"} if _isReady(short + "-sql-creds") else {})
+                }
+                spec = {
+                    providerConfigRef = {name = targetCluster}
+                    forProvider = {
+                        manifest = {
+                            apiVersion = "external-secrets.io/v1"
+                            kind = "ExternalSecret"
+                            metadata = {name = c + "-app-sql", namespace = ns, labels = _argoLabels}
+                            spec = {
+                                refreshInterval = "1h"
+                                secretStoreRef = {name = platformStore, kind = "ClusterSecretStore"}
+                                target = {
+                                    name = c + "-app-sql"
+                                    creationPolicy = "Owner"
+                                    template = {
+                                        engineVersion = "v2"
+                                        data = {
+                                            endpoint = endpoint
+                                            port = "{{ .port }}"
+                                            username = "{{ .username }}"
+                                            password = "{{ .password }}"
+                                        }
+                                    }
+                                }
+                                dataFrom = [{extract = {key = appVaultPath}}]
+                            }
+                        }
+                    }
+                }
+            }
+
+            _sql_provider_config = {
+                apiVersion = "kubernetes.crossplane.io/v1alpha2"
+                kind = "Object"
+                metadata = {
+                    name = short + "-sql-provider-config"
+                    annotations = {
+                        "crossplane.io/composition-resource-name" = "sql-provider-config"
+                    } | ({"krm.kcl.dev/ready" = "True"} if _isReady(short + "-sql-provider-config") else {})
+                }
+                spec = {
+                    providerConfigRef = {name = targetCluster}
+                    forProvider = {
+                        manifest = {
+                            apiVersion = "postgresql.sql.crossplane.io/v1alpha1"
+                            kind = "ProviderConfig"
+                            metadata = {name = c, labels = _argoLabels}
+                            spec = {
+                                credentials = {
+                                    source = "PostgreSQLConnectionSecret"
+                                    connectionSecretRef = {name = c + "-app-sql", namespace = ns}
+                                }
+                                # CNPG issues a self-signed CA per cluster, which fails the
+                                # default "verify-full" x509 check. This is in-cluster
+                                # traffic over the ClusterIP service, so "require" (still
+                                # TLS-encrypted, skips CA/hostname verification) is enough.
+                                sslMode = "require"
+                            }
+                        }
+                    }
+                }
+            }
+
+            # ── Section 14: Managed-role ESO resources (Generator + stable Secret + PushSecret) ──
+            # One set per managedRoles[] entry. refreshInterval is hardcoded "0": these
+            # Secrets are never auto-rotated — delete the Secret to force regeneration,
+            # CNPG's managed.roles[] reconciler then runs ALTER ROLE with the new password.
+            _managed_role_gens = [{
+                apiVersion = "kubernetes.crossplane.io/v1alpha2"
+                kind = "Object"
+                metadata = {
+                    name = short + "-" + r.name + "-gen"
+                    annotations = {
+                        "crossplane.io/composition-resource-name" = r.name + "-pwd-gen"
+                    } | ({"krm.kcl.dev/ready" = "True"} if _isReady(short + "-" + r.name + "-gen") else {})
+                }
+                spec = {
+                    providerConfigRef = {name = targetCluster}
+                    forProvider = {
+                        manifest = {
+                            apiVersion = "generators.external-secrets.io/v1alpha1"
+                            kind = "Password"
+                            metadata = {name = c + "-" + r.name + "-gen", namespace = ns, labels = _argoLabels}
+                            spec = {
+                                length = 32
+                                digits = 8
+                                symbols = 0
+                                symbolCharacters = ""
+                                noUpper = False
+                                allowRepeat = False
+                            }
+                        }
+                    }
+                }
+            } for r in managedRoles]
+
+            _managed_role_conn_bundles = [{
+                apiVersion = "kubernetes.crossplane.io/v1alpha2"
+                kind = "Object"
+                metadata = {
+                    name = short + "-" + r.name + "-creds-bundle"
+                    annotations = {
+                        "crossplane.io/composition-resource-name" = r.name + "-creds-bundle"
+                    } | ({"krm.kcl.dev/ready" = "True"} if _isReady(short + "-" + r.name + "-creds-bundle") else {})
+                }
+                spec = {
+                    providerConfigRef = {name = targetCluster}
+                    forProvider = {
+                        manifest = {
+                            apiVersion = "external-secrets.io/v1"
+                            kind = "ExternalSecret"
+                            metadata = {name = c + "-" + r.name + "-es", namespace = ns, labels = _argoLabels}
+                            spec = {
+                                refreshInterval = "0"
+                                dataFrom = [{
+                                    sourceRef = {
+                                        generatorRef = {
+                                            apiVersion = "generators.external-secrets.io/v1alpha1"
+                                            kind = "Password"
+                                            name = c + "-" + r.name + "-gen"
+                                        }
+                                    }
+                                }]
+                                target = {
+                                    name = c + "-" + r.name + "-creds"
+                                    creationPolicy = "Owner"
+                                    template = {
+                                        engineVersion = "v2"
+                                        data = {
+                                            username = r.name
+                                            password = "{{ .password }}"
+                                            endpoint = endpoint
+                                            port = "5432"
+                                            database = "postgres"
+                                        } | _conn_strings(endpoint, "postgres", r.name) | (_prefix_keys(_conn_strings(poolerEndpoint, "postgres", r.name), "pooler-") if poolerEnabled else {})
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } for r in managedRoles]
+
+            _managed_role_push_secrets = [{
+                apiVersion = "kubernetes.crossplane.io/v1alpha2"
+                kind = "Object"
+                metadata = {
+                    name = short + "-" + r.name + "-push-secret"
+                    annotations = {
+                        "crossplane.io/composition-resource-name" = r.name + "-push-secret"
+                    } | ({"krm.kcl.dev/ready" = "True"} if _isReady(short + "-" + r.name + "-push-secret") else {})
+                }
+                spec = {
+                    providerConfigRef = {name = targetCluster}
+                    forProvider = {
+                        manifest = {
+                            apiVersion = "external-secrets.io/v1alpha1"
+                            kind = "PushSecret"
+                            metadata = {name = c + "-" + r.name + "-push", namespace = ns, labels = _argoLabels}
+                            spec = {
+                                refreshInterval = "1h"
+                                deletionPolicy = "Delete"
+                                secretStoreRefs = [{name = platformStore, kind = "ClusterSecretStore"}]
+                                selector = {
+                                    secret = {name = c + "-" + r.name + "-creds"}
+                                }
+                                data = [{
+                                    match = {
+                                        remoteRef = {remoteKey = "database-clusters/" + c + "/roles/" + r.name + "/creds"}
+                                    }
+                                }]
+                            }
+                        }
+                    }
+                }
+            } for r in managedRoles]
+
+            # ── Section 15: dxr update — status writeback ────────────────────────────────
+            # Emitting an item with the XR's own apiVersion/kind updates the XR itself.
+            # XDatabase reads status.shared + status.environment to filter the
+            # shared pool, and status.clusterName + status.namespace for assignment.
+            # NOTE: dxr updates write status but Crossplane ignores metadata.labels —
+            # discovery labels (wxops.cloud/managed-by) must be in the XR manifest.
+
+            # created/ready mirror the XTenantApp contract so the portal has one field to
+            # poll across every package. Crossplane's native type:Ready is unreliable on
+            # v2.3 + function-kcl v0.12.1, so both are derived from ocds instead.
+            #
+            # created: every composed resource this XR emits has been observed at least once.
+            # ready:   the cluster can actually serve connections — the CNPG Cluster is up,
+            #          and any pooler that was asked for is up too, since tenants are handed
+            #          the pooler endpoint rather than the cluster's.
+            #
+            # Excluded from `ready` on purpose:
+            #   - push-secrets / credential bundles: Vault seeding is a platform concern. If
+            #     it lags, the cluster still serves connections.
+            #   - scheduled backups: a backup schedule not yet registered does not make a
+            #     running cluster unready. Its failure is an operational alert, not a
+            #     readiness gate.
+            _composedNames = [
+                short + "-cnpg-cluster"
+                short + "-push-secret"
+                short + "-app-push-secret"
+                short + "-sql-creds"
+                short + "-sql-provider-config"
+            ] + [short + "-" + r.name + "-gen" for r in managedRoles] \
+              + [short + "-" + r.name + "-creds-bundle" for r in managedRoles] \
+              + [short + "-" + r.name + "-push-secret" for r in managedRoles] \
+              + ([short + "-cnpg-rw-pooler"] if poolerEnabled else []) \
+              + ([short + "-cnpg-ro-pooler"] if roPoolerEnabled else []) \
+              + ([short + "-scheduled-backup"] if backupEnabled else [])
+
+            _clusterCreated = len([n for n in _composedNames if n not in _ocds]) == 0
+            _clusterReady = _isReady(short + "-cnpg-cluster") \
+                and (_isReady(short + "-cnpg-rw-pooler") if poolerEnabled else True) \
+                and (_isReady(short + "-cnpg-ro-pooler") if roPoolerEnabled else True)
+
+            # ── Sync state ──────────────────────────────────────────────────────────────
+            # `synced` follows the same resources `ready` does; a failure on any other composed resource is still
+            # shown in `syncMessage` without gating anything.
+            _gatingNames = [short + "-cnpg-cluster"] + ([short + "-cnpg-rw-pooler"] if poolerEnabled else []) + ([short + "-cnpg-ro-pooler"] if roPoolerEnabled else [])
+            _syncFailures = [n + ": " + _get(_syncConds(n)[0], "message", _get(_syncConds(n)[0], "reason", "not synced")) for n in _ocds if _syncFailed(n)]
+            _synced = len([n for n in _gatingNames if _syncFailed(n)]) == 0
+            _syncMessage = (_syncFailures[0] + (" (+" + str(len(_syncFailures) - 1) + " more)" if len(_syncFailures) > 1 else ""))[:400] if _syncFailures else ""
+            _syncStatus = ({"synced" = _synced} if _ocds else {}) | ({"syncMessage" = _syncMessage} if _syncFailures else {})
+
+            _dxr = {
+                apiVersion = oxr.apiVersion
+                kind = oxr.kind
+                status = {
+                    clusterName = c
+                    namespace = ns
+                    shared = shared
+                    environment = environment
+                    created = _clusterCreated
+                    ready = _clusterReady
+                } | _syncStatus
+            }
+
+            # ── Section 16: Final resource list ──────────────────────────────────────────
+            _composedItems = [
+                _cnpg_cluster
+                _push_secret
+                _app_push_secret
+                _sql_creds_secret
+                _sql_provider_config
+            ] + _managed_role_gens + _managed_role_conn_bundles + _managed_role_push_secrets + ([_cnpg_rw_pooler] if poolerEnabled else []) + ([_cnpg_ro_pooler] if roPoolerEnabled else []) + ([_scheduled_backup] if backupEnabled else [])
+
+            # A handed-over Object only observes: the new kind's XR writes the same cluster, and deleting this XR must not delete the cluster, its Secrets or its Vault entries.
+            # Without the annotation nothing changes.
+            _handedOver = lambda o: any -> any {
+                {**o, "spec" = {**o.spec, "managementPolicies" = ["Observe"], "deletionPolicy" = "Orphan"}}
+            }
+
+            items = [_dxr] + ([_handedOver(o) for o in _composedItems] if _handover else _composedItems)

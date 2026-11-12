@@ -1,16 +1,21 @@
 """
-XPlatformDatabaseCluster — KCL composition source.
+XDatabaseCluster — KCL composition source. It replaced XPlatformDatabaseCluster (ADR-005), which was archived once every XR had moved; the name no longer repeats
+the API group.
+
+Annotation (on the XR, never a parameter):
+  wxops.cloud/handover: "true"   Releases the CNPG cluster from this XR: every composed Object is rendered Observe-only with deletionPolicy Orphan, so it stops writing and
+                                 deleting the XR leaves the cluster, its Secrets and its Vault entries in place. It carried the XPlatformDatabaseCluster → XDatabaseCluster migration.
 
 Inputs (via option("params").oxr.spec.parameters):
   Core:
-    clusterName             string   CNPG cluster name; tenant-database references it via clusterRef.
+    clusterName             string   CNPG cluster name; an XDatabase on it records it in status.clusterRef.
     namespace               string   K8s namespace for all CNPG resources.
     instances               int      PG instances (1 = standalone, 3 = HA). Default: 1.
     postgresVersion         int      PostgreSQL major version. Default: 16.
     storageSize             string   PVC size per instance. Default: "8Gi".
     shared                  bool     Mark as shared multi-tenant pool. Default: false.
                                        Written to status.shared for discovery by
-                                       XTenantDatabase's pool filtering logic.
+                                       XDatabase's pool filtering logic.
     vaultPlatformSecretStore string  ESO ClusterSecretStore for PushSecret. Default: "vault-platform".
                                        NOTE: this store is itself scoped to the "platform/" KV2 path,
                                        so all paths below omit "platform/" (e.g. "database-clusters/...")
@@ -130,6 +135,8 @@ _get = lambda d: any, k: str, default: any -> any {
     _safe = d or {}
     _safe[k] if k in _safe else default
 }
+
+_handover = _get(_get(oxr.metadata, "annotations", {}), "wxops.cloud/handover", "") == "true"
 
 # ── ArgoCD resource tracking ─────────────────────────────────────────────────
 _oxrLabels = oxr.metadata.labels if "labels" in oxr.metadata else {}
@@ -559,7 +566,7 @@ _app_push_secret = {
     }
 }
 
-# ── Section 13: provider-sql ProviderConfig — for tenant-database Roles ──────
+# ── Section 13: provider-sql ProviderConfig — for XDatabase Roles ────────────
 # provider-sql's ProviderConfig (source: PostgreSQLConnectionSecret) requires
 # a Secret with the fixed keys endpoint/port/username/password. We base this
 # on {appSecretName}/{appVaultPath} rather than the superuser — per the CNPG
@@ -573,7 +580,7 @@ _app_push_secret = {
 # literal FQDN `endpoint` (Section 2: {c}-rw.{ns}.svc.cluster.local) into a
 # dedicated {c}-app-sql Secret — distinct from {appSecretName}, so there's no
 # ownership conflict with the PushSecret. The ProviderConfig (named `c`) is
-# what tenant-database's per-tenant provider-sql Role references via
+# what XDatabase's per-tenant provider-sql Role references via
 # providerConfigRef: {name: clusterRef}.
 _sql_creds_secret = {
     apiVersion = "kubernetes.crossplane.io/v1alpha2"
@@ -762,7 +769,7 @@ _managed_role_push_secrets = [{
 
 # ── Section 15: dxr update — status writeback ────────────────────────────────
 # Emitting an item with the XR's own apiVersion/kind updates the XR itself.
-# XTenantDatabase reads status.shared + status.environment to filter the
+# XDatabase reads status.shared + status.environment to filter the
 # shared pool, and status.clusterName + status.namespace for assignment.
 # NOTE: dxr updates write status but Crossplane ignores metadata.labels —
 # discovery labels (wxops.cloud/managed-by) must be in the XR manifest.
@@ -810,8 +817,8 @@ _syncMessage = (_syncFailures[0] + (" (+" + str(len(_syncFailures) - 1) + " more
 _syncStatus = ({"synced" = _synced} if _ocds else {}) | ({"syncMessage" = _syncMessage} if _syncFailures else {})
 
 _dxr = {
-    apiVersion = "platform.wxops.cloud/v1alpha1"
-    kind = "XPlatformDatabaseCluster"
+    apiVersion = oxr.apiVersion
+    kind = oxr.kind
     status = {
         clusterName = c
         namespace = ns
@@ -823,11 +830,18 @@ _dxr = {
 }
 
 # ── Section 16: Final resource list ──────────────────────────────────────────
-items = [
-    _dxr
+_composedItems = [
     _cnpg_cluster
     _push_secret
     _app_push_secret
     _sql_creds_secret
     _sql_provider_config
 ] + _managed_role_gens + _managed_role_conn_bundles + _managed_role_push_secrets + ([_cnpg_rw_pooler] if poolerEnabled else []) + ([_cnpg_ro_pooler] if roPoolerEnabled else []) + ([_scheduled_backup] if backupEnabled else [])
+
+# A handed-over Object only observes: the new kind's XR writes the same cluster, and deleting this XR must not delete the cluster, its Secrets or its Vault entries.
+# Without the annotation nothing changes.
+_handedOver = lambda o: any -> any {
+    {**o, "spec" = {**o.spec, "managementPolicies" = ["Observe"], "deletionPolicy" = "Orphan"}}
+}
+
+items = [_dxr] + ([_handedOver(o) for o in _composedItems] if _handover else _composedItems)

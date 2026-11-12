@@ -1,0 +1,463 @@
+apiVersion: apiextensions.crossplane.io/v2
+kind: CompositeResourceDefinition
+metadata:
+  name: xdatabaseclusters.platform.wxops.cloud
+spec:
+  group: platform.wxops.cloud
+  scope: Cluster
+  names:
+    kind: XDatabaseCluster
+    plural: xdatabaseclusters
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - parameters
+              properties:
+                parameters:
+                  type: object
+                  required:
+                    - clusterName
+                    - namespace
+                  properties:
+                    cluster:
+                      type: string
+                      description: |
+                        Name of the provider-kubernetes ProviderConfig to apply this
+                        XR's composed resources through. Defaults to "default", the
+                        local (hub) cluster — the only one wired up today, so leaving
+                        this unset is behaviour-neutral.
+
+                        Set it to target a spoke cluster once a ProviderConfig for
+                        that spoke exists. See development-docs/core-ideas/multi-cluster.md.
+
+                    # ── Core ──────────────────────────────────────────────────
+                    clusterName:
+                      type: string
+                      description: |
+                        CNPG cluster name. An XDatabase placed on this cluster records
+                        it in status.clusterRef. A dedicated cluster is named
+                        <owner>-<dbName>-cluster, after the one database it serves.
+                    namespace:
+                      type: string
+                      description: Kubernetes namespace where the CNPG cluster is created.
+                    instances:
+                      type: integer
+                      default: 1
+                      minimum: 1
+                      maximum: 9
+                      description: Number of PostgreSQL instances. 1 = standalone (dev/test), 3 = HA.
+                    postgresVersion:
+                      type: integer
+                      default: 16
+                      description: |
+                        PostgreSQL major version. Maps to the community image
+                        ghcr.io/cloudnative-pg/postgresql:{version}.
+                    storageSize:
+                      type: string
+                      default: "8Gi"
+                      description: PVC storage size per instance.
+                    shared:
+                      type: boolean
+                      default: false
+                      description: |
+                        Mark this cluster as available for shared multi-tenant
+                        use. When true, the composition writes status.shared,
+                        allowing XDatabase to filter this cluster into
+                        the tier: shared pool. The XR must also have the
+                        wxops.cloud/managed-by: platform-database-clusters
+                        label in its manifest for discovery.
+                    environment:
+                      type: string
+                      enum: ["dev", "staging", "prod"]
+                      default: "dev"
+                      description: |
+                        Environment this cluster serves. When shared: true,
+                        XDatabase only places databases whose environment
+                        matches this cluster's environment — dev databases go
+                        to dev clusters, prod to prod. An XDatabase with no
+                        environment is served by the dev pool.
+                        Written to status.environment.
+                    vaultPlatformSecretStore:
+                      type: string
+                      default: "vault-platform"
+                      description: |
+                        ESO ClusterSecretStore name used by PushSecret to mirror
+                        CNPG's own {clusterName}-superuser and {clusterName}-app
+                        secrets to Vault at
+                        database-clusters/{clusterName}/superuser-creds
+                        and database-clusters/{clusterName}/app-creds.
+
+                    # ── Pooler (RW) ───────────────────────────────────────────
+                    enablePooler:
+                      type: boolean
+                      default: true
+                      description: Deploy a PgBouncer Pooler (type rw) alongside the cluster.
+                    poolMode:
+                      type: string
+                      default: transaction
+                      enum: [transaction, session]
+                      description: PgBouncer pool mode for the RW pooler.
+
+                    # ── PostgreSQL configuration ───────────────────────────────
+                    postgresConfig:
+                      type: object
+                      default: {}
+                      description: |
+                        PostgreSQL server configuration (postgresql.conf) and client
+                        authentication rules (pg_hba.conf), passed through to
+                        spec.postgresql on the CNPG Cluster.
+
+                        Some parameters are fixed by CNPG and cannot be overridden
+                        here (e.g. archive_command, listen_addresses, wal_level,
+                        port, data_directory).
+                        See: https://cloudnative-pg.io/documentation/1.29/postgresql_conf/
+                      properties:
+                        tuning:
+                          type: object
+                          default: {}
+                          description: |
+                            Common/popular postgresql.conf settings with sensible
+                            defaults. Use these for routine sizing/tuning changes.
+                          properties:
+                            maxConnections:
+                              type: integer
+                              default: 200
+                            sharedBuffers:
+                              type: string
+                              description: e.g. "256MB", "1GB"
+                            workMem:
+                              type: string
+                              description: e.g. "16MB"
+                            maintenanceWorkMem:
+                              type: string
+                              description: e.g. "256MB"
+                            effectiveCacheSize:
+                              type: string
+                              description: e.g. "3GB"
+                            maxWalSize:
+                              type: string
+                              description: e.g. "2GB"
+                            minWalSize:
+                              type: string
+                              description: e.g. "512MB"
+                            checkpointCompletionTarget:
+                              type: string
+                              description: Float as string, e.g. "0.9"
+                            randomPageCost:
+                              type: string
+                              description: |
+                                Float as string. Use "1.1" for SSD-backed storage
+                                (default planner assumption is "4" for spinning disks).
+                            logMinDurationStatement:
+                              type: string
+                              description: Milliseconds, or "-1" to disable. e.g. "1000"
+                            logStatement:
+                              type: string
+                              enum: [none, ddl, mod, all]
+                            statementTimeout:
+                              type: string
+                              description: e.g. "30s", "5min"
+                            idleInTransactionSessionTimeout:
+                              type: string
+                              description: e.g. "10min"
+                        extraParameters:
+                          type: object
+                          additionalProperties:
+                            type: string
+                          default: {}
+                          description: |
+                            Free-form postgresql.conf parameters for cluster-specific
+                            requirements not covered by `tuning`. Keys here override
+                            the same key in `tuning`.
+                            Example: {"track_io_timing": "on", "wal_compression": "zstd"}
+                        pgHba:
+                          type: array
+                          items:
+                            type: string
+                          default: []
+                          description: |
+                            Additional pg_hba.conf rules, appended after CNPG's
+                            own default rules (CNPG always keeps the rules it
+                            needs for the superuser and streaming replication).
+                            Example:
+                              - "hostssl app app_db 10.0.0.0/8 scram-sha-256"
+
+                    # ── Monitoring ────────────────────────────────────────────
+                    monitoring:
+                      type: object
+                      default: {}
+                      description: Prometheus Operator integration.
+                      properties:
+                        enablePodMonitor:
+                          type: boolean
+                          default: false
+                          description: |
+                            When true, CNPG creates a PodMonitor so Prometheus Operator scrapes
+                            the cluster metrics endpoint (port 9187).
+                            Requires the Prometheus Operator CRDs to be installed in the cluster.
+
+                    # ── Backup ────────────────────────────────────────────────
+                    backup:
+                      type: object
+                      default: {}
+                      description: |
+                        Barman object-store backup configuration. When enabled, WAL archiving
+                        is activated on the cluster and a ScheduledBackup CR is created.
+                      properties:
+                        enabled:
+                          type: boolean
+                          default: false
+                        destinationPath:
+                          type: string
+                          description: |
+                            Object store destination path.
+                            S3 / MinIO:  s3://my-bucket/cnpg/cluster-a
+                            GCS:         gs://my-bucket/cnpg/cluster-a
+                        endpointURL:
+                          type: string
+                          description: |
+                            Override the storage endpoint (MinIO, Ceph RGW, etc.).
+                            Leave blank for native AWS S3, GCS, or Azure Blob.
+                        credentialsSecretRef:
+                          type: object
+                          description: |
+                            Existing K8s Secret containing cloud storage credentials.
+                            For S3 / MinIO: keys ACCESS_KEY_ID, ACCESS_SECRET_KEY.
+                            For GCS:        key  APPLICATION_CREDENTIALS (service-account JSON).
+                            For Azure:      keys AZURE_STORAGE_ACCOUNT, AZURE_STORAGE_KEY.
+                            The Secret must exist before the XR is applied.
+                          properties:
+                            name:
+                              type: string
+                            namespace:
+                              type: string
+                        schedule:
+                          type: string
+                          default: "0 0 2 * * *"
+                          description: |
+                            ScheduledBackup cron expression (6-field: sec min hr dom mon dow).
+                            Default: daily at 02:00 UTC.
+                        retentionPolicy:
+                          type: string
+                          default: "30d"
+                          description: |
+                            Barman WAL and base-backup retention window (e.g. 7d, 30d, 90d).
+
+                    # ── Read replica ──────────────────────────────────────────
+                    readReplica:
+                      type: object
+                      default: {}
+                      description: Dedicated read-only PgBouncer Pooler for replica traffic.
+                      properties:
+                        enablePooler:
+                          type: boolean
+                          default: false
+                          description: |
+                            Deploy a second PgBouncer Pooler of type "ro" in addition to the
+                            RW pooler. Exposes service {clusterName}-ro-pooler for read workloads.
+                        poolerInstances:
+                          type: integer
+                          default: 1
+                          minimum: 1
+                          maximum: 9
+
+                    # ── Managed roles (cluster-wide) ───────────────────────────
+                    managedRoles:
+                      type: array
+                      default: []
+                      description: |
+                        General, cluster-wide PostgreSQL roles (e.g. "readonly",
+                        a second superuser) managed declaratively via
+                        spec.managed.roles[] on the CNPG Cluster — platform fully
+                        owns this array, so no Server-Side-Apply coordination with
+                        XDatabase is needed.
+
+                        Each entry gets its own ESO Password generator and a
+                        STABLE ExternalSecret ({clusterName}-{name}-creds,
+                        refreshInterval "0" — NOT auto-rotated). To change the
+                        password, delete that Secret; CNPG then regenerates it
+                        and runs ALTER ROLE with the new value. A PushSecret syncs
+                        each role's credentials to Vault at
+                        database-clusters/{clusterName}/roles/{name}/creds.
+                      items:
+                        type: object
+                        required:
+                          - name
+                        properties:
+                          name:
+                            type: string
+                            description: PostgreSQL role name.
+                          ensure:
+                            type: string
+                            default: present
+                            enum: [present, absent]
+                          login:
+                            type: boolean
+                            default: true
+                          superuser:
+                            type: boolean
+                            default: false
+                          createdb:
+                            type: boolean
+                            default: false
+                            description: Grant CREATEDB privilege.
+                          createrole:
+                            type: boolean
+                            default: false
+                            description: Grant CREATEROLE privilege.
+                          inherit:
+                            type: boolean
+                            default: true
+                            description: |
+                              Inherit privileges of roles this role is a
+                              member of (via inRoles). Default true per
+                              PostgreSQL convention.
+                          replication:
+                            type: boolean
+                            default: false
+                            description: Grant REPLICATION privilege.
+                          bypassrls:
+                            type: boolean
+                            default: false
+                            description: Bypass row-level security policies.
+                          connectionLimit:
+                            type: integer
+                            default: -1
+                            description: |
+                              Max concurrent connections for this role.
+                              -1 = unlimited (default).
+                          inRoles:
+                            type: array
+                            default: []
+                            description: |
+                              Roles this role is a member of. Use for
+                              PostgreSQL predefined roles (pg_read_all_data,
+                              pg_write_all_data, pg_monitor, pg_signal_backend,
+                              etc.) or custom parent roles.
+                              See: https://www.postgresql.org/docs/current/predefined-roles.html
+                            items:
+                              type: string
+
+                    # ── Bootstrap / Import ────────────────────────────────────
+                    bootstrapFrom:
+                      type: object
+                      default: {}
+                      description: |
+                        Override how the cluster is initialized.
+                        Default (initdb) creates a fresh empty cluster.
+
+                        Import types use CNPG's built-in pg_dump-based import:
+                          https://cloudnative-pg.io/docs/1.29/database_import
+
+                        import-microservices — copy one database from an external PostgreSQL.
+                          The new cluster owns only that database. Roles are NOT copied;
+                          application roles must be recreated (e.g. via XDatabase).
+                          Best for migrating a single micro-service database.
+
+                        import-monolith — copy multiple databases and their owners from an
+                          external PostgreSQL. Roles matching sourceDatabases owners are also
+                          imported. Best for migrating a legacy shared-database application.
+
+                        Both import types require the source PostgreSQL to be reachable from
+                        the cluster during bootstrap. The import is a one-time operation;
+                        the source instance is never touched after the cluster is Ready.
+                      properties:
+                        type:
+                          type: string
+                          default: "initdb"
+                          enum: [initdb, import-microservices, import-monolith]
+                        sourceHost:
+                          type: string
+                          description: Hostname or IP of the source PostgreSQL instance.
+                        sourcePort:
+                          type: integer
+                          default: 5432
+                        sourceDatabase:
+                          type: string
+                          description: Single database to import (import-microservices only).
+                        sourceDatabases:
+                          type: array
+                          items:
+                            type: string
+                          default: []
+                          description: Database names to import (import-monolith only).
+                        sourceRoles:
+                          type: array
+                          items:
+                            type: string
+                          default: []
+                          description: |
+                            PostgreSQL role names to import in addition to database owners
+                            (import-monolith only).
+                        sourceUser:
+                          type: string
+                          default: postgres
+                          description: Superuser name on the source instance.
+                        sourceSSLMode:
+                          type: string
+                          default: require
+                          enum: [disable, allow, prefer, require, verify-ca, verify-full]
+                        sourcePasswordSecretRef:
+                          type: object
+                          description: |
+                            Existing K8s Secret with key "password" holding the source superuser
+                            password. Must exist before the XR is applied.
+                          properties:
+                            name:
+                              type: string
+                            namespace:
+                              type: string
+            status:
+              type: object
+              properties:
+                clusterName:
+                  type: string
+                  description: CNPG cluster name (echoed from spec.parameters.clusterName).
+                namespace:
+                  type: string
+                  description: Namespace where the CNPG cluster lives.
+                shared:
+                  type: boolean
+                  description: Whether this cluster is in the shared multi-tenant pool.
+                environment:
+                  type: string
+                  description: Environment this cluster serves (dev, staging, prod).
+                created:
+                  type: boolean
+                  description: |
+                    True once every composed resource has been observed at least
+                    once. Indicates provisioning has started, not that it succeeded.
+                ready:
+                  type: boolean
+                  description: |
+                    True when the cluster can serve connections: the CNPG Cluster is
+                    up, and any enabled pooler is up too (tenants are handed the
+                    pooler endpoint, not the cluster's).
+
+                    Derived from observed composed-resource state rather than the
+                    native type:Ready condition, which is unreliable on Crossplane
+                    v2.3 with function-kcl v0.12.1. Poll this field, not conditions.
+
+                    Vault credential seeding and scheduled backups are deliberately
+                    excluded — neither stops a running cluster from serving.
+
+                synced:
+                  type: boolean
+                  description: |
+                    False while a composed resource that `ready` depends on failed its last apply —
+                    its `Ready` condition can stay True from the earlier success, so `ready` is
+                    derived with this in mind. `syncMessage` says what. Absent until the first
+                    reconcile.
+                syncMessage:
+                  type: string
+                  description: |
+                    The failing resource and the provider's own message, truncated; present while
+                    anything — including a resource `ready` deliberately excludes — is not Synced.
