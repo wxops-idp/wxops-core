@@ -442,6 +442,6 @@ composition it enforces.
   hub→spoke API connection, for new and pre-existing clusters
 - [`docs/core-ideas/darlane.md`](../core-ideas/darlane.md) — Darlane workflows and the `XDarlane` vision
 - [`docs/core-ideas/guardian.md`](guardian.md) — Guardian Framework design
-- [`docs/api-reference/platform/tenant-app.md`](../../docs/api-reference/platform/tenant-app.md) — `XTenantApp` API reference
+- [`docs/api-reference/platform/tenant-app.md`](../../docs/api-reference/_archives/tenant-app.md) — `XTenantApp` API reference
 - [`VERSIONS.yaml`](../../VERSIONS.yaml) — served API versions, and the release each package last changed in
 - [`release-notes/README.md`](../../release-notes/README.md) — release naming, the API-compat gate, when notes are required

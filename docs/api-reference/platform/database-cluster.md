@@ -1,16 +1,21 @@
-# XPlatformDatabaseCluster
+# XDatabaseCluster
+
+> `XDatabaseCluster` replaces [`XPlatformDatabaseCluster`](../_archives/platform-database-clusters.md) ([ADR-005](../../../development-docs/adr/005-kind-ownership-scope-and-naming.md)).
+> `XPlatformDatabaseCluster` is archived: every XR moved by
+> [the handover](../../user-guide/migrating-to-new-kinds.md#xplatformdatabasecluster--xdatabasecluster), kept for the record.
+> The discovery label below keeps the value `platform-database-clusters` on purpose: it is a stable identifier, and manifests written for the old kind keep working.
 
 Platform-managed CloudNativePG cluster with pooler, Vault credential seeding, and optional shared-cluster labeling for dynamic tenant pool discovery.
 
 | | |
 |---|---|
 | **Group** | `platform.wxops.cloud` |
-| **Kind** | `XPlatformDatabaseCluster` |
+| **Kind** | `XDatabaseCluster` |
 | **Plural** | `xplatformdatabaseclusters` |
 | **Scope** | `Cluster` |
 | **API versions** | `v1alpha1` (served, storage) |
-| **Package** | [`package/platform/platform-database-clusters/`](../../../package/platform/platform-database-clusters) — see [`VERSIONS.yaml`](../../../VERSIONS.yaml) for the current package version |
-| **Composition function** | [`function-kcl`](https://github.com/crossplane-contrib/function-kcl) — see [`kcl/platform-database-clusters/main.k`](../../../kcl/platform-database-clusters/main.k) |
+| **Package** | [`package/platform/database-cluster/`](../../../package/platform/database-cluster) — see [`VERSIONS.yaml`](../../../VERSIONS.yaml) for the current package version |
+| **Composition function** | [`function-kcl`](https://github.com/crossplane-contrib/function-kcl) — see [`kcl/database-cluster/main.k`](../../../kcl/database-cluster/main.k) |
 
 ## `spec.parameters`
 
@@ -23,13 +28,13 @@ Platform-managed CloudNativePG cluster with pooler, Vault credential seeding, an
 | Field | Type | Required | Default | Description |
 |---|---|---|---|---|
 | `cluster` | `string` | | `"default"` | Name of the provider-kubernetes `ProviderConfig` to apply composed resources through. `"default"` is the local hub cluster — the only one wired up today, so leaving this unset is behaviour-neutral. Set it to target a spoke cluster once a `ProviderConfig` for it exists — see [multi-cluster.md](../../../development-docs/core-ideas/multi-cluster.md). |
-| `clusterName` | `string` | yes | | CNPG cluster name. Tenants pass this value as `clusterRef` in `XTenantDatabase` to locate the cluster and its superuser secret. |
+| `clusterName` | `string` | yes | | CNPG cluster name. An `XDatabase` placed on this cluster records it in `status.clusterRef`. A dedicated cluster is named `<owner>-<dbName>-cluster`, after the one database it serves. |
 | `namespace` | `string` | yes | | Kubernetes namespace where the CNPG cluster is created. |
 | `instances` | `integer` (1–9) | | `1` | Number of PostgreSQL instances. `1` = standalone (dev/test), `3` = HA. |
 | `postgresVersion` | `integer` | | `16` | PostgreSQL major version. Maps to the community image `ghcr.io/cloudnative-pg/postgresql:{version}`. |
 | `storageSize` | `string` | | `"8Gi"` | PVC storage size per instance. |
-| `shared` | `boolean` | | `false` | Mark this cluster as available for shared multi-tenant use. When `true`, the composition writes `status.shared: true`, and `XTenantDatabase` filters by this status field to build the shared pool. |
-| `environment` | `string` (`dev`, `staging`, `prod`) | | `"dev"` | Environment this cluster serves. When `shared: true`, `XTenantDatabase` only auto-assigns databases whose `environment` matches — dev databases go to dev clusters, prod to prod. Written to `status.environment`. |
+| `shared` | `boolean` | | `false` | Mark this cluster as available for shared multi-tenant use. When `true`, the composition writes `status.shared: true`, and `XDatabase` filters by this status field to build the shared pool. |
+| `environment` | `string` (`dev`, `staging`, `prod`) | | `"dev"` | Environment this cluster serves. When `shared: true`, `XDatabase` only places databases whose `environment` matches — dev databases go to dev clusters, prod to prod. An `XDatabase` with no `environment` is served by the `dev` pool. Written to `status.environment`. |
 | `vaultPlatformSecretStore` | `string` | | `"vault-platform"` | ESO `ClusterSecretStore` name used by `PushSecret` to mirror CNPG's own `{clusterName}-superuser` and `{clusterName}-app` secrets to Vault at `database-clusters/{clusterName}/superuser-creds` and `database-clusters/{clusterName}/app-creds`. Each push writes the whole secret in one go (no per-key `property`), so only one Vault KV2 version is created per reconcile. When `enablePooler` is true, pooler-prefixed connection strings (`pooler-host`, `pooler-port`, `pooler-uri`, `pooler-jdbc-uri`, `pooler-pgpass`) are merged into both Vault entries via the PushSecret's `spec.template`. |
 
 ### Pooler (RW)
@@ -99,7 +104,7 @@ Dedicated read-only PgBouncer Pooler for replica traffic.
 ### `managedRoles[]`
 
 General, cluster-wide PostgreSQL roles (e.g. `readonly`, a second superuser) managed declaratively via `spec.managed.roles[]` on the CNPG `Cluster` — platform
-fully owns this array, so no Server-Side-Apply coordination with `tenant-database` is needed.
+fully owns this array, so no Server-Side-Apply coordination with `XDatabase` is needed.
 
 Each entry gets its own ESO Password generator and a STABLE `ExternalSecret` (`{clusterName}-{name}-creds`, `refreshInterval: "0"` — NOT auto-rotated). To
 change the password, delete that Secret; CNPG then regenerates it and runs `ALTER ROLE` with the new value. A `PushSecret` syncs each role's credentials to
@@ -127,7 +132,7 @@ Import types use CNPG's built-in pg_dump-based import — see the [CNPG database
 
 - **`import-microservices`** — copy one database from an external PostgreSQL.
   The new cluster owns only that database. Roles are NOT copied; application
-  roles must be recreated (e.g. via `XTenantDatabase`). Best for migrating a
+  roles must be recreated (e.g. via `XDatabase`). Best for migrating a
   single micro-service database.
 - **`import-monolith`** — copy multiple databases and their owners from an
   external PostgreSQL. Roles matching `sourceDatabases` owners are also
@@ -182,8 +187,8 @@ Full mechanism, the `Manual`-pin alternative, and why: [Channels](../../../devel
 
 ## Required discovery label
 
-`XTenantDatabase` discovers platform clusters via `function-extra-resources`, which selects XRs by label. Every `XPlatformDatabaseCluster` XR **must** include
-this label in its manifest:
+`XDatabase` discovers platform clusters via `function-extra-resources`, which selects XRs by label. Every `XDatabaseCluster` XR **must** include
+this label in its manifest, shared or dedicated:
 
 ```yaml
 metadata:
@@ -192,12 +197,12 @@ metadata:
 ```
 
 > **Why a manifest label?** Crossplane's composite reconciler writes `status` fields from composition dxr updates, but **ignores `metadata.labels`**. The
-> composition cannot set discovery labels automatically — they must be in the XR manifest applied by the user or GitOps. Without this label, `XTenantDatabase`
-> will not discover the cluster for `tier: shared` auto-assignment.
+> composition cannot set discovery labels automatically — they must be in the XR manifest applied by the user or GitOps. Without this label, `XDatabase`
+> will not discover the cluster — neither for `tier: shared` placement nor as a `tier: dedicated` database's cluster.
 
-The composition uses `status.shared` and `status.environment` (written by the dxr update) to filter the pool — the label only controls **which XRs are
-fetched**, not which ones are selected as shared.
+`XDatabase` uses `status.shared` and `status.environment` (written by the dxr update) to filter the pool — the label only controls **which XRs are
+fetched**, not which ones are selected as shared. A dedicated cluster also needs `wxops.cloud/owner: <owner>` and `shared: false`.
 
 ## Example
 
-See [`examples/platform/platform-database-clusters/xr.yaml`](../../../examples/platform/platform-database-clusters/xr.yaml).
+See [`examples/platform/database-cluster/xr.yaml`](../../../examples/platform/database-cluster/xr.yaml).

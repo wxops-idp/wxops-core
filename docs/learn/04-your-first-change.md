@@ -78,8 +78,8 @@ warning](02-opentofu-here.md#how-xr-fields-reach-opentofu-variables) — never i
     fromFieldPath: Optional
 ```
 
-This package uses inline HCL, not KCL, so there's no `make kcl-sync` step here. If you were editing `platform-database-clusters`, `tenant-database` or
-`tenant-app` instead, you'd edit `kcl/<pkg>/main.k` and run `make kcl-sync` before continuing — see [the sync
+This package uses inline HCL, not KCL, so there's no `make kcl-sync` step here. If you were editing `database-cluster`, `database` or
+`app` instead, you'd edit `kcl/<pkg>/main.k` and run `make kcl-sync` before continuing — see [the sync
 step](03-kcl-here.md#the-sync-step--never-forget-this).
 
 ## 3 — Update the example and test cases

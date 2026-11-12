@@ -11,9 +11,9 @@ W'xOps Core is the control-plane "brain" of W'xOps, built on **Crossplane v2** c
 | Engine | Used by | When to use |
 |---|---|---|
 | `function-patch-and-transform` | `scm-*` (`gitea-*`, `random-password` archived), `oidc-connection` | Single composed resource: an inline-HCL `Workspace`, or one wrapped `Object`; each such package ends with the shared `status` step (`kcl/status/main.k`) that folds `Synced` into `ready`/`synced`/`syncMessage`. The `scm-*` packages keep **all** vendor logic in HCL — no KCL, no direct API calls |
-| `function-kcl` | `platform-database-clusters`, `tenant-database`, `tenant-app`, `oidc-static-password`, `oidc-client`, `oidc-connector`, `persona`, `persona-binding`, `platform-policy` | Multi-resource, conditional branching, list comprehensions |
+| `function-kcl` | `database-cluster`, `database`, `app`, `oidc-static-password`, `oidc-client`, `oidc-connector`, `persona`, `persona-binding`, `policy` | Multi-resource, conditional branching, list comprehensions |
 
-`tenant-database` additionally uses `function-extra-resources` as a first pipeline step to discover shared clusters via label selector before the KCL step renders resources — as do all three `oidc-*` KCL packages, to read their `XOIDCConnection` (and, for `oidc-connector`, the `XScmConnection`, `XScmOAuthApp` and every labelled `XScmTeam`) by the `crossplane.io/composite` label Crossplane stamps on every root XR with its own name — no user-written discovery label needed, unlike `tenant-database`'s pool selector.
+`database` and `app` use `function-extra-resources` as a first pipeline step to read the XR's own `Namespace` (its `wxops.cloud/owner` is the owner); `database` also discovers the platform's `XDatabaseCluster`s by label selector — as do all three `oidc-*` KCL packages, to read their `XOIDCConnection` (and, for `oidc-connector`, the `XScmConnection`, `XScmOAuthApp` and every labelled `XScmTeam`) by the `crossplane.io/composite` label Crossplane stamps on every root XR with its own name — no user-written discovery label needed, unlike `database`'s cluster selector.
 
 ### KCL source management
 
@@ -27,11 +27,11 @@ make kcl-check   # fail if composition.yaml has drifted from kcl/{pkg}/main.k
 ### KCL conventions
 
 - Read inputs: `oxr = option("params").oxr`, `params = oxr.spec.parameters`.
-- Extra resources (tenant-database): `option("params").extraResources`.
+- Extra resources (database): `option("params").ctx["apiextensions.crossplane.io/extra-resources"]` — not `option("params").extraResources`, which function-extra-resources never fills.
 - Use `_get(d, "key", default)` helper instead of `params.get("key", default)` — the latter returns `Undefined` for unset XRD fields in function-kcl.
 - KCL has no `if/elif/else` variable assignment — use chained ternary: `x = a if cond1 else b if cond2 else c`.
 - KCL `sorted()` does not support `key=` parameter — use `min()` + list filter instead.
-- Each composed resource wraps as a `kubernetes.crossplane.io/v1alpha2 Object` with `spec.forProvider.manifest`.
+- Each composed resource wraps as a `kubernetes.crossplane.io/v1alpha2 Object` with `spec.forProvider.manifest` — except a **namespaced** tenant kind (`tenant.wxops.cloud`, ADR-005), which composes `kubernetes.m.crossplane.io/v1alpha1` Objects through the platform's `ClusterProviderConfig` (`tests/invariants.py` enforces it).
 - Use dxr update (emit item with XR's own apiVersion/kind) to write labels and status back to the XR.
 
 ### Vault path convention
@@ -44,13 +44,13 @@ Documentation shows the full logical path (e.g. `tenants/{owner}/databases/{dbNa
 
 ## Packages
 
-Fourteen Crossplane Configuration packages:
+Fourteen Crossplane Configuration packages in four API groups (`tenant`, `platform`, `scm`, `auth`, ADR-005):
 
 | Package | Kind | Composition |
 |---|---|---|
-| `platform-database-clusters` | `XPlatformDatabaseCluster` | function-kcl |
-| `tenant-database` | `XTenantDatabase` | function-extra-resources + function-kcl |
-| `tenant-app` | `XTenantApp` | function-kcl |
+| `database-cluster` | `XDatabaseCluster` | function-kcl |
+| `database` | `XDatabase` | function-extra-resources (the XR's Namespace, the platform's clusters) + function-kcl; a **namespaced** XR in `tenant.wxops.cloud` composing `kubernetes.m.crossplane.io` Objects and namespaced `Usage`s — the owner is the namespace's, the cluster the platform's |
+| `app` | `XApp` | function-extra-resources (the XR's Namespace, for its owner) + function-kcl; a **namespaced** XR in `tenant.wxops.cloud` composing `kubernetes.m.crossplane.io` Objects through the hub's `ClusterProviderConfig` |
 | `scm-connection` | `XScmConnection` | patch-and-transform + ESO `ExternalSecret` + a read-only inspection `Workspace` (data sources only; never gates `ready`) |
 | `scm-repository` | `XScmRepository` | patch-and-transform + inline HCL, one module for every vendor |
 | `scm-oauth-app` | `XScmOAuthApp` | patch-and-transform + inline HCL + ESO `PushSecret` |
@@ -61,7 +61,13 @@ Fourteen Crossplane Configuration packages:
 | `oidc-connector` | `XOIDCConnector` | function-extra-resources + function-kcl + ESO `ExternalSecret`/`PushSecret` |
 | `persona` | `XPersona` | function-extra-resources + function-kcl; composes nothing — resolves members into `status.subjects` |
 | `persona-binding` | `XPersonaBinding` | function-extra-resources + function-kcl + `RoleBinding`/`ClusterRoleBinding` (the only RBAC a composition may emit) |
-| `platform-policy` | `XPlatformPolicy` | function-extra-resources + function-kcl + one Kyverno `ValidatingPolicy`/`MutatingPolicy` |
+| `policy` | `XPolicy` | function-extra-resources + function-kcl + one Kyverno `ValidatingPolicy`/`MutatingPolicy` (two `ValidatingPolicy`s for `env-gate`) |
+
+**Archived, not deleted** — `platform-policy`, `platform-database-clusters`, `tenant-app` and `tenant-database` (`XPlatformPolicy`, `XPlatformDatabaseCluster`, `XTenantApp`,
+`XTenantDatabase`), replaced by `policy`, `database-cluster`, `app` and `database` (ADR-005, RFC-010) after every XR had moved by the handover in
+`docs/user-guide/migrating-to-new-kinds.md`. Unlike the next group these ran on a cluster, so removing them was a deliberate `breaking` release. Source lives on at
+`package/{platform,auth}/archives/<name>/` and `kcl/_archives/<name>/`, tests at `tests/cases/_archives/`, examples at `examples/_archives/`, docs at
+`docs/api-reference/_archives/`.
 
 **Archived, not deleted** — `gitea-user`/`-org`/`-team`/`-repository` (`XGiteaUser`/`XGiteaOrg`/`XGiteaTeam`/`XGiteaRepository`, all
 patch-and-transform + inline HCL) and the `random-password` utility (`XRandomPassword`): no cluster ever ran them, every active
@@ -84,25 +90,25 @@ version, not the release name — see [`release-notes/README.md`](release-notes/
 ## Directory layout
 
 - `package/<group>/<name>/` — `xrd.yaml`, `composition.yaml`, `crossplane.yaml`, `kustomization.yaml`, `README.md`.
-  The group is the API group the package's kinds serve (`platform`, `scm`, `auth`) — see
-  [ADR-002](development-docs/adr/002-three-api-groups.md) and [RFC-007](development-docs/rfc/007-package-layout-by-api-group.md).
+  The group is the API group the package's kinds serve (`tenant`, `platform`, `scm`, `auth`) — see
+  [ADR-002](development-docs/adr/002-three-api-groups.md), [ADR-005](development-docs/adr/005-kind-ownership-scope-and-naming.md) (a fourth group, `tenant`, for namespaced kinds a team owns) and [RFC-007](development-docs/rfc/007-package-layout-by-api-group.md).
   **`VERSIONS.yaml` is the only package list**: each entry carries `group` and `path`, and `tests/lib/packages.py`
   is the one resolver. Adding a package is a `VERSIONS.yaml` entry plus an entry in `package/dev/kustomization.yaml`;
   no Makefile, script, workflow or test list needs editing — except `kcl-sync.py`'s own `KCL_PACKAGES`
-  list for a `function-kcl` package, since it embeds `kcl/{pkg}/main.k` by name, not by discovery.
+  list for a `function-kcl` package, since it embeds `kcl/{pkg}/main.k` by name, not by discovery
 - `package/install/<group>/` — production OCI registry-based install (`Configuration` resources, auto-bumped by CI)
 - `package/dev/` — development install (applies XRDs + Compositions directly)
 - `providers/` — shared provider/function installs and `ProviderConfig` (apply once per cluster)
 - `kcl/<name>/` — KCL composition source (`kcl.mod`, `main.k`)
 - `examples/<group>/<name>/xr.yaml` — one minimal XR per package, mirroring `package/<group>/<name>/`; further variants are snippets on the
-  package's API page. `make test` validates each against its XRD. The platform-policy scenario kit lives beside its `xr.yaml`
+  package's API page. `make test` validates each against its XRD. The policy scenario kit lives beside `examples/auth/policy/xr.yaml`
 - `tests/cases/<name>/` — test cases; `tests/lib/` shared harness (see [Testing](#testing))
 - `docs/` — **generic documentation** for anyone who uses, operates or builds on the platform — usage, delivery, and
   guideline material, not where the platform is headed. Hub: `docs/README.md`. The sections:
   - `docs/learn/` — contributor onboarding for Crossplane/OpenTofu/KCL newcomers, each page against
     a real file in this repo; prerequisite reading for `development-docs/development/`, not part of it
   - `docs/api-reference/` — the reconcile loop from a user's side (`README.md`), one page per Kind under `<group>/`
-    (`platform/`, `scm/`, `auth/`, mirroring `package/<group>/<name>/`),
+    (`tenant/`, `platform/`, `scm/`, `auth/`, mirroring `package/<group>/<name>/`),
     `status-contract.md`
   - `docs/user-guide/` — `setup.md`, `app-onboarding.md`, `portal-integration.md`
 - `development-docs/` — **everything about building, deciding, releasing and where Core is headed**. Hub:

@@ -8,7 +8,7 @@ every persona bound to that role gains it, in every cluster. Pieces are static m
 | File | What it adds |
 |---|---|
 | [`persona-piece.yaml`](persona-piece.yaml) | `developers` and `viewers` can read Kyverno PolicyReports — to see why a request was refused |
-| [`platform-piece.yaml`](platform-piece.yaml) | A new tenant kind joins `wxops:platform-edit` (and so `platform-admin`) |
+| [`platform-piece.yaml`](platform-piece.yaml) | A new platform-run kind joins `wxops:platform-edit` (and so `platform-admin`) |
 | [`tenant-namespace.yaml`](tenant-namespace.yaml) | A namespace as onboarding creates it: owned by a team, discoverable by `XPersonaBinding` |
 
 Check the result:

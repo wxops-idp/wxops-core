@@ -2,7 +2,7 @@
 
 A persona is a title that collects who it applies to — SCM teams, hand-listed groups and users, and in-cluster agents — and the environments it applies on. It
 **grants nothing** and composes no resource: it resolves its members into `status.subjects`, in the exact shape of an RBAC subject, for
-[`persona-binding`](../persona-binding) and [`platform-policy`](../platform-policy) to read. See [RFC-009](../../../development-docs/rfc/009-scm-personas.md).
+[`persona-binding`](../persona-binding) and [`platform-policy`](../archives/platform-policy) to read. See [RFC-009](../../../development-docs/rfc/009-scm-personas.md).
 
 ## Prerequisites
 

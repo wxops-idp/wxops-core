@@ -280,7 +280,7 @@ flowchart LR
 - **The spoke's API is exported for token reviews only.** A route on the spoke's gateway passes TLS through to the API server for that one name, and accepts
   only the hub's fleet certificate. People still reach the API through Pinniped; nothing else on the hub calls it.
 - **Both legs are mTLS** through the gateways, so OpenBao is never public and the spoke's API never is either.
-- **Written on the hub** as `provider-vault` resources ([RFC-008](../rfc/008-built-in-tools-identity-and-catalog.md#openbao)), from the cluster's
+- **Written on the hub** as `provider-vault` resources ([RFC-008](../rfc/008-built-in-tools-identity-and-catalog.md#what-renders-per-tool)), from the cluster's
   membership — see the join kit below.
 
 ---

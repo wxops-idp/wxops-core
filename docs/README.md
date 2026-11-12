@@ -62,9 +62,9 @@ API group (`platform`, `scm`, ...) is per package — see [ADR-002](../developme
 | [gitea-org](api-reference/_archives/gitea-org.md) (archived) | `XGiteaOrg` | A Gitea organisation with visibility and metadata — superseded by `scm-repository` |
 | [gitea-team](api-reference/_archives/gitea-team.md) (archived) | `XGiteaTeam` | A team inside an organisation, including membership — superseded by `scm-repository` |
 | [gitea-repository](api-reference/_archives/gitea-repository.md) (archived) | `XGiteaRepository` | A repository owned by an organisation — superseded by `scm-repository` |
-| [platform-database-clusters](api-reference/platform/platform-database-clusters.md) | `XPlatformDatabaseCluster` | A CloudNativePG cluster with poolers, backups and Vault-seeded credentials |
-| [tenant-database](api-reference/platform/tenant-database.md) | `XTenantDatabase` | A tenant database on a shared or dedicated cluster, credentials pushed to Vault |
-| [tenant-app](api-reference/platform/tenant-app.md) | `XTenantApp` | Deployment, Service, ingress with TLS and SSO, monitoring, and the Darlane twin |
+| [database-cluster](api-reference/platform/database-cluster.md) | `XDatabaseCluster` (replaces `XPlatformDatabaseCluster`) | A CloudNativePG cluster with poolers, backups and Vault-seeded credentials |
+| [database](api-reference/tenant/database.md) | `XDatabase` (replaces `XTenantDatabase`) | A tenant database on a shared or dedicated cluster, credentials pushed to Vault |
+| [app](api-reference/tenant/app.md) | `XApp` (replaces `XTenantApp`) | Deployment, Service, ingress with TLS and SSO, monitoring, and the Darlane twin |
 | [random-password](api-reference/_archives/random-password.md) (archived) | `XRandomPassword` | Utility composition, not published as a package |
 | [scm-connection](api-reference/scm/connection.md) | `XScmConnection` | One Git hosting service and its credential, rendered for every other `scm` resource |
 | [scm-repository](api-reference/scm/repository.md) | `XScmRepository` | A repository on Gitea or GitHub, created (`managed`) or read (`observed`) |
@@ -76,7 +76,7 @@ API group (`platform`, `scm`, ...) is per package — see [ADR-002](../developme
 | [oidc-connector](api-reference/auth/oidc-connector.md) | `XOIDCConnector` | An upstream Git vendor connector, team allow-list generated from `XScmTeam` |
 | [persona](api-reference/auth/persona.md) | `XPersona` | A title that collects SCM teams, users and agents into RBAC subjects |
 | [persona-binding](api-reference/auth/persona-binding.md) | `XPersonaBinding` | Binds a persona to `view`, a persona role or a Platform API role, per owned namespace |
-| [platform-policy](api-reference/auth/platform-policy.md) | `XPlatformPolicy` | One reviewed Kyverno CEL policy per resource — owner stamp and seal, read-only Secrets, exec, protected, RBAC, ServiceAccount and Namespace guards |
+| [policy](api-reference/auth/policy.md) | `XPolicy` (replaces `XPlatformPolicy`) | One reviewed Kyverno CEL policy per resource — owner stamp and seal, read-only Secrets, exec, protected, RBAC, ServiceAccount and Namespace guards |
 | [status-contract](api-reference/status-contract.md) | all | Every package's `status` fields on one page: the absent-vs-`false` split, `ready` vs `dependenciesReady` |
 
 ### User guide
@@ -86,6 +86,7 @@ Running W'xOps Core and building on it.
 | Doc | What it covers |
 |---|---|
 | [setup](user-guide/setup.md) | Prerequisites and platform dependencies, providers, credentials, installing packages, and a first resource |
+| [migrating-to-new-kinds](user-guide/migrating-to-new-kinds.md) | The runbook for moving XRs to the renamed kinds (`XPolicy` first): the handover annotation, the steps, the undo |
 | [app-onboarding](user-guide/app-onboarding.md) | The golden path from picking a template to a running `XTenantApp`, through `XScmRepository` |
 | [portal-integration](user-guide/portal-integration.md) | The consumer side of the API: screen-by-screen field map, health cards, error-to-runbook wiring, and what a portal must never do |
 

@@ -1,7 +1,7 @@
 # API Reference — what you declare, what Core reconciles
 
 > Every W'xOps Core API is a Crossplane composite resource (XR) at `v1alpha1`, and every Kind is cluster-scoped. Kinds are split across API groups by trust
-> boundary — `platform.wxops.cloud` for workloads and data, `scm.wxops.cloud` for Git hosting, `auth.wxops.cloud` for OIDC broker configuration (see
+> boundary — `tenant.wxops.cloud` for what a team runs in its own namespace, `platform.wxops.cloud` for platform-run capacity, `scm.wxops.cloud` for Git hosting, `auth.wxops.cloud` for OIDC broker configuration (see
 > [ADR-002](../../development-docs/adr/002-three-api-groups.md)). This page explains what the reconcile loop does for you and lists every Kind. Each Kind's own
 > page has the full `spec.parameters` and `status` reference.
 
@@ -53,7 +53,7 @@ Two consequences shape everything below:
 | **Watch progress** | `kubectl get <plural>`, `kubectl describe <kind> <name>`, `crossplane resource trace <kind> <name>` | Reports `status.created`, `status.ready` and the Kind's own fields. `trace` walks the tree from the XR to every composed resource. | Read `status.ready`, not the `Ready` condition: on Crossplane v2.3 with function-kcl v0.12.1 the condition is unreliable. `Synced: False` means Crossplane could not reconcile the XR at all; read its message first. |
 | **Pause** | `kubectl annotate <kind> <name> crossplane.io/paused=true` | Stops checking or changing the resources behind the XR until the annotation is removed | Drift is not corrected while paused |
 | **Stay on today's composition** | Set `spec.crossplane.compositionUpdatePolicy: Manual` | Keeps the XR on the composition revision it runs, even when a new package is installed | A pin is easy to forget — nothing reminds you it's there. See [Channels](../../development-docs/development/releasing.md#channels) for `stable`/`nightly` and why `Manual` is the recommended default. |
-| **Delete** | `kubectl delete <kind> <name>` | Removes the resources it composed | Kinds that hold data decide what survives. `XTenantDatabase` keeps the database and its credentials unless `databaseReclaimPolicy: delete`, and Vault entries follow their own rules. Read the Kind's page before deleting. |
+| **Delete** | `kubectl delete <kind> <name>` | Removes the resources it composed | Kinds that hold data decide what survives. `XDatabase` keeps the database and its credentials unless `databaseReclaimPolicy: delete`, and Vault entries follow their own rules. Read the Kind's page before deleting. |
 
 Discover a Kind's fields on a cluster where the package is installed:
 
@@ -77,7 +77,7 @@ Four details catch integrations out:
 - **A failed update no longer hides behind `ready: true`.** A composed resource keeps `Ready=True` from its earlier success, so `ready` also requires its `Synced`
   condition not to be `False`; `synced` and `syncMessage` say what failed. See [Sync state](status-contract.md#sync-state--every-package).
 - **The `scm` and `oidc` Kinds leave `created` and `ready` absent until the first apply.** Treat absent as not ready.
-- **`XTenantApp` splits readiness.** `ready` covers the workload; `dependenciesReady` covers the TLS
+- **`XApp` splits readiness.** `ready` covers the workload; `dependenciesReady` covers the TLS
   certificate.
 - **Every Kind adds its own fields** (IDs, URLs, the resolved tier).
 
@@ -85,7 +85,7 @@ All of it is on one page: [status contract](status-contract.md).
 
 ## Kinds
 
-One page per Kind, in a folder per API group, mirroring `package/<group>/<name>/`: [`platform/`](platform/) (`platform.wxops.cloud`),
+One page per Kind, in a folder per API group, mirroring `package/<group>/<name>/`: [`tenant/`](tenant/) (`tenant.wxops.cloud`), [`platform/`](platform/) (`platform.wxops.cloud`),
 [`scm/`](scm/) (`scm.wxops.cloud`) and [`auth/`](auth/) (`auth.wxops.cloud`). Archived Kinds are under [`_archives/`](_archives/).
 
 | Kind | Package | You declare (key fields) | Core composes and keeps reconciled | Status beyond `created` and `ready` |
@@ -94,9 +94,11 @@ One page per Kind, in a folder per API group, mirroring `package/<group>/<name>/
 | [`XGiteaOrg`](_archives/gitea-org.md) (archived) | `gitea-org` | `giteaUrl`, `orgName`, `visibility`, `description`, `credentialsSecretRef` | A Terraform `Workspace` that manages the organisation | `orgId`, `orgName` |
 | [`XGiteaTeam`](_archives/gitea-team.md) (archived) | `gitea-team` | `orgName`, `teamName`, `permission`, `units`, `members`, `credentialsSecretRef` | A Terraform `Workspace` that manages the team and its membership | `teamId`, `teamName` |
 | [`XGiteaRepository`](_archives/gitea-repository.md) (archived) | `gitea-repository` | `orgName`, `repoName`, `private`, `autoInit`, `defaultBranch`, `credentialsSecretRef` | A Terraform `Workspace` that manages the repository | `repoId`, `cloneUrl`, `sshUrl`, `htmlUrl` |
-| [`XPlatformDatabaseCluster`](platform/platform-database-clusters.md) | `platform-database-clusters` | `clusterName`, `namespace`, `instances`, `postgresVersion`, `storageSize`, `shared`, `environment`, plus pooler, backup, replica and managed-role blocks | CloudNativePG `Cluster`, RW and RO `Pooler`s, `ScheduledBackup`, generated credentials pushed to Vault (`Password`, `ExternalSecret`, `PushSecret`), and a provider-sql `ProviderConfig` | `clusterName`, `namespace`, `shared`, `environment` |
-| [`XTenantDatabase`](platform/tenant-database.md) | `tenant-database` | `tier` (`shared` or `dedicated`), `environment`, `dbName`, `owner`, `extensions`, `databaseReclaimPolicy` | On a discovered shared cluster, or a dedicated `XPlatformDatabaseCluster` it creates: a CNPG `Database`, a provider-sql `Role`, a generated password with a connection-creds `ExternalSecret`, and a `PushSecret` to Vault | `clusterRef`, `clusterNamespace`, `tier`, `dbName` |
-| [`XTenantApp`](platform/tenant-app.md) | `tenant-app` | `appName`, `namespace`, `image`, `replicas`, `resources`, `env`/`secretsFrom`, `volumes`, `service`, `probes`, `ingress` (TLS, SSO), `monitoring`, `darlane` | `Deployment`, `Service`, `ServiceAccount`, PVCs, cert-manager `Certificate`, Traefik `IngressRoute`/`TraefikService`, `ServiceMonitor`/`PodMonitor`, and the Darlane twin `Deployment` with its Services | `dependenciesReady`, `url`, `namespace`, `image`, `darlane.*` |
+| [`XDatabaseCluster`](platform/database-cluster.md) | `database-cluster` | `clusterName`, `namespace`, `instances`, `postgresVersion`, `storageSize`, `shared`, `environment`, plus pooler, backup, replica and managed-role blocks | CloudNativePG `Cluster`, RW and RO `Pooler`s, `ScheduledBackup`, generated credentials pushed to Vault (`Password`, `ExternalSecret`, `PushSecret`), and a provider-sql `ProviderConfig` | `clusterName`, `namespace`, `shared`, `environment` |
+| [`XDatabase`](tenant/database.md) | `database` | `tier` (`shared` or `dedicated`), `environment`, `dbName`, `databaseName`, `extensions`, `databaseReclaimPolicy` — all optional | The same role, database and credentials as `XTenantDatabase`, as namespaced Objects in the XR's namespace, on a cluster the platform chooses; the owner is the namespace's | `clusterRef`, `clusterNamespace`, `tier`, `dbName`, `databaseName`, `owner` |
+| [`XTenantDatabase`](_archives/tenant-database.md) (archived) | `tenant-database` | `tier` (`shared` or `dedicated`), `environment`, `dbName`, `owner`, `extensions`, `databaseReclaimPolicy` | On a discovered shared cluster, or a dedicated `XPlatformDatabaseCluster` it creates: a CNPG `Database`, a provider-sql `Role`, a generated password with a connection-creds `ExternalSecret`, and a `PushSecret` to Vault | `clusterRef`, `clusterNamespace`, `tier`, `dbName` |
+| [`XApp`](tenant/app.md) | `app` | `appName` (optional), `environment` (optional), `image`, `replicas`, `resources`, `env`/`secretsFrom`, `volumes`, `service`, `probes`, `ingress` (TLS, SSO), `monitoring`, `darlane` | The same resources as `XTenantApp`, as namespaced Objects in the XR's own namespace — and nothing at all in a namespace with no `wxops.cloud/owner` | `dependenciesReady`, `url`, `namespace`, `owner`, `image`, `darlane.*` |
+| [`XTenantApp`](_archives/tenant-app.md) (archived) | `tenant-app` | `appName`, `namespace`, `image`, `replicas`, `resources`, `env`/`secretsFrom`, `volumes`, `service`, `probes`, `ingress` (TLS, SSO), `monitoring`, `darlane` | `Deployment`, `Service`, `ServiceAccount`, PVCs, cert-manager `Certificate`, Traefik `IngressRoute`/`TraefikService`, `ServiceMonitor`/`PodMonitor`, and the Darlane twin `Deployment` with its Services | `dependenciesReady`, `url`, `namespace`, `image`, `darlane.*` |
 | [`XRandomPassword`](_archives/random-password.md) (archived) | `random-password` (utility, not published) | `length`, `special`, `overrideSpecial` | An OpenTofu `Workspace` that generates a random password | No status fields |
 | [`XScmConnection`](scm/connection.md) | `scm-connection` | `vendor`, `org`, `baseUrl`, `access`, `secretStoreRef` | An ESO `ExternalSecret` rendering the host token into `scm-connection-<name>`, in tfvars form, for every consumer's `Workspace`; plus a read-only `inspect` `Workspace` summarising the org | `secretName`, `org`, `repositories`, `teams` |
 | [`XScmRepository`](scm/repository.md) | `scm-repository` | `scmRef`, `mode`, `org`, `repoName`, `visibility`, `defaultBranch`, `topics`, `retain` | An OpenTofu `Workspace` that creates (`managed`) or reads (`observed`) the repository on whichever host the connection names | `exists`, `repoId`, `cloneUrl`, `sshUrl`, `htmlUrl`, `fullName` |
@@ -108,7 +110,7 @@ One page per Kind, in a folder per API group, mirroring `package/<group>/<name>/
 | [`XOIDCConnector`](auth/oidc-connector.md) | `oidc-connector` | `connectionRef`, `connectorId`, `scmRef`, `oauthAppRef`, `orgs` | An `ExternalSecret` reading the oauth app's client secret + `PushSecret`; `orgs[].teams` generated from labelled `XScmTeam`s | `vaultKey`, `teams` |
 | [`XPersona`](auth/persona.md) | `persona` | `description`, `environments`, `members` | Nothing — resolves members into status only | `subjects`, `groups`, `teams` |
 | [`XPersonaBinding`](auth/persona-binding.md) | `persona-binding` | `personaRef`, `role`, `scope`, `namespaces` | One `RoleBinding` per owned namespace, or one `ClusterRoleBinding` (the only composition that emits RBAC) | `bindings` |
-| [`XPlatformPolicy`](auth/platform-policy.md) | `platform-policy` | `template`, `mode`, `scmOrgs`, `personaRef`, `exemptPersonaRef` | One Kyverno `ValidatingPolicy` or `MutatingPolicy` | `policyName`, `policyKind` |
+| [`XPolicy`](auth/policy.md) | `policy` | `template`, `mode`, `scmOrgs`, `personaRef`, `exemptPersonaRef` | One Kyverno `ValidatingPolicy` or `MutatingPolicy` | `policyName`, `policyKind` |
 
 Each composed resource appears only when its parameters ask for it. The *Composed resources* list at the top of each `kcl/<package>/main.k` records the exact
 condition for every one.

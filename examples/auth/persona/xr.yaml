@@ -1,4 +1,4 @@
-# The developers persona (RFC-009): it only collects who it applies to — XPersonaBinding grants to it, XPlatformPolicy narrows for it. A team joins with the
+# The developers persona (RFC-009): it only collects who it applies to — XPersonaBinding grants to it, XPolicy narrows for it. A team joins with the
 # labels scm.wxops.cloud/oidc-login and auth.wxops.cloud/persona-developers on its XScmTeam. The other default personas: docs/api-reference/auth/persona.md.
 apiVersion: auth.wxops.cloud/v1alpha1
 kind: XPersona

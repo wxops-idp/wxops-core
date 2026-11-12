@@ -66,7 +66,7 @@ Conventional Commits, enforced at commit-msg. Allowed types: `feat`, `fix`,
 `perf`, `refactor`, `docs`, `test`, `chore`, `revert`.
 
 There is **no `ci` type** — use `chore(ci):`. Scope with the package name where
-it applies: `feat(tenant-app): ...`.
+it applies: `feat(app): ...`.
 
 ### Three rules that bite
 
@@ -192,17 +192,18 @@ comment naming the error substring, so it cannot pass by failing for an
 unrelated reason:
 
 ```yaml
-# expect: 'owner' is a required property
+# expect: 'image' is a required property
 #
-# owner scopes both the PostgreSQL role name and the Vault path. Missing, it
-# would produce a role and secret path with an empty segment.
-apiVersion: platform.wxops.cloud/v1alpha1
-kind: XTenantDatabase
+# image is the one field an XApp cannot default. Missing, `crossplane render` would
+# still emit a Deployment with no image — only the XRD, and this case, catch it.
+apiVersion: tenant.wxops.cloud/v1alpha1
+kind: XApp
 metadata:
-  name: no-owner
+  name: no-image
+  namespace: rocket-team-production
 spec:
   parameters:
-    dbName: payments
+    environment: dev
 ```
 
 Generate and review:

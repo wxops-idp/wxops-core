@@ -1,5 +1,10 @@
 # XTenantDatabase
 
+> **Being replaced by [`XDatabase`](../tenant/database.md)** ([ADR-005](../../../development-docs/adr/005-kind-ownership-scope-and-naming.md),
+> [RFC-010](../../../development-docs/rfc/010-namespaced-tenant-kinds.md)): the same database, created in the team's own namespace so the namespace decides whose it is and
+> the platform decides where it lives. `XTenantDatabase` stays served so running databases keep working, and a later release archives it. A database holds data — move
+> one with [the handover](../../user-guide/migrating-to-new-kinds.md#xtenantdatabase--xdatabase), and read its checks first. New databases should be `XDatabase`.
+
 Tenant-facing PostgreSQL database with dynamic tier resolution (shared pool auto-assign / dedicated cluster composition), Vault-backed credentials, and ESO
 sync.
 
@@ -10,8 +15,8 @@ sync.
 | **Plural** | `xtenantdatabases` |
 | **Scope** | `Cluster` |
 | **API versions** | `v1alpha1` (served, storage) |
-| **Package** | [`package/platform/tenant-database/`](../../../package/platform/tenant-database) — see [`VERSIONS.yaml`](../../../VERSIONS.yaml) for the current package version |
-| **Composition functions** | [`function-extra-resources`](https://github.com/crossplane-contrib/function-extra-resources) (shared cluster discovery) + [`function-kcl`](https://github.com/crossplane-contrib/function-kcl) — see [`kcl/tenant-database/main.k`](../../../kcl/tenant-database/main.k) |
+| **Package** | [`package/platform/tenant-database/`](../../../package/platform/archives/tenant-database) — see [`VERSIONS.yaml`](../../../VERSIONS.yaml) for the current package version |
+| **Composition functions** | [`function-extra-resources`](https://github.com/crossplane-contrib/function-extra-resources) (shared cluster discovery) + [`function-kcl`](https://github.com/crossplane-contrib/function-kcl) — see [`kcl/tenant-database/main.k`](../../../kcl/_archives/tenant-database/main.k) |
 
 ## `spec.parameters`
 
@@ -20,7 +25,7 @@ sync.
 | Field | Type | Required | Default | Description |
 |---|---|---|---|---|
 | `cluster` | `string` | | `"default"` | Name of the provider-kubernetes `ProviderConfig` to apply composed resources through. Not to be confused with `clusterRef` below, which names a *CNPG* cluster — this is the Kubernetes cluster the resources land on. `"default"` is the local hub, so leaving this unset is behaviour-neutral. See [multi-cluster.md](../../../development-docs/core-ideas/multi-cluster.md). |
-| `tier` | `string` (`shared`, `dedicated`) | | `"shared"` | **`shared`** — auto-assign to the least-loaded `XPlatformDatabaseCluster` labeled `shared: true` and matching this database's `environment`. The composition discovers shared clusters at render time via `function-extra-resources`, counts existing tenant databases per cluster, and picks the one with the fewest tenants. Prevents `dbName` collisions per cluster. The assignment is **sticky** — once resolved, subsequent reconciles reuse the same cluster. **`dedicated`** — compose a new `XPlatformDatabaseCluster` as a child resource (1 cluster = 1 database, fully isolated). Size the child cluster via `dedicatedCluster`. Ignored if `clusterRef`/`clusterNamespace` are set explicitly. |
+| `tier` | `string` (`shared`, `dedicated`) | | `"shared"` | **`shared`** — auto-assign to the least-loaded `XDatabaseCluster` (or `XPlatformDatabaseCluster`) labeled `shared: true` and matching this database's `environment`. The composition discovers shared clusters at render time via `function-extra-resources`, counts existing tenant databases per cluster, and picks the one with the fewest tenants. Prevents `dbName` collisions per cluster. The assignment is **sticky** — once resolved, subsequent reconciles reuse the same cluster. **`dedicated`** — compose a new `XPlatformDatabaseCluster` as a child resource (1 cluster = 1 database, fully isolated). Size the child cluster via `dedicatedCluster`. Ignored if `clusterRef`/`clusterNamespace` are set explicitly. |
 | `environment` | `string` (`dev`, `staging`, `prod`) | | `"dev"` | Pool isolation: for `tier: shared`, the pool is filtered to clusters matching this environment. For `tier: dedicated`, passed through to the child cluster's `environment` field. |
 | `dedicatedCluster` | `object` | | `{}` | Cluster sizing parameters when `tier` is `dedicated`. Ignored for `tier: shared` or when `clusterRef` is set explicitly. |
 | `dedicatedCluster.instances` | `integer` (1–9) | | `1` | PostgreSQL instances. `1` = standalone, `3` = HA. |
@@ -28,7 +33,7 @@ sync.
 | `dedicatedCluster.postgresVersion` | `integer` | | `16` | PostgreSQL major version. |
 | `dedicatedCluster.enablePooler` | `boolean` | | `true` | Deploy a PgBouncer RW pooler on the dedicated cluster. |
 | `dedicatedCluster.namespace` | `string` | | `"cnpg-system"` | Namespace for the dedicated cluster. |
-| `clusterRef` | `string` | | | Name of the platform cluster to provision this database on. Must match the `clusterName` of an existing `XPlatformDatabaseCluster`. When set (along with `clusterNamespace`), bypasses all tier logic. |
+| `clusterRef` | `string` | | | Name of the platform cluster to provision this database on. Must match the `clusterName` of an existing `XDatabaseCluster` or `XPlatformDatabaseCluster`. When set (along with `clusterNamespace`), bypasses all tier logic. |
 | `clusterNamespace` | `string` | | | Kubernetes namespace where the CNPG cluster lives. When set (along with `clusterRef`), bypasses all tier logic. |
 
 ### Database
@@ -89,7 +94,7 @@ manifest for the selectors to find it:
 
 | Resource | Required label | Purpose |
 |---|---|---|
-| `XPlatformDatabaseCluster` | `wxops.cloud/managed-by: platform-database-clusters` | Discovered as candidate for `tier: shared` pool |
+| `XDatabaseCluster` or `XPlatformDatabaseCluster` | `wxops.cloud/managed-by: platform-database-clusters` | Discovered as candidate for `tier: shared` pool — both kinds are read, and a cluster present under both counts once |
 | `XTenantDatabase` | `wxops.cloud/tenant-database: "true"` | Discovered for per-cluster tenant counting and `dbName` collision detection |
 
 Both labels **must be in the XR manifest** — they cannot be set by the composition. Crossplane's composite reconciler writes `status` from dxr updates but
@@ -100,7 +105,7 @@ subsequent databases.
 
 ## Examples
 
-- [`examples/platform/tenant-database/xr.yaml`](../../../examples/platform/tenant-database/xr.yaml) — shared tier (default)
+- [`examples/platform/tenant-database/xr.yaml`](../../../examples/_archives/tenant-database/xr.yaml) — shared tier (default)
 - Dedicated tier — a cluster of its own, created by the XR:
 
   ```yaml

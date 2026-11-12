@@ -1,7 +1,7 @@
 # Application Onboarding — Golden Path
 
-End-to-end flow for taking a developer from "pick a flavor and template" to a running [`tenant-app`](../api-reference/platform/tenant-app.md), tying together the
-templates catalog, [`scm-repository`](../api-reference/scm/repository.md), and `tenant-app`'s `appFlavor`/`templateId`/`repository.url`/`secretsFrom` fields.
+End-to-end flow for taking a developer from "pick a flavor and template" to a running [`app`](../api-reference/tenant/app.md), tying together the
+templates catalog, [`scm-repository`](../api-reference/scm/repository.md), and `app`'s `appFlavor`/`templateId`/`repository.url`/`secretsFrom` fields.
 The portal/scaffolder that drives this flow lives outside `wxops-core` — this doc describes the contract between it and the packages in this repo. Steps 1–2,
 4–7 are pure portal-backend logic (the host's API + git operations); only steps 3 and 8 touch this repo's XRDs.
 
@@ -11,9 +11,9 @@ The portal/scaffolder that drives this flow lives outside `wxops-core` — this 
 ## 1. User picks `appFlavor`
 
 `appFlavor` (`webapp`, `ai`, `ai-webapp`, `geo-webapp`, `search-webapp`) is the broad category. The portal uses it to **filter/recommend** which `templateId`s
-are offered — e.g. `appFlavor: ai-webapp` surfaces templates with vectordb-ready skeletons. `appFlavor` and `templateId` are separate `tenant-app` fields
-because they serve different downstream consumers: `appFlavor` drives platform automation (e.g. a separate `XTenantDatabase` claim's `pgvector`/`postgis`
-extension choices), while `templateId` is a catalog/source-of-scaffold link. Neither affects any resource `tenant-app` itself composes.
+are offered — e.g. `appFlavor: ai-webapp` surfaces templates with vectordb-ready skeletons. `appFlavor` and `templateId` are separate `app` fields
+because they serve different downstream consumers: `appFlavor` drives platform automation (e.g. a separate `XDatabase` claim's `pgvector`/`postgis`
+extension choices), while `templateId` is a catalog/source-of-scaffold link. Neither affects any resource `app` itself composes.
 
 ## 2. User picks `templateId`
 
@@ -35,9 +35,9 @@ spec:
     visibility: private
 ```
 
-Poll/wait for `status.htmlUrl`/`status.cloneUrl` — these become `tenant-app`'s `repository.url` (step 8) and the git push target (step 6).
+Poll/wait for `status.htmlUrl`/`status.cloneUrl` — these become `app`'s `repository.url` (step 8) and the git push target (step 6).
 
-> **Import existing repo**: skip steps 3–6 entirely. Set `repository.url` directly to the existing repo's URL in the `tenant-app` claim (step 8). No
+> **Import existing repo**: skip steps 3–6 entirely. Set `repository.url` directly to the existing repo's URL in the `XApp` (step 8). No
 > `XScmRepository` resource needed — or set `mode: observed` on one to still track it through the API.
 
 ## 4. Fetch the template skeleton
@@ -61,18 +61,18 @@ holds. This becomes the repo's initial commit on `defaultBranch`.
 CI defined by the skeleton itself (pushed as part of step 6) builds and publishes the container image, producing the `image` reference (`repository:tag`) used
 in step 8.
 
-## 8. Create the application — `tenant-app`
+## 8. Create the application — `app`
 
-Once the repo exists and CI has produced an image, the portal creates the [`XTenantApp`](../api-reference/platform/tenant-app.md) claim:
+Once the repo exists and CI has produced an image, the portal creates the [`XApp`](../api-reference/tenant/app.md) in the **team's own namespace** — which decides where it runs and,
+through the namespace's `wxops.cloud/owner`, who owns it, so the manifest names neither:
 
 ```yaml
 metadata:
-  labels:
-    wxops.cloud/owner: <team>                 # the owning team's slug — see Labels below
+  name: <appName>                             # the application's name
+  namespace: <tenant-namespace>               # the team's namespace
 spec:
   parameters:
-    appName: <appName>
-    namespace: <tenant-namespace>
+    environment: <environment>                # optional, any name — one XApp per environment overlay
     appFlavor: <appFlavor>                    # from step 1
     templateId: <templateId>                  # from step 2
     repository:
@@ -81,13 +81,13 @@ spec:
 ```
 
 The namespace the app lands in already has its defaults from the team's `tenants/<name>/` directory — see
-[Namespace defaults](#namespace-defaults--from-gitops). The claim itself goes in the app's environment overlay.
+[Namespace defaults](#namespace-defaults--from-gitops). The manifest goes in the app's environment overlay.
 
 ## 9. (Optional) Wire database secrets
 
-If the app needs a database, create a [`tenant-database`](../api-reference/platform/tenant-database.md) claim first (or alongside), then set
-`secretsFrom.database.enabled: true` on the `tenant-app` claim — see [tenant-app's go-live ordering
-contract](../api-reference/platform/tenant-app.md#vault-secrets--databases) for why the database/secret claim must exist before (or alongside) `tenant-app`.
+If the app needs a database, create an [`XDatabase`](../api-reference/tenant/database.md) in the same namespace first (or alongside), then set
+`secretsFrom.database.enabled: true` on the `XApp` — see [the app's go-live ordering
+contract](../api-reference/tenant/app.md#vault-secrets--databases) for why the database/secret must exist before (or alongside) the `XApp`.
 
 ## Labels the platform reads
 
@@ -100,17 +100,16 @@ matched exactly: group `<org>:<team>` owns `<team>`.
 |---|---|---|---|
 | `auth.wxops.cloud/tenant-namespace` | `Namespace` | `"true"` | [`XPersonaBinding`](../api-reference/auth/persona-binding.md) `scope: owned` finds the team's namespaces by it; `owner-stamp` runs only there |
 | `wxops.cloud/owner` | `Namespace` | `<team>` | The namespace's owner — every object inside inherits it, and the team's persona binding lands only here |
-| `wxops.cloud/environment` | `Namespace` | `dev`, `staging`, `prod`, … | The namespace's environment. Where an [`env-gate`](../api-reference/auth/platform-policy.md) guards it, only the persona trusted with that environment changes it by hand; everyone else deploys through Git |
+| `wxops.cloud/environment` | `Namespace` | `dev`, `staging`, `prod`, … | The namespace's environment. Where an [`env-gate`](../api-reference/auth/policy.md) guards it, only the persona trusted with that environment changes it by hand; everyone else deploys through Git |
 
 **Set by you, in Git:**
 
 | Label | On | Value | Why |
 |---|---|---|---|
-| `wxops.cloud/owner` | The `XTenantApp` and `XTenantDatabase` XRs | `<team>` | They are cluster-scoped, so there is no namespace to inherit from: without the label, [`owner-seal`](../api-reference/auth/platform-policy.md) refuses every person's change to them. Must be one of your own teams |
 | `wxops.cloud/owner` | Every manifest you keep in a tenant namespace | `<team>` | `owner-stamp` adds it on create if it is missing, but then the live object carries a label Git does not — keep it in Git so Argo CD and the cluster agree |
 | `wxops.cloud/protected` | Objects only the platform team may change or delete | `"true"` | The `protected` template refuses everyone else's update and delete. Argo CD is not matched — add `Prune=false` to keep its sync from deleting them |
 
-**Set by `tenant-app` itself** on every composed resource — don't set them, read them:
+**Set by `app` itself** on every composed resource — don't set them, read them:
 
 | Label or annotation | Value | Shows |
 |---|---|---|
@@ -120,7 +119,7 @@ matched exactly: group `<org>:<team>` owns `<team>`.
 | `wxops.cloud/app-flavor` | `webapp`, `ai`, … | The category, for platform automation (database extensions, generated policies) |
 | `wxops.cloud/template-id`, `wxops.cloud/repo-url` (annotations) | from steps 2–3 | The catalog link — which template it was scaffolded from, where its source lives |
 
-User `labels` on `tenant-app` cannot override these. Within a tenant namespace, ServiceAccounts carry `wxops.cloud/owner` too (stamped on create):
+User `labels` on `app` cannot override these. Within a tenant namespace, ServiceAccounts carry `wxops.cloud/owner` too (stamped on create):
 `sa-guard` lets a person's workload run only as `default` or a ServiceAccount their team owns.
 
 ## Namespace defaults — from GitOps
@@ -141,8 +140,8 @@ Argo CD syncs a team's namespace and its apps as separate Applications, from App
 
 - **`tenants/<name>/`** holds the namespace's `ResourceQuota`, `LimitRange`, `NetworkPolicy` (default-deny, plus same-namespace, the ingress controller and
   DNS) and registry credentials. A team that needs more changes its own directory by pull request.
-- **The app's overlays** hold its `XTenantApp` claim (step 8): `dev` syncs on merge; `staging` and `production` wait for a manual sync — the same line
-  [`env-gate`](../api-reference/auth/platform-policy.md) draws for people changing a guarded namespace by hand.
+- **The app's overlays** hold its `XApp` (step 8): `dev` syncs on merge; `staging` and `production` wait for a manual sync — the same line
+  [`env-gate`](../api-reference/auth/policy.md) draws for people changing a guarded namespace by hand.
 
 | Concern | How |
 |---|---|
@@ -169,5 +168,5 @@ subfolder name.
 | 5 | Render placeholders | external (portal) |
 | 6 | Commit + push initial commit | external (portal) |
 | 7 | CI builds image | external (skeleton's CI config) |
-| 8 | Application workload, in the app's environment overlay | [`tenant-app`](../api-reference/platform/tenant-app.md); namespace defaults from `tenants/<name>/` (GitOps) |
-| 9 | Database + secrets (optional) | [`tenant-database`](../api-reference/platform/tenant-database.md) + platform `ExternalSecret`/`PushSecret` |
+| 8 | Application workload, in the app's environment overlay | [`app`](../api-reference/tenant/app.md); namespace defaults from `tenants/<name>/` (GitOps) |
+| 9 | Database + secrets (optional) | [`database`](../api-reference/tenant/database.md) + platform `ExternalSecret`/`PushSecret` |

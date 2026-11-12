@@ -1,5 +1,10 @@
 # XTenantApp
 
+> **Being replaced by [`XApp`](../tenant/app.md)** ([ADR-005](../../../development-docs/adr/005-kind-ownership-scope-and-naming.md),
+> [RFC-010](../../../development-docs/rfc/010-namespaced-tenant-kinds.md)): the same application scaffold, created in the team's own namespace so the namespace decides
+> where it runs and who owns it. `XTenantApp` stays served so running applications keep working, and a later release archives it. Move an application with
+> [the handover](../../user-guide/migrating-to-new-kinds.md#xtenantapp--xapp). New applications should be `XApp`.
+
 Tenant application scaffold — provisions a `Deployment` + `Service` + optional `IngressRoute` + optional `ServiceAccount` for an application workload, following
 the `app.kubernetes.io/*` label conventions used by the Kubewekend and Bitnami Helm "common" libraries (`app.kubernetes.io/name`, `app.kubernetes.io/instance`,
 `app.kubernetes.io/managed-by: crossplane`).
@@ -14,8 +19,8 @@ This XR deliberately stops at the application workload. Vault-backed secrets (`E
 | **Plural** | `xtenantapps` |
 | **Scope** | `Cluster` |
 | **API versions** | `v1alpha1` (served, storage) |
-| **Package** | [`package/platform/tenant-app/`](../../../package/platform/tenant-app) — see [`VERSIONS.yaml`](../../../VERSIONS.yaml) for the current package version |
-| **Composition function** | [`function-kcl`](https://github.com/crossplane-contrib/function-kcl) — see [`kcl/tenant-app/main.k`](../../../kcl/tenant-app/main.k) |
+| **Package** | [`package/platform/tenant-app/`](../../../package/platform/archives/tenant-app) — see [`VERSIONS.yaml`](../../../VERSIONS.yaml) for the current package version |
+| **Composition function** | [`function-kcl`](https://github.com/crossplane-contrib/function-kcl) — see [`kcl/tenant-app/main.k`](../../../kcl/_archives/tenant-app/main.k) |
 
 ## `spec.parameters`
 
@@ -454,7 +459,7 @@ failures.
 
 ## Example
 
-See [`examples/platform/tenant-app/xr.yaml`](../../../examples/platform/tenant-app/xr.yaml).
+See [`examples/platform/tenant-app/xr.yaml`](../../../examples/_archives/tenant-app/xr.yaml).
 
 ## See also
 
