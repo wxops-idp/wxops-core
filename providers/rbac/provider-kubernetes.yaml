@@ -50,7 +50,7 @@ rules:
       - wxops:platform-view
       - wxops:platform-edit
       - wxops:platform-admin
-  # Kyverno CEL policies (auth.wxops.cloud/platform-policy) — the Kyverno controller itself is a cluster bootstrap prerequisite, not installed by W'xOps.
+  # Kyverno CEL policies (auth.wxops.cloud/policy) — the Kyverno controller itself is a cluster bootstrap prerequisite, not installed by W'xOps.
   - apiGroups: ["policies.kyverno.io"]
     resources: ["validatingpolicies", "mutatingpolicies"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]

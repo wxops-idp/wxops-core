@@ -48,7 +48,7 @@ spec:
 
             A persona is a title that collects who it applies to: SCM teams, hand-listed groups and users, and in-cluster agents. It
             grants nothing and composes no resource — it resolves its members into `status.subjects`, in the exact shape an RBAC
-            subject takes, for XPersonaBinding and XPlatformPolicy to read.
+            subject takes, for XPersonaBinding and XPolicy to read.
 
             Inputs (via option("params").oxr.spec.parameters):
               description        string    What the persona may do, in one line.

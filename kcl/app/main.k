@@ -35,7 +35,7 @@ Inputs (via option("params").oxr.spec.parameters):
                        resources — purely metadata for catalog linking.
   repository.url string Optional. URL of the application's source-code
                        repository (e.g. a Gitea repo created or imported by
-                       the platform/portal — tenant-app does not create or
+                       the platform/portal — XApp does not create or
                        import repositories itself). Applied as the
                        wxops.cloud/repo-url annotation on all composed
                        resources — purely metadata for catalog linking.
@@ -93,8 +93,8 @@ Inputs (via option("params").oxr.spec.parameters):
   secretsFrom.app.secretName           string Default: "{appName}-env".
   secretsFrom.database.enabled         bool   Default: false. Same as
                       secretsFrom.app but for a database connection-creds
-                      Secret (e.g. produced by a platform-provisioned
-                      XTenantDatabase).
+                      Secret (e.g. the credentials of an XDatabase in the
+                      same namespace).
   secretsFrom.database.secretName      string Default: "{appName}-db-creds".
 
   reloader.enabled   bool    Default: false. If true, adds
@@ -208,8 +208,8 @@ Composed resources:
   app-weighted-traefikservice traefik.io/v1alpha1         TraefikService  — (if darlane.trafficWeight > 0).
 
 This XR deliberately stops at the application workload: Vault-backed secrets
-(ExternalSecret/PushSecret) and databases (XTenantDatabase) are platform-level
-concerns wired up separately — apps consume the resulting Secrets via
+(ExternalSecret/PushSecret) and databases (XDatabase) are separate XRs,
+wired up separately — apps consume the resulting Secrets via
 `envFrom`.
 
 """
@@ -290,7 +290,7 @@ labels = _podLabels | {"wxops.cloud/owner" = owner}
 
 # templateId / repository.url are pure catalog-linking metadata (e.g. for a
 # Backstage catalog-info.yaml or portal UI) — applied as annotations on every
-# composed resource. tenant-app neither creates nor imports repositories;
+# composed resource. XApp neither creates nor imports repositories;
 # repository.url just records where the source lives.
 _templateId = _get(params, "templateId", "")
 _repo = _get(params, "repository", {})
@@ -330,7 +330,7 @@ _env = params.env if "env" in params else []
 
 # secretsFrom.{app,database} reference Secrets provisioned out-of-band by the
 # platform/GitOps (ExternalSecret/PushSecret for Vault app secrets, an
-# XTenantDatabase's connection-creds for the database) — this XR only wires
+# XDatabase's connection-creds for the database) — this XR only wires
 # them into envFrom by name, on a simple default naming convention. It does
 # not wait for or validate that these Secrets exist; that's the platform's
 # responsibility to provision before (or alongside) this XR's resources.
@@ -1098,7 +1098,7 @@ _pod_monitor = {
 
 # ── Status write-back (dxr) ─────────────────────────────────────────
 # Emitting an item with the XR's own apiVersion/kind writes status fields back
-# to the XR, giving operators a quick signal from `kubectl get xtenantapp`.
+# to the XR, giving operators a quick signal from `kubectl get xapps`.
 #
 # `ocds` (observed composed resources) holds the last-known state of each
 # Object from provider-kubernetes. Reading the Ready condition here means the
@@ -1122,7 +1122,7 @@ _appReady = _deploymentReady and _serviceReady and _ingressReady
 # instead of showing a blanket "not ready" for a serving application.
 #
 # Only the cert-manager Certificate qualifies today. Note this XR does NOT
-# compose an XTenantDatabase — secretsFrom.database merely wires an existing
+# compose an XDatabase — secretsFrom.database merely wires an existing
 # Secret in by name and is explicitly not waited on (see the comment above the
 # Deployment), so there is no database readiness for this XR to report.
 #

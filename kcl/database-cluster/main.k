@@ -774,7 +774,7 @@ _managed_role_push_secrets = [{
 # NOTE: dxr updates write status but Crossplane ignores metadata.labels —
 # discovery labels (wxops.cloud/managed-by) must be in the XR manifest.
 
-# created/ready mirror the XTenantApp contract so the portal has one field to
+# created/ready mirror the XApp contract so the portal has one field to
 # poll across every package. Crossplane's native type:Ready is unreliable on
 # v2.3 + function-kcl v0.12.1, so both are derived from ocds instead.
 #

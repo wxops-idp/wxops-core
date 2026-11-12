@@ -1,6 +1,6 @@
 # Persona roles (RFC-009). Reads come from Kubernetes' own `view` (selected by its aggregate-to-view label: no Secrets, no impersonation); writes come only
 # from the W'xOps pieces below. `edit` and `admin` are not aggregated into a team persona: they grant `impersonate` on ServiceAccounts and
-# `serviceaccounts/token`, through which an SCM user could act as any ServiceAccount and escape every XPlatformPolicy. Only `wxops:persona-platform` keeps
+# `serviceaccounts/token`, through which an SCM user could act as any ServiceAccount and escape every XPolicy. Only `wxops:persona-platform` keeps
 # `admin`. Bound by XPersonaBinding with a RoleBinding per namespace — never a ClusterRoleBinding; cluster-wide power is wxops:platform-* only.
 #
 # A kind tenants should write is a new piece with the persona labels it belongs to — a reviewed change, like any permission.
@@ -122,7 +122,7 @@ rules:
     resources: ["servicemonitors", "podmonitors"]
     verbs: ["create", "update", "patch", "delete"]
 ---
-# Into a running workload — owners only, and narrowed further by the exec-guard XPlatformPolicy.
+# Into a running workload — owners only, and narrowed further by the exec-guard XPolicy.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
