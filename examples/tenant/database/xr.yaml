@@ -1,0 +1,44 @@
+apiVersion: tenant.wxops.cloud/v1alpha1
+kind: XDatabase
+metadata:
+  name: payment-db                     # the database's logical name unless dbName is set
+  namespace: rocket-team-production    # the team's namespace: whose it is, through its wxops.cloud/owner label
+spec:
+  # spec.crossplane is a sibling of spec.parameters, not a field inside it — track a channel
+  # (every release labels its Composition channel: stable; make install-dev applies channel:
+  # nightly). See development-docs/development/releasing.md#channels for the Manual-pin alternative.
+  # crossplane:
+  #   compositionRevisionSelector:
+  #     matchLabels:
+  #       channel: stable          # or nightly
+  #   compositionUpdatePolicy: Automatic
+  parameters:
+    # Every parameter is optional. There is no owner, cluster, namespace or secret store to name:
+    # the namespace decides whose it is, and the platform decides where it lives.
+    # tier: shared        # default — a shared cluster for the environment, chosen by the platform
+    # tier: dedicated     # the cluster the platform team created for this database:
+    #                     #   an XDatabaseCluster named <owner>-<dbName>-cluster, shared: false
+    environment: dev      # optional, any name — picks the shared pool; absent means "dev"
+    extensions:
+      - uuid-ossp
+      - pgcrypto
+
+    # The PostgreSQL database is named <owner>-<dbName> unless you set databaseName — only
+    # to adopt a database an XTenantDatabase created under its bare dbName.
+    # databaseName: payment-db
+
+    # "retain" (default) protects the database and its owning role from XR
+    # deletion — both survive and must be cleaned up manually if the tenant
+    # is decommissioned. Set to "delete" to have CNPG drop the database on XR
+    # deletion (also allows the role to be dropped) — a Usage orders the
+    # role's DROP ROLE to run only after the database's DROP DATABASE has
+    # completed, avoiding the 2BP01 parallel-deletion race.
+    #
+    # Also controls the connection-creds Secret and its ExternalSecret/
+    # Password-generator: "retain" orphans them on XR deletion so the
+    # existing password is preserved and reused on recreate (delete them
+    # manually to force a new password); "delete" tears them down too, so
+    # recreation generates a brand-new password — ordered by a second
+    # Usage so the Secret isn't removed until DROP ROLE completes
+    # (provider-sql's Observe() needs it even while deleting the Role).
+    # databaseReclaimPolicy: "retain"

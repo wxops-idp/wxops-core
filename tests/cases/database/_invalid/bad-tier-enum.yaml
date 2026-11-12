@@ -1,0 +1,11 @@
+# expect: is not one of ['shared', 'dedicated']
+#
+# Only the two tiers exist.
+apiVersion: tenant.wxops.cloud/v1alpha1
+kind: XDatabase
+metadata:
+  name: payment-db
+  namespace: rocket-team-production
+spec:
+  parameters:
+    tier: isolated

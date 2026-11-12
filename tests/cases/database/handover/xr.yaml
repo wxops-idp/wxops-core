@@ -1,0 +1,14 @@
+# Handed back (the undo of a migration from XTenantDatabase): every composed Object is Observe-only (no Delete among its management policies), so deleting this XR leaves the role, the database and the credentials in place.
+apiVersion: tenant.wxops.cloud/v1alpha1
+kind: XDatabase
+metadata:
+  name: payment-db
+  namespace: rocket-team-production
+  annotations:
+    wxops.cloud/handover: "true"
+spec:
+  parameters:
+    environment: dev   # pool filtered by environment — must match the cluster's environment
+    extensions:
+      - uuid-ossp
+      - pgcrypto

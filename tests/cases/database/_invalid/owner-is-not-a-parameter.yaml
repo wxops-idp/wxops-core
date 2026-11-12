@@ -1,0 +1,11 @@
+# expect: unknown field spec.parameters.owner
+#
+# The owner is the namespace's. A field that named another would be the confused deputy RFC-010 closes: a database filed under team-b's OpenBao path.
+apiVersion: tenant.wxops.cloud/v1alpha1
+kind: XDatabase
+metadata:
+  name: payment-db
+  namespace: rocket-team-production
+spec:
+  parameters:
+    owner: team-b

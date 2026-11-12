@@ -1,0 +1,12 @@
+# The mirror of the XTenantDatabase shared-tier case. No owner, no cluster, no secret store: the namespace and the platform decide them.
+apiVersion: tenant.wxops.cloud/v1alpha1
+kind: XDatabase
+metadata:
+  name: payment-db
+  namespace: rocket-team-production
+spec:
+  parameters:
+    environment: dev   # pool filtered by environment — must match the cluster's environment
+    extensions:
+      - uuid-ossp
+      - pgcrypto

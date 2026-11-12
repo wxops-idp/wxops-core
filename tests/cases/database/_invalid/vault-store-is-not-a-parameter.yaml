@@ -1,0 +1,11 @@
+# expect: unknown field spec.parameters.vaultSecretStoreName
+#
+# A store the tenant could name might be scoped to a mount teams may not write.
+apiVersion: tenant.wxops.cloud/v1alpha1
+kind: XDatabase
+metadata:
+  name: payment-db
+  namespace: rocket-team-production
+spec:
+  parameters:
+    vaultSecretStoreName: vault-platform

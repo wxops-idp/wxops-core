@@ -1,0 +1,11 @@
+# expect: unknown field spec.parameters.clusterRef
+#
+# The platform decides which cluster a database lives on.
+apiVersion: tenant.wxops.cloud/v1alpha1
+kind: XDatabase
+metadata:
+  name: payment-db
+  namespace: rocket-team-production
+spec:
+  parameters:
+    clusterRef: cluster-a

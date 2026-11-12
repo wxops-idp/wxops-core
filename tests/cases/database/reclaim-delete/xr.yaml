@@ -1,0 +1,10 @@
+# databaseReclaimPolicy: delete adds the two namespaced Usages that order DROP ROLE after DROP DATABASE, and the Secret's deletion after DROP ROLE.
+apiVersion: tenant.wxops.cloud/v1alpha1
+kind: XDatabase
+metadata:
+  name: payment-db
+  namespace: rocket-team-production
+spec:
+  parameters:
+    environment: dev
+    databaseReclaimPolicy: delete

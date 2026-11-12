@@ -1,0 +1,11 @@
+# databaseName adopts a database an XTenantDatabase created under its bare dbName — the PostgreSQL name of an existing CNPG database cannot change.
+apiVersion: tenant.wxops.cloud/v1alpha1
+kind: XDatabase
+metadata:
+  name: payment-db
+  namespace: rocket-team-production
+spec:
+  parameters:
+    environment: dev
+    dbName: payment-db
+    databaseName: payment-db
