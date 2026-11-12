@@ -1,0 +1,14 @@
+# expect: unknown field spec.parameters.containerPortt
+#
+# Kubernetes PRUNES unknown fields rather than rejecting them, so this typo would
+# be silently dropped and the container would fall back to the default port with
+# no error anywhere. This suite is deliberately stricter than the API server here.
+apiVersion: tenant.wxops.cloud/v1alpha1
+kind: XApp
+metadata:
+  name: typo
+  namespace: rocket-team-production
+spec:
+  parameters:
+    image: ghcr.io/x/y:1
+    containerPortt: 9090

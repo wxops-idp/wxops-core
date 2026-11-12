@@ -72,6 +72,34 @@ rules:
     resources: ["poddisruptionbudgets"]
     verbs: ["create", "update", "patch", "delete"]
 ---
+# The W'xOps tenant kinds (ADR-005): written by developers and owners in the namespaces they are bound in — and only there, which is what makes the namespace the owner.
+# Read is its own piece, granted explicitly to every team persona so it does not depend on Kubernetes' `view` aggregating a kind. A rule for a kind whose CRD is not
+# installed grants nothing until it is.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: wxops:piece:persona-write-tenant
+  labels:
+    auth.wxops.cloud/aggregate-to-persona-developers: "true"
+    auth.wxops.cloud/aggregate-to-persona-owners: "true"
+rules:
+  - apiGroups: ["tenant.wxops.cloud"]
+    resources: ["xapps", "xdatabases"]
+    verbs: ["create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: wxops:piece:persona-read-tenant
+  labels:
+    auth.wxops.cloud/aggregate-to-persona-viewers: "true"
+    auth.wxops.cloud/aggregate-to-persona-developers: "true"
+    auth.wxops.cloud/aggregate-to-persona-owners: "true"
+rules:
+  - apiGroups: ["tenant.wxops.cloud"]
+    resources: ["*", "*/status"]
+    verbs: ["get", "list", "watch"]
+---
 # The operator kinds tenants write beside their workloads. A rule for a kind whose CRD is not installed grants nothing until it is.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole

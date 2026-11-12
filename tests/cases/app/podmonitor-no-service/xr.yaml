@@ -1,0 +1,246 @@
+apiVersion: tenant.wxops.cloud/v1alpha1
+kind: XApp
+metadata:
+  name: payment-api
+  namespace: rocket-team-production
+spec:
+  parameters:
+    environment: dev
+    # appFlavor: webapp   # default. one of webapp, ai, ai-webapp, geo-webapp, search-webapp
+    #                      # purely metadata (wxops.cloud/app-flavor label) for platform
+    #                      # automation, e.g. a separate XDatabase claim's extensions
+    # templateId: nodejs-service  # optional. Backstage/IDP template id — catalog metadata only
+    # repository:
+    #   url: https://gitea.example.com/rocket-team/payment-api  # catalog metadata only
+    image: ghcr.io/rocket-team/payment-api:1.4.0
+    # imagePullSecrets:
+    #   - my-registry-creds    # existing Secret (kubernetes.io/dockerconfigjson)
+    #                           # must exist in the target namespace
+
+    # serviceAccount:
+    #   create: true            # compose a new SA (default: false = use existing/default)
+    #   # name: payment-api    # defaults to appName when create: true
+    #   annotations:
+    #     eks.amazonaws.com/role-arn: arn:aws:iam::123456789:role/payment-api
+    #     # or: iam.gke.io/gcp-service-account: payment-api@project.iam.gserviceaccount.com
+
+    securityContext: {}
+    # securityContext:
+    #   runAsNonRoot: true
+    #   runAsUser: 1000
+    #   readOnlyRootFilesystem: true
+    #   allowPrivilegeEscalation: false
+    #   capabilities:
+    #     drop: ["ALL"]
+
+    # terminationGracePeriodSeconds: 60  # default: 30
+
+    # ── Everything below is optional — shown enabled for reference ──────
+    # replicas: 2
+    # containerPort: 8080
+    # command: ["node", "server.js"]    # override image ENTRYPOINT — omit to use image default
+    # args: ["--port", "8080"]          # override image CMD — can be set independently of command
+    # resources:
+    #   requests:
+    #     cpu: "100m"
+    #     memory: "128Mi"
+    #   limits:
+    #     cpu: "500m"
+    #     memory: "512Mi"
+    # env:
+    #   - name: LOG_LEVEL
+    #     value: "info"
+    # envFrom:
+    #   - secretRef:
+    #       name: payment-api-extra-secret
+    #   - configMapRef:
+    #       name: payment-api-config
+    # Metrics: use the monitoring block below, NOT prometheus.io/* annotations.
+    # Those annotations are a Prometheus convention read only by a
+    # kubernetes_sd_config job with matching relabel rules, and
+    # kube-prometheus-stack's additionalScrapeConfigs is empty here — so they
+    # scrape nothing. See development-docs/core-ideas/observability.md.
+    # monitoring:
+    #   enabled: true
+    #   kind: auto          # auto | ServiceMonitor | PodMonitor
+    #   port: 8080          # defaults to containerPort
+    #   path: /metrics
+    #   interval: 30s
+    #   sampleLimit: 5000
+    # podAnnotations:
+    #   example.com/some-annotation: "value"
+    # deploymentAnnotations:
+    #   wxops.cloud/owner: rocket-team
+    # labels:
+    #   wxops.cloud/cost-center: rocket-team
+
+    # secretsFrom:
+    #   app:
+    #     enabled: true
+    #     # secretName: payment-api-env       # default: "{appName}-env"
+    #   database:
+    #     enabled: true
+    #     # secretName: payment-api-db-creds  # default: "{appName}-db-creds"
+    # These Secrets are provisioned by the platform/GitOps (ExternalSecret/
+    # PushSecret for app secrets, XDatabase connection-creds for the
+    # database) — this XR only adds envFrom.secretRef entries by name.
+
+    # rolloutStrategy:
+    #   type: RollingUpdate   # default. one of RollingUpdate, Recreate
+    #   rollingUpdate:
+    #     maxSurge: "25%"       # default
+    #     maxUnavailable: "25%" # default
+
+    # reloader:
+    #   enabled: true
+
+    # volumes:
+    #   - name: data
+    #     mountPath: /data
+    #     claimName: payment-api-data   # use existing PVC
+    #   - name: cache
+    #     mountPath: /cache
+    #     claimName: payment-api-cache  # create a new PVC
+    #     create: true
+    #     storageClass: fast-ssd
+    #     size: 10Gi
+    #   - name: app-config
+    #     mountPath: /etc/app           # mounts all keys from the ConfigMap
+    #     configMapName: payment-api-config
+    #   - name: feature-flags
+    #     mountPath: /etc/flags
+    #     configMapName: feature-flags  # key-to-path projection — only listed keys mounted
+    #     items:
+    #       - key: flags.json
+    #         path: flags.json
+    #   - name: db-creds
+    #     mountPath: /run/secrets/db    # mounts all keys from the Secret
+    #     secretName: payment-api-db-creds
+    #     readOnly: true
+    #   - name: api-key
+    #     mountPath: /run/secrets       # projection — only one key from the Secret
+    #     secretName: payment-api-keys
+    #     items:
+    #       - key: STRIPE_KEY
+    #         path: stripe-key
+
+    # darlane:
+    #   enabled: true
+    #   replicas: 0                      # default — scale to 1 on-demand
+    #   # image: ghcr.io/rocket-team/payment-api:debug
+    #
+    #   # Tier 1: usable pod
+    #   command: ["uvicorn", "main:app", "--reload"]  # hot-reload for file sync
+    #   # containerPort: 8000          # if dev server starts on a different port than main app
+    #   #                              # required for A/B traffic to reach the right port
+    #   # args: ["--workers", "1"]
+    #   env:
+    #     - name: LOG_LEVEL
+    #       value: debug
+    #     - name: FEATURE_NEW_RANKING   # overrides main app env on collision
+    #       value: "true"
+    #   resources:
+    #     requests: {cpu: "100m", memory: "256Mi"}
+    #     limits: {memory: "1Gi"}
+    #   securityContext:
+    #     runAsNonRoot: true
+    #     # readOnlyRootFilesystem defaults to false for Darlane (allows apt/pip)
+    #
+    #   # File sync — writable emptyDir overlay, works even with readOnlyRootFilesystem: true
+    #   # fileSync:
+    #   #   enabled: true          # emits emptyDir volume at mountPath
+    #   #   mountPath: /app        # default — must match where app reads source files
+    #   #   initFromImage: true    # default — initContainer pre-populates from image; sync tools push deltas
+    #   #   # Developer side:
+    #   #   #   POD=$(kubectl -n <ns> get pods -l app.kubernetes.io/component=darlane -o jsonpath='{.items[0].metadata.name}')
+    #   #   #   wxops darlane sync <appName> --local ./src --remote /app
+    #
+    #   # mirrord (CLI only — no manifest config needed):
+    #   #   mirrord exec --target deployment/<appName>-darlane -- <command>
+    #   #   mirrord exec --target deployment/<appName>-darlane --steal -- <command>
+    #   #   mirrord exec --target deployment/<appName>-darlane --steal --filter "x-debug-user: alice" -- <command>
+    #
+    #   # Traffic routing: A/B testing + feature flags + full canary
+    #   # Three independent controls — compose freely.
+    #   # See development-docs/core-ideas/darlane.md#combining-traffic-modes for the full interaction table.
+    #   #
+    #   # trafficWeight: 20              # % of real Ingress traffic → Darlane pod
+    #   #                               # 0=debug only | 1-99=A/B split | 100=full canary
+    #   #                               # requires ingress.enabled: true
+    #   #
+    #   # stickySession:                # pin browser sessions to one backend via cookie
+    #   #   enabled: true               # requires trafficWeight > 0
+    #   #   cookieName: darlane-ab      # override if multiple apps share the same domain
+    #   #   secure: true                # Secure flag (HTTPS only)
+    #   #   sameSite: lax               # lax | strict | none
+    #   #
+    #   # headerRouting:                # pin requests by header — bypasses trafficWeight
+    #   #   enabled: true               # and cookie assignment; works with trafficWeight: 0
+    #   #   header: X-Target-Env        # HTTP header name (case-sensitive)
+    #   #   value: darlane              # header value to match (case-sensitive)
+    #   #   # e.g.: curl -H "X-Target-Env: darlane" https://payment-api.example.com/
+    #
+    #   # Tier 3: telemetry port + volumes
+    #   # telemetryPort: 4318           # emits payment-api-darlane-telemetry ClusterIP Service
+    #   #                               # OTEL collector scrapes here for the Darlane version
+    #   #                               # combine with trafficWeight for side-by-side A/B observability
+    #   # volumes:
+    #   #   - name: pip-cache
+    #   #     mountPath: /root/.cache/pip
+    #   #     claimName: payment-api-pip-cache   # existing PVC — survives pod restarts
+    #   #   - name: dev-config
+    #   #     mountPath: /etc/app-dev
+    #   #     configMapName: payment-api-dev-config  # ConfigMap volume
+    #   #   - name: dev-secrets
+    #   #     mountPath: /run/secrets/dev
+    #   #     secretName: payment-api-dev-creds       # Secret volume
+    #   #     readOnly: true
+    #
+    #   # Tier 2: safety + access control
+    #   # productionOverride: true       # required when environment: prod
+    #   # ttl: "4h"                      # annotation for Kyverno auto-scale-down
+    #   # serviceAccount:
+    #   #   create: true                 # emits SA; portal/CI uses SA token
+    #   #   # name: payment-api-darlane  # defaults to "{appName}-darlane"
+    #   #   # annotations:
+    #   #   #   eks.amazonaws.com/role-arn: arn:aws:iam::123456789:role/darlane
+
+    # service:
+    #   enabled: true
+    #   type: ClusterIP
+    #   port: 80
+
+    # probes:
+    #   liveness:
+    #     enabled: true       # default: service.enabled
+    #     path: /healthz      # default
+    #   readiness:
+    #     enabled: true       # default: service.enabled
+    #     path: /readyz       # default
+    #   startup:
+    #     enabled: false      # default — opt in for slow-starting apps
+    #     path: /healthz
+    #     periodSeconds: 10
+    #     failureThreshold: 30
+
+    # ingress:
+    #   enabled: true       # host becomes required when enabled
+    #   className: traefik
+    #   host: payment-api.rocket-team.example.com
+    #   path: /             # default
+    #   pathType: Prefix    # default
+    #   tls:
+    #     enabled: true
+    #     secretName: payment-api-tls   # default: "{appName}-tls"
+    #     clusterIssuer: letsencrypt-prod  # optional — auto-issues cert via cert-manager
+    #   auth:
+    #     enabled: true  # SSO via the platform's oauth2-proxy ForwardAuth middlewares
+
+    # Vault-backed env secrets and databases are platform-level concerns,
+    # wired up separately (e.g. an ExternalSecret/PushSecret + XDatabase
+    # claim). Reference the resulting Secret(s) via secretsFrom above, or via
+    # envFrom directly for any other Secret/ConfigMap.
+    service:
+      enabled: false
+    monitoring:
+      enabled: true
