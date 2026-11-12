@@ -1,0 +1,13 @@
+# The shared pool, served by the new kind only. Same label as the old kind's: a manifest moves between the two by changing `kind:` alone.
+apiVersion: platform.wxops.cloud/v1alpha1
+kind: XDatabaseCluster
+metadata:
+  name: cluster-a
+  labels:
+    wxops.cloud/managed-by: platform-database-clusters
+spec:
+  parameters:
+    clusterName: cluster-a
+    namespace: cnpg-system
+    shared: true
+    environment: dev

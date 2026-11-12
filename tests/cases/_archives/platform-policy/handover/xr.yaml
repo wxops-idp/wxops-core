@@ -1,0 +1,13 @@
+# Handed over to XPolicy (ADR-005): the annotation makes the Object Observe-only with deletionPolicy Orphan, so this XR stops writing the Kyverno policy and deleting it leaves the policy in place.
+apiVersion: auth.wxops.cloud/v1alpha1
+kind: XPlatformPolicy
+metadata:
+  name: handover
+  annotations:
+    wxops.cloud/handover: "true"
+spec:
+  parameters:
+    template: protected
+    scmOrgs: [wxops-idp]
+    exemptPersonaRef:
+      name: platform

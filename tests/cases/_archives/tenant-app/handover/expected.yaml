@@ -1,0 +1,581 @@
+apiVersion: platform.wxops.cloud/v1alpha1
+kind: XTenantApp
+metadata:
+  name: rocket-team-payment-api
+spec:
+  crossplane:
+    resourceRefs:
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: payment-api-certificate
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: payment-api-darlane-deployment
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: payment-api-darlane-ingressroute
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: payment-api-darlane-sa
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: payment-api-darlane-svc
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: payment-api-deployment
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: payment-api-ingress
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: payment-api-service
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: payment-api-servicemonitor
+      - apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        name: payment-api-weighted-traefikservice
+status:
+  conditions:
+    - reason: WatchCircuitClosed
+      status: 'True'
+      type: Responsive
+    - reason: ReconcileSuccess
+      status: 'True'
+      type: Synced
+    - message: 'Unready resources: payment-api-certificate, payment-api-darlane-deployment, payment-api-darlane-ingressroute, and 7 more'
+      reason: Creating
+      status: 'False'
+      type: Ready
+  created: false
+  darlane:
+    ready: false
+    replicas: 0
+    serviceAccountName: payment-api-darlane
+    trafficMode: both
+    ttl: 4h
+  dependenciesReady: false
+  image: ghcr.io/rocket-team/payment-api:1.4.0
+  namespace: rocket-team-production
+  ready: false
+  url: https://payment-api.rocket-team.example.com
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: payment-api-certificate
+  labels:
+    crossplane.io/composite: rocket-team-payment-api
+  name: payment-api-certificate
+  ownerReferences:
+    - apiVersion: platform.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XTenantApp
+      name: rocket-team-payment-api
+      uid: c66e5e9b-320c-5b1b-8beb-cf16e380a850
+spec:
+  deletionPolicy: Orphan
+  forProvider:
+    manifest:
+      apiVersion: cert-manager.io/v1
+      kind: Certificate
+      metadata:
+        annotations: {}
+        labels:
+          app.kubernetes.io/component: app
+          app.kubernetes.io/instance: payment-api
+          app.kubernetes.io/managed-by: crossplane
+          app.kubernetes.io/name: payment-api
+          wxops.cloud/app-flavor: webapp
+          wxops.cloud/environment: dev
+        name: payment-api-tls
+        namespace: rocket-team-production
+      spec:
+        dnsNames:
+          - payment-api.rocket-team.example.com
+        issuerRef:
+          kind: ClusterIssuer
+          name: letsencrypt-prod
+        secretName: payment-api-tls
+  managementPolicies:
+    - Observe
+  providerConfigRef:
+    name: default
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: payment-api-darlane-deployment
+  labels:
+    crossplane.io/composite: rocket-team-payment-api
+  name: payment-api-darlane-deployment
+  ownerReferences:
+    - apiVersion: platform.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XTenantApp
+      name: rocket-team-payment-api
+      uid: c66e5e9b-320c-5b1b-8beb-cf16e380a850
+spec:
+  deletionPolicy: Orphan
+  forProvider:
+    manifest:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        annotations:
+          wxops.cloud/darlane-ttl: 4h
+        labels:
+          app.kubernetes.io/component: darlane
+          app.kubernetes.io/instance: payment-api
+          app.kubernetes.io/managed-by: crossplane
+          app.kubernetes.io/name: payment-api
+          wxops.cloud/app-flavor: webapp
+          wxops.cloud/environment: dev
+        name: payment-api-darlane
+        namespace: rocket-team-production
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app.kubernetes.io/component: darlane
+            app.kubernetes.io/instance: payment-api
+            app.kubernetes.io/name: payment-api
+        template:
+          metadata:
+            labels:
+              app.kubernetes.io/component: darlane
+              app.kubernetes.io/instance: payment-api
+              app.kubernetes.io/managed-by: crossplane
+              app.kubernetes.io/name: payment-api
+              wxops.cloud/app-flavor: webapp
+              wxops.cloud/environment: dev
+          spec:
+            containers:
+              - command:
+                  - sleep
+                  - infinity
+                env: []
+                image: ghcr.io/rocket-team/payment-api:1.4.0
+                imagePullPolicy: IfNotPresent
+                name: payment-api-darlane
+                ports:
+                  - containerPort: 8080
+            serviceAccountName: payment-api-darlane
+  managementPolicies:
+    - Observe
+  providerConfigRef:
+    name: default
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: payment-api-darlane-ingressroute
+  labels:
+    crossplane.io/composite: rocket-team-payment-api
+  name: payment-api-darlane-ingressroute
+  ownerReferences:
+    - apiVersion: platform.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XTenantApp
+      name: rocket-team-payment-api
+      uid: c66e5e9b-320c-5b1b-8beb-cf16e380a850
+spec:
+  deletionPolicy: Orphan
+  forProvider:
+    manifest:
+      apiVersion: traefik.io/v1alpha1
+      kind: IngressRoute
+      metadata:
+        annotations: {}
+        labels:
+          app.kubernetes.io/component: app
+          app.kubernetes.io/instance: payment-api
+          app.kubernetes.io/managed-by: crossplane
+          app.kubernetes.io/name: payment-api
+          wxops.cloud/app-flavor: webapp
+          wxops.cloud/environment: dev
+        name: payment-api-darlane
+        namespace: rocket-team-production
+      spec:
+        entryPoints:
+          - websecure
+        routes:
+          - kind: Rule
+            match: Host(`payment-api.rocket-team.example.com`) && PathPrefix(`/`) && Header(`X-Debug`, `true`)
+            priority: 100
+            services:
+              - name: payment-api-darlane
+                port: 80
+        tls:
+          secretName: payment-api-tls
+  managementPolicies:
+    - Observe
+  providerConfigRef:
+    name: default
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: payment-api-darlane-sa
+  labels:
+    crossplane.io/composite: rocket-team-payment-api
+  name: payment-api-darlane-sa
+  ownerReferences:
+    - apiVersion: platform.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XTenantApp
+      name: rocket-team-payment-api
+      uid: c66e5e9b-320c-5b1b-8beb-cf16e380a850
+spec:
+  deletionPolicy: Orphan
+  forProvider:
+    manifest:
+      apiVersion: v1
+      kind: ServiceAccount
+      metadata:
+        annotations: {}
+        labels:
+          app.kubernetes.io/component: darlane
+          app.kubernetes.io/instance: payment-api
+          app.kubernetes.io/managed-by: crossplane
+          app.kubernetes.io/name: payment-api
+          wxops.cloud/app-flavor: webapp
+          wxops.cloud/environment: dev
+        name: payment-api-darlane
+        namespace: rocket-team-production
+  managementPolicies:
+    - Observe
+  providerConfigRef:
+    name: default
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: payment-api-darlane-svc
+  labels:
+    crossplane.io/composite: rocket-team-payment-api
+  name: payment-api-darlane-svc
+  ownerReferences:
+    - apiVersion: platform.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XTenantApp
+      name: rocket-team-payment-api
+      uid: c66e5e9b-320c-5b1b-8beb-cf16e380a850
+spec:
+  deletionPolicy: Orphan
+  forProvider:
+    manifest:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        annotations: {}
+        labels:
+          app.kubernetes.io/component: darlane
+          app.kubernetes.io/instance: payment-api
+          app.kubernetes.io/managed-by: crossplane
+          app.kubernetes.io/name: payment-api
+          wxops.cloud/app-flavor: webapp
+          wxops.cloud/environment: dev
+        name: payment-api-darlane
+        namespace: rocket-team-production
+      spec:
+        ports:
+          - port: 80
+            targetPort: 8080
+        selector:
+          app.kubernetes.io/component: darlane
+          app.kubernetes.io/instance: payment-api
+          app.kubernetes.io/name: payment-api
+        type: ClusterIP
+  managementPolicies:
+    - Observe
+  providerConfigRef:
+    name: default
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: payment-api-deployment
+  labels:
+    crossplane.io/composite: rocket-team-payment-api
+  name: payment-api-deployment
+  ownerReferences:
+    - apiVersion: platform.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XTenantApp
+      name: rocket-team-payment-api
+      uid: c66e5e9b-320c-5b1b-8beb-cf16e380a850
+spec:
+  deletionPolicy: Orphan
+  forProvider:
+    manifest:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        annotations: {}
+        labels:
+          app.kubernetes.io/component: app
+          app.kubernetes.io/instance: payment-api
+          app.kubernetes.io/managed-by: crossplane
+          app.kubernetes.io/name: payment-api
+          wxops.cloud/app-flavor: webapp
+          wxops.cloud/environment: dev
+        name: payment-api
+        namespace: rocket-team-production
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app.kubernetes.io/component: app
+            app.kubernetes.io/instance: payment-api
+            app.kubernetes.io/name: payment-api
+        strategy:
+          rollingUpdate:
+            maxSurge: 25%
+            maxUnavailable: 25%
+          type: RollingUpdate
+        template:
+          metadata:
+            annotations: {}
+            labels:
+              app.kubernetes.io/component: app
+              app.kubernetes.io/instance: payment-api
+              app.kubernetes.io/managed-by: crossplane
+              app.kubernetes.io/name: payment-api
+              wxops.cloud/app-flavor: webapp
+              wxops.cloud/environment: dev
+          spec:
+            containers:
+              - env: []
+                image: ghcr.io/rocket-team/payment-api:1.4.0
+                imagePullPolicy: IfNotPresent
+                livenessProbe:
+                  failureThreshold: 3
+                  httpGet:
+                    path: /healthz
+                    port: 8080
+                  initialDelaySeconds: 10
+                  periodSeconds: 10
+                  timeoutSeconds: 1
+                name: payment-api
+                ports:
+                  - containerPort: 8080
+                readinessProbe:
+                  failureThreshold: 3
+                  httpGet:
+                    path: /readyz
+                    port: 8080
+                  initialDelaySeconds: 5
+                  periodSeconds: 10
+                  timeoutSeconds: 1
+  managementPolicies:
+    - Observe
+  providerConfigRef:
+    name: default
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: payment-api-ingress
+  labels:
+    crossplane.io/composite: rocket-team-payment-api
+  name: payment-api-ingress
+  ownerReferences:
+    - apiVersion: platform.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XTenantApp
+      name: rocket-team-payment-api
+      uid: c66e5e9b-320c-5b1b-8beb-cf16e380a850
+spec:
+  deletionPolicy: Orphan
+  forProvider:
+    manifest:
+      apiVersion: traefik.io/v1alpha1
+      kind: IngressRoute
+      metadata:
+        annotations: {}
+        labels:
+          app.kubernetes.io/component: app
+          app.kubernetes.io/instance: payment-api
+          app.kubernetes.io/managed-by: crossplane
+          app.kubernetes.io/name: payment-api
+          wxops.cloud/app-flavor: webapp
+          wxops.cloud/environment: dev
+        name: payment-api
+        namespace: rocket-team-production
+      spec:
+        entryPoints:
+          - websecure
+        routes:
+          - kind: Rule
+            match: Host(`payment-api.rocket-team.example.com`) && PathPrefix(`/`)
+            priority: 1
+            services:
+              - kind: TraefikService
+                name: payment-api-weighted
+        tls:
+          secretName: payment-api-tls
+  managementPolicies:
+    - Observe
+  providerConfigRef:
+    name: default
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: payment-api-service
+  labels:
+    crossplane.io/composite: rocket-team-payment-api
+  name: payment-api-service
+  ownerReferences:
+    - apiVersion: platform.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XTenantApp
+      name: rocket-team-payment-api
+      uid: c66e5e9b-320c-5b1b-8beb-cf16e380a850
+spec:
+  deletionPolicy: Orphan
+  forProvider:
+    manifest:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        annotations: {}
+        labels:
+          app.kubernetes.io/component: app
+          app.kubernetes.io/instance: payment-api
+          app.kubernetes.io/managed-by: crossplane
+          app.kubernetes.io/name: payment-api
+          wxops.cloud/app-flavor: webapp
+          wxops.cloud/environment: dev
+        name: payment-api
+        namespace: rocket-team-production
+      spec:
+        ports:
+          - port: 80
+            targetPort: 8080
+        selector:
+          app.kubernetes.io/component: app
+          app.kubernetes.io/instance: payment-api
+          app.kubernetes.io/name: payment-api
+        type: ClusterIP
+  managementPolicies:
+    - Observe
+  providerConfigRef:
+    name: default
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: payment-api-servicemonitor
+  labels:
+    crossplane.io/composite: rocket-team-payment-api
+  name: payment-api-servicemonitor
+  ownerReferences:
+    - apiVersion: platform.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XTenantApp
+      name: rocket-team-payment-api
+      uid: c66e5e9b-320c-5b1b-8beb-cf16e380a850
+spec:
+  deletionPolicy: Orphan
+  forProvider:
+    manifest:
+      apiVersion: monitoring.coreos.com/v1
+      kind: ServiceMonitor
+      metadata:
+        annotations: {}
+        labels:
+          app.kubernetes.io/component: app
+          app.kubernetes.io/instance: payment-api
+          app.kubernetes.io/managed-by: crossplane
+          app.kubernetes.io/name: payment-api
+          release: kube-prometheus-stack
+          wxops.cloud/app-flavor: webapp
+          wxops.cloud/environment: dev
+        name: payment-api
+        namespace: rocket-team-production
+      spec:
+        endpoints:
+          - honorLabels: false
+            interval: 30s
+            path: /internal/metrics
+            scrapeTimeout: 10s
+            targetPort: 9090
+        namespaceSelector:
+          matchNames:
+            - rocket-team-production
+        sampleLimit: 2000
+        selector:
+          matchLabels:
+            app.kubernetes.io/component: app
+            app.kubernetes.io/instance: payment-api
+            app.kubernetes.io/name: payment-api
+  managementPolicies:
+    - Observe
+  providerConfigRef:
+    name: default
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  annotations:
+    crossplane.io/composition-resource-name: payment-api-weighted-traefikservice
+  labels:
+    crossplane.io/composite: rocket-team-payment-api
+  name: payment-api-weighted-traefikservice
+  ownerReferences:
+    - apiVersion: platform.wxops.cloud/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: XTenantApp
+      name: rocket-team-payment-api
+      uid: c66e5e9b-320c-5b1b-8beb-cf16e380a850
+spec:
+  deletionPolicy: Orphan
+  forProvider:
+    manifest:
+      apiVersion: traefik.io/v1alpha1
+      kind: TraefikService
+      metadata:
+        annotations: {}
+        labels:
+          app.kubernetes.io/component: app
+          app.kubernetes.io/instance: payment-api
+          app.kubernetes.io/managed-by: crossplane
+          app.kubernetes.io/name: payment-api
+          wxops.cloud/app-flavor: webapp
+          wxops.cloud/environment: dev
+        name: payment-api-weighted
+        namespace: rocket-team-production
+      spec:
+        weighted:
+          services:
+            - name: payment-api
+              port: 80
+              weight: 80
+            - name: payment-api-darlane
+              port: 80
+              weight: 20
+  managementPolicies:
+    - Observe
+  providerConfigRef:
+    name: default

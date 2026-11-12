@@ -1,0 +1,28 @@
+# Handed over to XDatabase (ADR-005, RFC-010): every composed Object is Observe-only with deletionPolicy Orphan, and the child dedicated cluster is told to do the same, so deleting this XR leaves the cluster and its data running.
+apiVersion: platform.wxops.cloud/v1alpha1
+kind: XTenantDatabase
+metadata:
+  name: rocket-team-analytics-db
+  annotations:
+    wxops.cloud/handover: "true"
+  labels:
+    wxops.cloud/tenant-database: "true"
+spec:
+  parameters:
+    tier: dedicated
+    environment: dev
+    dedicatedCluster:
+      instances: 1
+      storageSize: "1Gi"
+      postgresVersion: 16
+      enablePooler: true
+      # namespace: cnpg-system  # default
+
+    dbName: analytics-db
+    owner: rocket-team
+    extensions:
+      - uuid-ossp
+      - pgcrypto
+
+    # databaseReclaimPolicy: "retain"
+    vaultSecretStoreName: "vault-tenant"

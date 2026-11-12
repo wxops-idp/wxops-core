@@ -1,0 +1,56 @@
+# cluster-a is mid-handover: both kinds exist for it. cluster-b is known only to the new kind.
+apiVersion: platform.wxops.cloud/v1alpha1
+kind: XPlatformDatabaseCluster
+metadata:
+  name: cluster-a
+  labels:
+    wxops.cloud/managed-by: platform-database-clusters
+spec:
+  parameters:
+    clusterName: cluster-a
+    namespace: cnpg-system
+    shared: true
+    environment: dev
+---
+apiVersion: platform.wxops.cloud/v1alpha1
+kind: XDatabaseCluster
+metadata:
+  name: cluster-a
+  labels:
+    wxops.cloud/managed-by: platform-database-clusters
+spec:
+  parameters:
+    clusterName: cluster-a
+    namespace: cnpg-system
+    shared: true
+    environment: dev
+---
+apiVersion: platform.wxops.cloud/v1alpha1
+kind: XDatabaseCluster
+metadata:
+  name: cluster-b
+  labels:
+    wxops.cloud/managed-by: platform-database-clusters
+spec:
+  parameters:
+    clusterName: cluster-b
+    namespace: cnpg-other
+    shared: true
+    environment: dev
+---
+# cluster-a already holds one database, so the least-loaded cluster is cluster-b — which only the new kind knows.
+apiVersion: platform.wxops.cloud/v1alpha1
+kind: XTenantDatabase
+metadata:
+  name: peer-db
+  uid: 11111111-2222-3333-4444-555555555555
+  labels:
+    wxops.cloud/tenant-database: "true"
+spec:
+  parameters:
+    dbName: other-db
+    owner: other-team
+    environment: dev
+status:
+  clusterRef: cluster-a
+  clusterNamespace: cnpg-system

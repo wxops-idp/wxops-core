@@ -14,9 +14,9 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - ../platform/platform-database-clusters
-  - ../platform/tenant-database
-  - ../platform/tenant-app
+  - ../platform/database-cluster
+  - ../tenant/app
+  - ../tenant/database
   - ../scm/connection
   - ../scm/repository
   - ../scm/oauth-app
@@ -27,7 +27,7 @@ resources:
   - ../auth/oidc-connector
   - ../auth/persona
   - ../auth/persona-binding
-  - ../auth/platform-policy
+  - ../auth/policy
 
 # Every package/<pkg>/composition.yaml ships channel: stable (the release default). Overriding it
 # here means everything applied via `make install-dev` is unambiguously channel: nightly, so an XR

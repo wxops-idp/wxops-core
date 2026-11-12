@@ -1,0 +1,15 @@
+# The four archived packages, for a cluster that still runs their XRs: apply before the handover, so the old compositions honour `wxops.cloud/handover`
+# (docs/user-guide/migrating-to-new-kinds.md), and delete once every XR has moved. Not part of `make install-dev`.
+#
+#   kubectl apply -k package/dev/archived/
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../platform/archives/platform-database-clusters
+  - ../../platform/archives/tenant-database
+  - ../../platform/archives/tenant-app
+  - ../../auth/archives/platform-policy
+labels:
+  - pairs:
+      channel: nightly
+    includeSelectors: false

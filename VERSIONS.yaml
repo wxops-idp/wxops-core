@@ -6,7 +6,7 @@
 #   api      — the Kubernetes API version the XRD serves (platform.wxops.cloud/v1alpha1).
 #              This is the contract: dev XRs, prod XRs and the portal all bind to it.
 #              Edited by hand, and rarely.
-#   group    — the API group the package's kinds live in (platform | scm | auth), per ADR-002.
+#   group    — the API group the package's kinds live in (tenant | platform | scm | auth), per ADR-002 and ADR-005.
 #   path     — where the package directory lives, per RFC-007. `tests/lib/packages.py` is the one
 #              resolver; nothing derives a directory from a package name by string rules.
 #   package  — `current` is the release (release-YYYY-MM-DD[.N]) in which the package's
@@ -47,38 +47,24 @@ packages:
 # source to package/platform/archives/<name>/, and the rest to the sibling `_archives/` folder
 # in tests/cases/, examples/ and docs/api-reference/ (skipped by test discovery; see
 # tests/lib/render.py). provider-terraform went the same way, to providers/archive/.
+#
+# platform-policy, platform-database-clusters, tenant-app and tenant-database are ARCHIVED as of
+# the release that replaced them with policy, database-cluster, app and database (ADR-005,
+# RFC-010) — after every XR of the old kinds had moved by the handover in
+# docs/user-guide/migrating-to-new-kinds.md. Same convention, but these four DID run on a
+# cluster, so removing them is deliberately `breaking` and the release says so: deleting an
+# XRD deletes its XRs. Source moved to package/{platform,auth}/archives/<name>/ and
+# kcl/_archives/<name>/, the rest to the sibling `_archives/` folders.
 
-  platform-database-clusters:
+  database-cluster:
     group: platform
-    path: package/platform/platform-database-clusters
+    path: package/platform/database-cluster
     package:
-      current: release-2026-10-16
+      current: unreleased
     api:
       served: [v1alpha1]
       storage: v1alpha1
-    description: Platform-managed CloudNativePG cluster with pooler, Vault credential seeding, and shared-cluster labeling for dynamic tenant pool discovery.
-
-  tenant-database:
-    group: platform
-    path: package/platform/tenant-database
-    package:
-      current: release-2026-10-16
-    api:
-      served: [v1alpha1]
-      storage: v1alpha1
-    description: Tenant-facing PostgreSQL database with dynamic tier resolution (shared pool auto-assign / dedicated cluster composition), Vault-backed credentials, and ESO sync.
-
-  tenant-app:
-    group: platform
-    path: package/platform/tenant-app
-    package:
-      current: release-2026-10-16
-    api:
-      served: [v1alpha1]
-      storage: v1alpha1
-    description: |
-      Tenant application scaffold (Deployment, Service, Traefik IngressRoute, Darlane debug-twin) with cert-manager TLS auto-provisioning,
-      A/B traffic splitting via TraefikService, fileSync emptyDir overlay, multi-source volumes (PVC/ConfigMap/Secret), and oauth2-proxy SSO via Traefik middlewares
+    description: Platform-managed CloudNativePG cluster with pooler, Vault credential seeding, and shared-cluster labeling for dynamic tenant pool discovery. The successor of `platform-database-clusters` (ADR-005) — the same cluster, under a name that does not repeat the group.
 
   # ── scm.wxops.cloud — Git hosting across Gitea, GitHub and (later) GitLab ──
   # ADR-002 (API groups) and RFC-003 (the XScm* family). Vendor behaviour lives in each
@@ -191,15 +177,37 @@ packages:
       storage: v1alpha1
     description: Binds a persona's subjects to a standard, persona or Platform API ClusterRole — RoleBindings in the namespaces a team owns, or one ClusterRoleBinding. The only composition that emits RBAC, and only bindings.
 
-  platform-policy:
+  policy:
     group: auth
-    path: package/auth/platform-policy
+    path: package/auth/policy
     package:
-      current: release-2026-11-09
+      current: unreleased
     api:
       served: [v1alpha1]
       storage: v1alpha1
-    description: One reviewed Kyverno CEL policy per resource — owner-stamp, owner-seal, secret-guard, exec-guard, protected, rbac-guard, sa-guard, namespace-guard or env-gate — matching SCM users only, Deny by default. Kyverno refuses; it never grants.
+    description: One reviewed Kyverno CEL policy per resource — owner-stamp, owner-seal, secret-guard, exec-guard, protected, rbac-guard, sa-guard, namespace-guard or env-gate — matching SCM users only, Deny by default. Kyverno refuses; it never grants. The successor of `platform-policy` (ADR-005) — the same rules, under a name that does not repeat the group.
+
+  # ── tenant.wxops.cloud — namespaced kinds a team owns, one owner per namespace (ADR-005, RFC-010) ──
+
+  app:
+    group: tenant
+    path: package/tenant/app
+    package:
+      current: unreleased
+    api:
+      served: [v1alpha1]
+      storage: v1alpha1
+    description: Namespaced tenant application scaffold (Deployment, Service, Traefik IngressRoute, Darlane debug-twin) owned by the namespace it runs in — owner and target come from the namespace, never a field. The successor of tenant-app (ADR-005, RFC-010).
+
+  database:
+    group: tenant
+    path: package/tenant/database
+    package:
+      current: unreleased
+    api:
+      served: [v1alpha1]
+      storage: v1alpha1
+    description: Namespaced tenant PostgreSQL database on a platform CNPG cluster (Role, Database, credentials pushed to OpenBao) owned by the namespace it is created in — owner and cluster are never fields. The successor of tenant-database (ADR-005, RFC-010).
 
 # Utility compositions — not yet published as standalone OCI packages.
 utilities:

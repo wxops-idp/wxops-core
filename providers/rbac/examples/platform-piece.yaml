@@ -1,5 +1,6 @@
-# A new W'xOps tenant kind (here RFC-006's XObjectBucket — not built yet) joins the Platform API: edit for tenants, admin above. One piece per kind or per package;
-# read access needs no piece, wxops:piece:platform-read already covers every kind in the three W'xOps groups.
+# A new platform-run W'xOps kind (here RFC-006's XObjectBucket — not built yet) joins the Platform API: edit for platform personas, admin above. One piece per kind or per package;
+# read access needs no piece, wxops:piece:platform-read already covers every kind in the four W'xOps groups. A kind a *team* writes is namespaced, in tenant.wxops.cloud, and joins
+# the persona roles instead (aggregate-persona.yaml's wxops:piece:persona-write-tenant) — platform-admin already writes the whole tenant group.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:

@@ -18,18 +18,18 @@ kind: ClusterRole
 metadata:
   name: wxops-provider-kubernetes-managed
 rules:
-  # CloudNativePG (platform-database-clusters)
+  # CloudNativePG (database-cluster)
   - apiGroups: ["postgresql.cnpg.io"]
     resources: ["clusters", "poolers", "scheduledbackups", "databases"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-  # External Secrets Operator (platform-database-clusters, tenant-database, tenant-app)
+  # External Secrets Operator (database-cluster, database, app)
   - apiGroups: ["external-secrets.io"]
     resources: ["externalsecrets", "pushsecrets", "clustersecretstores"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   - apiGroups: ["generators.external-secrets.io"]
     resources: ["passwords"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-  # provider-sql (platform-database-clusters wraps ProviderConfig, tenant-database wraps Role)
+  # provider-sql (database-cluster wraps ProviderConfig, database wraps Role)
   - apiGroups: ["postgresql.sql.crossplane.io"]
     resources: ["providerconfigs", "roles"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
@@ -54,14 +54,14 @@ rules:
   - apiGroups: ["policies.kyverno.io"]
     resources: ["validatingpolicies", "mutatingpolicies"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-  # tenant-app workload resources
+  # app workload resources
   - apiGroups: ["apps"]
     resources: ["deployments"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   - apiGroups: [""]
     resources: ["services", "persistentvolumeclaims", "serviceaccounts"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-  # networking.k8s.io/ingresses kept for migration — tenant-app now emits IngressRoute,
+  # networking.k8s.io/ingresses kept for migration — app now emits IngressRoute,
   # but existing clusters may still have Ingress objects from the old composition.
   - apiGroups: ["networking.k8s.io"]
     resources: ["ingresses"]
@@ -69,11 +69,11 @@ rules:
   - apiGroups: ["traefik.io"]
     resources: ["traefikservices", "ingressroutes"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-  # cert-manager (tenant-app Certificate CR when ingress.tls.clusterIssuer is set)
+  # cert-manager (app Certificate CR when ingress.tls.clusterIssuer is set)
   - apiGroups: ["cert-manager.io"]
     resources: ["certificates"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-  # Prometheus Operator (tenant-app spec.parameters.monitoring) — without this every
+  # Prometheus Operator (app spec.parameters.monitoring) — without this every
   # emitted ServiceMonitor/PodMonitor fails `forbidden` at reconcile with no other signal.
   - apiGroups: ["monitoring.coreos.com"]
     resources: ["servicemonitors", "podmonitors"]
