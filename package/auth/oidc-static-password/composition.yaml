@@ -108,7 +108,7 @@ spec:
             # ── The connection, fetched by function-extra-resources ─────────────────────
             # Selected by the "crossplane.io/composite" label Crossplane stamps on every root XR with its own
             # name (see internal/controller/apiextensions/composite/api.go, APINamingConfigurator) — no
-            # user-written label needed, unlike the tenant-database discovery pattern this otherwise follows.
+            # user-written label needed, unlike the database discovery pattern this otherwise follows.
             _ctxExtras = option("params").ctx["apiextensions.crossplane.io/extra-resources"] or {}
             _connList = _ctxExtras.connections or []
             _conn = _connList[0] if _connList else {}
@@ -158,7 +158,7 @@ spec:
             # un-stringifies it if it arrives this way.
             _recordJson = '{"email":"' + email + '","username":"' + username + '","name":"' + displayName + '","userID":"' + userId + '","groups":"' + _groupsJson.replace('"', '\\"') + '","hash":"{{ .password | bcrypt }}"}'
 
-            # ── Observed state (keyed by Object name) — same idiom as tenant-database ───
+            # ── Observed state (keyed by Object name) — same idiom as database ──────────
             _ocds = option("params").ocds or {}
             # A composed resource whose last apply failed keeps Ready=True from the earlier success, so Ready
             # alone cannot say the apply worked: Synced is the condition the provider sets False.

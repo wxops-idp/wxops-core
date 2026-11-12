@@ -414,7 +414,7 @@ spec:
 
             # ── tenant-sql-role: provider-sql Role for this tenant's database ──────────
             # postgresql.sql.crossplane.io/v1alpha1 Role, reconciled via the per-cluster
-            # ProviderConfig named clusterRef (created by platform-database-clusters from its
+            # ProviderConfig named clusterRef (created by the XDatabaseCluster from its
             # superuser creds Secret). passwordSecretRef points at {connSecretName} and is
             # applied only at Create() time — provider-sql does not re-apply password
             # changes on an existing role (see "Password rotation" note in the docstring).
