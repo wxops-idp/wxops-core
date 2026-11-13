@@ -514,7 +514,7 @@ Run on one cluster with two test teams, `team-a` and `team-b`, before this RFC i
 #### Spike and acceptance results (2026-11-04)
 
 Run on the hub — RKE2, Kubernetes v1.36.5 (upgraded from v1.34.5 during the run), Kyverno v1.19.2, Pinniped v0.46.0 through its impersonation proxy — with
-the [scenario kit](../../examples/auth/policy/scenarios): two team namespaces, the sandbox personas and bindings, all eight templates in `Deny`.
+the [scenario kit](../../examples/sandbox): two team namespaces, the sandbox personas and bindings, all eight templates in `Deny`.
 Impersonated run: **50/50**. Real logins through Dex and Pinniped, one user per session: **alice 26/26**, **bob 7/7**, **paula 8/8** — alice's first
 run had one failure, the kit misreading an RBAC refusal as a policy refusal (fixed below), and passed in full on the rerun.
 

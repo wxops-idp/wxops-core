@@ -298,7 +298,7 @@ RBAC answers *which kinds, where*; it cannot say *only your team's object*, *not
 are the templates. Each is one reviewed KCL function in [`policy`](../../docs/api-reference/auth/policy.md), matches SCM users only, and denies —
 it never grants. Free-form policies are not offered: [RFC-009](../rfc/009-scm-personas.md#open-questions) keeps it to templates.
 
-**Built (2026-10-26; `sa-guard`, `namespace-guard` 2026-11-03), exercised by [`examples/auth/policy/scenarios/`](../../examples/auth/policy/scenarios):**
+**Built (2026-10-26; `sa-guard`, `namespace-guard` 2026-11-03), exercised by [`examples/sandbox/`](../../examples/sandbox):**
 
 | Template | Protects |
 |---|---|

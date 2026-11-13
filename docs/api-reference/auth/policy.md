@@ -735,57 +735,6 @@ More: one XR per template, each with the policy it renders, under [What each tem
 
 ## Trying the templates on a cluster
 
-[`examples/auth/policy/scenarios/`](../../../examples/auth/policy/scenarios) plays every template against a sandbox and checks each result. It needs a
-kubeconfig that may impersonate (cluster-admin does), the three `auth` packages installed (`make install-dev`), and `curl` for the port-forward rows.
-
-```bash
-cd examples/auth/policy/scenarios
-./run.sh setup      # in stages: namespaces + personas, bindings, then each template in Deny one at a time — then nginx in each namespace
-./run.sh test       # 50 rows: allow, refused by a policy, or refused by RBAC first
-./run.sh mapping    # owner mapping end to end: a team mapped to team-a gets its binding and passes owner-seal, then loses both — cleans up after
-./run.sh env-gate   # B labelled prod: only the persona trusted with prod changes it by hand — and an XApp whose own environment is prod; out of scope, persona narrowed, persona missing — cleans up after
-./run.sh compare    # your platform persona vs your own kubeconfig, by `kubectl auth can-i` — writes nothing
-./run.sh teardown   # the sandbox, the Dex users and any open session
-
-# The same rows through real logins — one user per session, through the browser
-./run.sh users                    # Dex static users in the sandbox groups
-./run.sh session alice            # a kubeconfig with its own Pinniped caches; log in as alice@sbx.wxops.local
-SESSION=alice ./run.sh test       # alice's rows only
-./run.sh session-end              # forget the login, then the same for bob and paula
-```
-
-- **Who plays.** `alice` (team-a), `bob` (team-b) and `paula` (the exempt platform persona) are impersonated with `--as`/`--as-group`, so the API server
-  and Kyverno see exactly those groups. *you* is your own kubeconfig: a `system:` user, never an SCM user, so no policy matches it — the cluster-admin column.
-- **Real logins, one session at a time.** The sandbox groups have no Git team behind them, so `users` creates three `XOIDCStaticPassword`s
-  ([`users.yaml`](../../../examples/auth/policy/scenarios/users.yaml)) carrying them, with generated passwords. Once Dex has re-rendered its config,
-  `session <user>` writes a kubeconfig with its own Pinniped session and credential caches outside the repository (`$XDG_RUNTIME_DIR`), and you log in
-  through the browser — the same authorization-code flow as any person; the password grant is never used, so it can stay disabled. `SESSION=<user>` runs
-  that user's rows only, after checking the login carries the user's group; `session-end` deletes the caches. This proves what impersonation cannot: that
-  Dex and Pinniped deliver `wxops-sbx:team-a` to the API server and Kyverno unchanged. The *you* rows run in impersonation mode, which plays everyone.
-- **Why a made-up org.** Every sandbox policy lists only `scmOrgs: [wxops-sbx]`, so it runs in `Deny` without touching a real login, and your real
-  `platform` persona is never matched by it. `compare` covers the real persona instead, read-only, in `wxops-platform`.
-- **Why both teams get `wxops:persona-owners` in both namespaces.** A policy only runs after RBAC says yes. Giving each team RBAC on the other's namespace
-  leaves the policy as the only thing that stops a cross-team write or exec — the cases `owner-seal` and `exec-guard` exist for. For the same reason
-  [`namespace-editor.yaml`](../../../examples/auth/policy/scenarios/namespace-editor.yaml) gives team-b Namespace writes (test-only RBAC, created and removed
-  as you), so `namespace-guard` is what stops bob. Other rows check what the persona roles no longer grant: impersonating a ServiceAccount, requesting its
-  token, creating ServiceAccounts, Pods, RoleBindings or Secrets, reading Secrets.
-- **The owner mapping** ([ADR-006](../../../development-docs/adr/006-team-owner-mapping.md)) has its own command, `mapping`, against
-  [`mapping.yaml`](../../../examples/auth/policy/scenarios/mapping.yaml): a team `team-a-ops` labelled `wxops.cloud/owner: team-a`, played by
-  `carol`. The sandbox has no Git host, so the team is **paused** from its first apply — Crossplane never composes it — and the script writes the
-  `status.oidcGroup` a real team would publish. Rows: the persona's `status.owners`, the RoleBinding in A and none in B, `owner-seal` re-rendered with the map,
-  carol allowed in A; then the label removed and carol refused in A **by `owner-seal`** — she keeps RBAC there through a second binding, so the refusal is
-  the policy's. Each step waits for the re-render; the mapping converges, it does not switch.
-- **`env-gate`** has its own command too, against [`env-gate.yaml`](../../../examples/auth/policy/scenarios/env-gate.yaml): `wxops-sbx-b`
-  labelled `wxops.cloud/environment: prod`, a persona `sbx-prod` holding only bob, and the gate on `prod`. B is team-b's, so `owner-seal` lets team-b write
-  there and every refusal is the gate's: `dan` (team-b, not in `sbx-prod`) is refused, bob, paula (exempt) and *you* pass, and bob cannot relabel B to
-  `dev` (`namespace-guard`). Then three edges: with the label removed dan passes at once — the API server reads the namespace's labels on every request;
-  with `sbx-prod` narrowed to `staging` bob is refused after the re-render; with a persona that does not exist nobody passes, and `syncMessage` says so.
-  `exec` is left out: `exec-guard` already refuses both in B, so it would not tell the two policies apart. With the `app` package installed and `make providers-rbac` applied,
-  the same command plays the **application gate** too, in B once it is no longer labelled prod: dan is refused an `XApp` with `environment: prod` but not one with `dev` or
-  none; bob may; dan cannot change a prod one to `dev` or delete it, bob can; and with `sbx-prod` narrowed to `staging` bob is refused again. The `XApp`s are paused and every
-  request but one is a dry run, so nothing is composed. Without the package or the RBAC those rows are skipped with a note.
-- **A row that fails is a finding**, not a script error: it prints the first line of what the API server answered. `exec-guard`'s rows are the ones to
-  watch: they exec into nginx and port-forward to its Service, fetching the page through the tunnel, and whether Kyverno sees `CONNECT` for
-  `pods/exec` and `pods/portforward` is still an [RFC-009 spike](../../../development-docs/rfc/009-scm-personas.md#acceptance-matrix).
-- **While it runs,** seven policies are in `Deny` with `failurePolicy: Fail`. They match only `wxops-sbx` users, but Kyverno is in the request path for
-  their resources until `teardown`.
+The [sandbox kit](../../../examples/sandbox/README.md) plays every template against a sandbox and checks each result, as SCM users impersonated or logged in for
+real: `./run.sh setup`, then `./run.sh test` for the eight templates, `mapping` for owner mapping, `env-gate` for the environment gate on namespaces and on an
+`XApp` or `XDatabase`'s own environment. Its README covers what it needs, who plays, and how to read a failing row.

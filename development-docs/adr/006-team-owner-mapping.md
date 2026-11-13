@@ -5,7 +5,7 @@
 Accepted — 2026-11-07. **Shipped in `release-2026-11-09`.** Built and covered offline (the `persona/with-owner-mapping`, `persona-binding/owned-mapped` and `platform-policy/owner-seal-mapped`
 cases). **Proven on the cluster 2026-11-09** in the sandbox, by impersonation: the persona's `status.owners`, the mapped team's RoleBinding in the owner's
 namespace only, `owner-seal` allowing it there, and — the mapping removed, RBAC kept — `owner-seal` refusing it. Replayable as `./run.sh mapping`
-(`examples/auth/policy/scenarios/mapping.yaml`). Through a real login it is still to run. The check found one defect, fixed before release: a new
+(`examples/sandbox/mapping.yaml`). Through a real login it is still to run. The check found one defect, fixed before release: a new
 persona lookup without `fromFieldPathPolicy: Optional` stopped every existing `XPlatformPolicy` from re-rendering.
 
 ## Context

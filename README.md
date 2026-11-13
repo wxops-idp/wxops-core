@@ -199,7 +199,8 @@ development-docs/             ← development hub (development-docs/README.md): 
 examples/                     ← one minimal xr.yaml per package, in <group>/<name>/ (tenant, platform, scm, auth) — more variants on each API page
   tenant/database/xr.yaml
   scm/oauth-app/xr.yaml
-  auth/policy/xr.yaml · auth/policy/scenarios/ (cluster acceptance kit)
+  auth/policy/xr.yaml
+  sandbox/                    ← the cluster kit: run.sh plays personas, bindings, policies and the tenant kinds against a sandbox
   _archives/                  ← examples for retired packages
 kcl/                          ← KCL composition functions (source of truth, embedded via kcl-sync)
   database-cluster/ · database/ · app/ · policy/ · persona/ · …
