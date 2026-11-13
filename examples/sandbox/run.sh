@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Plays every XPolicy template (policies/) against the sandbox in sandbox.yaml and bindings.yaml as SCM users, and compares each row with what it expects.
-# Usage: ./run.sh setup | test | mapping | env-gate | compare | users | session <user> | session-end | teardown; SESSION=<user> ./run.sh test for one real login —
-# see docs/api-reference/auth/policy.md#trying-the-templates-on-a-cluster.
+# The sandbox kit: plays W'xOps against a sandbox (sandbox.yaml, bindings.yaml, policies/) as SCM users — every XPolicy template, owner mapping, env-gate, the tenant kinds —
+# and compares each row with what it expects.
+# Usage: ./run.sh setup | test | mapping | env-gate | tenant | compare | users | session <user> | session-end | teardown; SESSION=<user> ./run.sh test for one real login —
+# see README.md beside it.
 set -uo pipefail
 
 DIR=$(cd "$(dirname "$0")" && pwd)
@@ -365,6 +366,14 @@ env_gate() {
     row policy dan   "deletes it" -- kubectl -n $B delete xapp sbx-gate-app --dry-run=server "${DAN[@]}"
     row allow  bob   "changes it from prod to dev — he reaches prod" -- \
       kubectl -n $B patch xapp sbx-gate-app --dry-run=server --type=merge -p '{"spec":{"parameters":{"environment":"dev"}}}' "${BOB[@]}"
+    if [ "$(kubectl auth can-i create xdatabases.tenant.wxops.cloud -n $B "${BOB[@]}" 2>/dev/null)" = yes ]; then
+      row policy dan   "creates an XDatabase with environment: prod — the same gate guards databases" -- \
+        kubectl create --dry-run=server -f - "${DAN[@]}" <<<"$(tenant_xr XDatabase sbx-gate-db $B paused '' '"environment":"prod"')"
+      row allow  bob   "creates one — he reaches prod" -- \
+        kubectl create --dry-run=server -f - "${BOB[@]}" <<<"$(tenant_xr XDatabase sbx-gate-db $B paused '' '"environment":"prod"')"
+    else
+      echo "note: the database package is not installed, or bob cannot write XDatabases — the XDatabase rows are skipped" >&2
+    fi
   fi
   kubectl label namespace $B wxops.cloud/environment=prod --overwrite >/dev/null
   kubectl patch xpersona sbx-prod --type=merge -p '{"spec":{"parameters":{"environments":["staging"]}}}' >/dev/null
@@ -435,6 +444,117 @@ env_gate_teardown() {
   kubectl -n $B delete configmap bob-1 bob-2 bob-3 paula-1 you-1 dan-1 dan-2 --ignore-not-found >/dev/null 2>&1
 }
 
+# The tenant kinds (RFC-010 §3): XApp and XDatabase live in a team's namespace, and the namespace decides who owns them — RBAC keeps a team out of other
+# namespaces, owner-stamp and owner-seal keep the owner label honest inside its own. Impersonation only; needs `./run.sh setup` first, and the `app` and
+# `database` packages with `make providers-rbac`. Most rows are server-side dry runs against paused XRs; two XApps are composed for real — one in a namespace with
+# no owner (it renders nothing) and one nginx in A (its Deployment shows what the composition writes). Removes what it creates.
+C=wxops-sbx-c
+ALICE_BOTH=(--as=alice --as-group=wxops-sbx:team-a --as-group=wxops-sbx:team-b) # tenant only: alice as a member of team-b too
+tenant() {
+  [ -n "$SESSION" ] && { echo "tenant runs in impersonation mode only — unset SESSION"; exit 2; }
+  kubectl get xpolicy sbx-owner-seal sbx-owner-stamp >/dev/null 2>&1 || { echo "run ./run.sh setup first"; exit 1; }
+  local k
+  for k in xapps xdatabases; do
+    kubectl get crd $k.tenant.wxops.cloud >/dev/null 2>&1 || { echo "$k.tenant.wxops.cloud is not served — make install-dev"; exit 1; }
+    [ "$(kubectl auth can-i create $k.tenant.wxops.cloud -n $A "${ALICE[@]}" 2>/dev/null)" = yes ] ||
+      { echo "alice cannot write $k in A — make providers-rbac"; exit 1; }
+  done
+  tenant_teardown
+  echo "a namespace with no owner, and two XApps as you: team-b's in B, a protected one in A…"
+  kubectl create namespace $C >/dev/null || exit 1
+  kubectl create -f - >/dev/null <<<"$(tenant_xr XApp sbx-b-app $B paused)" || exit 1
+  kubectl create -f - >/dev/null <<<"$(tenant_xr XApp sbx-guarded $A paused '{"wxops.cloud/protected":"true"}')" || exit 1
+
+  echo "create — RBAC decides where, owner-stamp fills the owner, owner-seal checks it"
+  row allow  alice "creates an XApp in A, which team-a owns" -- kubectl create --dry-run=server -f - "${ALICE[@]}" <<<"$(tenant_xr XApp sbx-app $A paused)"
+  row allow  -     "… and owner-stamp labels it wxops.cloud/owner=team-a from the namespace" -- \
+    stamped team-a "${ALICE[@]}" <<<"$(tenant_xr XApp sbx-app $A paused)"
+  row policy alice "creates one in B — her role there allows it, but team-b is not her team" -- \
+    kubectl create --dry-run=server -f - "${ALICE[@]}" <<<"$(tenant_xr XApp sbx-app $B paused)"
+  row rbac   alice "creates one in C — no binding there, so RBAC refuses before any policy runs" -- \
+    kubectl create --dry-run=server -f - "${ALICE[@]}" <<<"$(tenant_xr XApp sbx-app $C paused)"
+  row allow  alice "creates one in A labelled team-b, as a member of team-b too — an explicit label is kept (ADR-006)" -- \
+    stamped team-b "${ALICE_BOTH[@]}" <<<"$(tenant_xr XApp sbx-app $A paused '{"wxops.cloud/owner":"team-b"}')"
+  row policy alice "creates one in A labelled team-b, as team-a only — the label must name one of her teams" -- \
+    kubectl create --dry-run=server -f - "${ALICE[@]}" <<<"$(tenant_xr XApp sbx-app $A paused '{"wxops.cloud/owner":"team-b"}')"
+  row allow  alice "creates an XDatabase in A" -- kubectl create --dry-run=server -f - "${ALICE[@]}" <<<"$(tenant_xr XDatabase sbx-db $A paused)"
+  row allow  -     "… stamped team-a too" -- stamped team-a "${ALICE[@]}" <<<"$(tenant_xr XDatabase sbx-db $A paused)"
+  row policy alice "creates one in B" -- kubectl create --dry-run=server -f - "${ALICE[@]}" <<<"$(tenant_xr XDatabase sbx-db $B paused)"
+  row rbac   alice "creates one in C" -- kubectl create --dry-run=server -f - "${ALICE[@]}" <<<"$(tenant_xr XDatabase sbx-db $C paused)"
+
+  echo "update and delete — only the owner's team, and a protected one only by the platform team"
+  row policy alice "updates team-b's XApp in B" -- kubectl -n $B patch xapp sbx-b-app --dry-run=server --type=merge -p '{"spec":{"parameters":{"replicas":2}}}' "${ALICE[@]}"
+  row policy alice "relabels it to team-a" -- kubectl -n $B label xapp sbx-b-app wxops.cloud/owner=team-a --overwrite --dry-run=server "${ALICE[@]}"
+  row policy alice "deletes it" -- kubectl -n $B delete xapp sbx-b-app --dry-run=server "${ALICE[@]}"
+  row allow  bob   "updates it — team-b's own" -- kubectl -n $B patch xapp sbx-b-app --dry-run=server --type=merge -p '{"spec":{"parameters":{"replicas":2}}}' "${BOB[@]}"
+  row allow  bob   "deletes it" -- kubectl -n $B delete xapp sbx-b-app --dry-run=server "${BOB[@]}"
+  row allow  you   "updates it — not an SCM user, like Argo CD: Git and its review govern that writer" -- \
+    kubectl -n $B patch xapp sbx-b-app --dry-run=server --type=merge -p '{"spec":{"parameters":{"replicas":2}}}'
+  row policy alice "updates a protected XApp her own team owns" -- \
+    kubectl -n $A patch xapp sbx-guarded --dry-run=server --type=merge -p '{"spec":{"parameters":{"replicas":2}}}' "${ALICE[@]}"
+  row allow  paula "updates it — exempt persona" -- \
+    kubectl -n $A patch xapp sbx-guarded --dry-run=server --type=merge -p '{"spec":{"parameters":{"replicas":2}}}' "${PAULA[@]}"
+
+  echo "composed for real — what the namespace decides, in what the composition writes"
+  row allow  you   "creates an XApp in C, a namespace with no owner" -- kubectl create -f - <<<"$(tenant_xr XApp sbx-orphan $C)"
+  row allow  -     "… it renders nothing and syncMessage says C is not a tenant namespace" -- \
+    within 120 sh -c "kubectl -n $C get xapp sbx-orphan -o jsonpath='{.status.syncMessage}' | grep -q 'not a tenant namespace'"
+  row allow  -     "… and composes nothing" -- test -z "$(kubectl -n $C get objects.kubernetes.m.crossplane.io,deployments -o name 2>/dev/null)"
+  row allow  alice "creates an nginx XApp in A whose labels say wxops.cloud/owner: team-b" -- kubectl create -f - "${ALICE[@]}" <<<"$(tenant_xr XApp sbx-forge $A '' '' \
+    '"image":"nginx:1.27-alpine","containerPort":80,"labels":{"wxops.cloud/owner":"team-b"},"probes":{"liveness":{"enabled":false},"readiness":{"enabled":false}}')"
+  row allow  -     "… its Deployment carries the namespace's owner, team-a — a user's wxops.cloud/* label never reaches a resource" -- \
+    within 180 deployment_owner_is $A sbx-forge team-a
+  row allow  -     "… its pod template carries no owner, so a change of owner never rolls the pods" -- \
+    test -z "$(kubectl -n $A get deployment sbx-forge -o jsonpath='{.spec.template.metadata.labels.wxops\.cloud/owner}')"
+  row allow  -     "… and owner-stamp labels the pods team-a as the ReplicaSet controller creates them" -- within 120 pods_owned $A sbx-forge team-a
+  row policy bob   "deletes it — his role in A allows it, but team-a is not his team" -- kubectl -n $A delete xapp sbx-forge --dry-run=server "${BOB[@]}"
+  row allow  alice "deletes it — her own" -- kubectl -n $A delete xapp sbx-forge --wait=false "${ALICE[@]}"
+
+  tenant_teardown
+  echo
+  echo "$pass passed, $fail failed"
+  [ $fail -eq 0 ]
+}
+
+# tenant_xr <XApp|XDatabase> <name> <namespace> [paused] [labels-json] [parameters-json] — one tenant XR as JSON, on the nightly channel install-dev applies
+tenant_xr() {
+  local kind=$1 name=$2 ns=$3 paused=${4:-} labels='{}' params ann='{}'
+  [ -n "${5:-}" ] && labels=$5
+  [ "$paused" = paused ] && ann='{"crossplane.io/paused":"true"}'
+  if [ -n "${6:-}" ]; then params=$6
+  elif [ "$kind" = XApp ]; then params='"image":"ghcr.io/example/sbx-app:1"'
+  else params='"environment":"dev"'
+  fi
+  printf '{"apiVersion":"tenant.wxops.cloud/v1alpha1","kind":"%s","metadata":{"name":"%s","namespace":"%s","labels":%s,"annotations":%s},' "$kind" "$name" "$ns" "$labels" "$ann"
+  printf '"spec":{"crossplane":{"compositionRevisionSelector":{"matchLabels":{"channel":"nightly"}},"compositionUpdatePolicy":"Automatic"},"parameters":{%s}}}\n' "$params"
+}
+
+# stamped <owner> [identity…] — a server-side dry-run create of the XR on stdin comes back labelled with that owner (what owner-stamp left on it)
+stamped() {
+  local want=$1
+  shift
+  [ "$(kubectl create --dry-run=server -o jsonpath='{.metadata.labels.wxops\.cloud/owner}' -f - "$@")" = "$want" ]
+}
+
+# deployment_owner_is <namespace> <deployment> <owner>
+deployment_owner_is() {
+  [ "$(kubectl -n "$1" get deployment "$2" -o jsonpath='{.metadata.labels.wxops\.cloud/owner}' 2>/dev/null)" = "$3" ]
+}
+
+# pods_owned <namespace> <app> <owner> — the app has pods, and every one is labelled with that owner
+pods_owned() {
+  local owners
+  owners=$(kubectl -n "$1" get pods -l app.kubernetes.io/name="$2",app.kubernetes.io/component=app -o jsonpath='{range .items[*]}{.metadata.labels.wxops\.cloud/owner}{"\n"}{end}')
+  [ -n "$owners" ] && ! grep -qvx "$3" <<<"$owners"
+}
+
+tenant_teardown() {
+  kubectl -n $A delete xapp sbx-forge sbx-guarded --ignore-not-found >/dev/null 2>&1
+  kubectl -n $B delete xapp sbx-b-app --ignore-not-found >/dev/null 2>&1
+  kubectl -n $C delete xapp sbx-orphan --ignore-not-found >/dev/null 2>&1
+  kubectl delete namespace $C --ignore-not-found >/dev/null 2>&1
+}
+
 mapping_teardown() {
   kubectl delete xpersonabinding sbx-mapped-owned sbx-carol-a --ignore-not-found >/dev/null
   kubectl delete xpersona sbx-mapped sbx-carol --ignore-not-found >/dev/null
@@ -475,9 +595,10 @@ compare() {
 }
 
 teardown() {
-  # The XRs first, so their bindings and policies go with them; then the namespaces. The mapping and env-gate scenarios', if interrupted.
+  # The XRs first, so their bindings and policies go with them; then the namespaces. The mapping, env-gate and tenant scenarios', if interrupted.
   mapping_teardown
   env_gate_teardown
+  tenant_teardown
   kubectl delete xpolicy "${POLICIES[@]}" --ignore-not-found
   kubectl delete xpersonabinding "${BINDINGS[@]}" --ignore-not-found
   kubectl delete xpersona "${PERSONAS[@]}" --ignore-not-found
@@ -496,7 +617,8 @@ case "${1:-test}" in
   test) test_rows ;;
   mapping) mapping ;;
   env-gate) env_gate ;;
+  tenant) tenant ;;
   compare) compare ;;
   teardown) teardown ;;
-  *) echo "usage: $0 setup | test | mapping | env-gate | compare | users | session <user> | session-end | teardown"; exit 2 ;;
+  *) echo "usage: $0 setup | test | mapping | env-gate | tenant | compare | users | session <user> | session-end | teardown"; exit 2 ;;
 esac

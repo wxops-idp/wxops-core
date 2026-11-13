@@ -112,7 +112,7 @@ In GitOps, step 2 is a commit adding the annotation, step 3 a commit adding the 
 the old XR is safe once the annotation is in place, because its objects orphan.
 
 **Prove enforcement is continuous.** On the sandbox, keep a refused request running through steps 2 to 5 — for example `./run.sh` in
-[`examples/auth/policy/scenarios/`](../../examples/auth/policy/scenarios) — and confirm no row flips to allowed. The scenario kit now applies `XPolicy`.
+[`examples/sandbox/`](../../examples/sandbox) — and confirm no row flips to allowed. The scenario kit now applies `XPolicy`.
 
 **What to change besides the manifest.** Commands and dashboards that name the old kind: `kubectl get xplatformpolicy` becomes `kubectl get xpolicy`, and the
 `wxops:piece:platform-admin-write` role needs nothing, because it already covers the whole `auth.wxops.cloud` group.

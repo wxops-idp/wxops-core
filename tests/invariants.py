@@ -303,7 +303,7 @@ def tenant_kind_namespaced_only(docs, ctx):
             ref = (d.get("spec") or {}).get("providerConfigRef") or {}
             if ref.get("kind") != "ClusterProviderConfig":
                 bad.append(f"{_name(d)} references {ref.get('kind')!r}, not a platform ClusterProviderConfig")
-            # Crossplane v2's namespaced managed resources have no spec.deletionPolicy (provider-kubernetes v1.2.1's kubernetes.m.crossplane.io Object has none): the field would be
+            # Crossplane v2's namespaced managed resources have no spec.deletionPolicy (provider-kubernetes v1.4.1's kubernetes.m.crossplane.io Object has none): the field would be
             # pruned and the Object deleted with its resource. An Object that must outlive its XR leaves Delete out of spec.managementPolicies instead.
             if "deletionPolicy" in (d.get("spec") or {}):
                 bad.append(f"{_name(d)} sets spec.deletionPolicy, which a namespaced Object does not have — leave Delete out of spec.managementPolicies to orphan")

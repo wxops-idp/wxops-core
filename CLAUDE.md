@@ -101,7 +101,7 @@ version, not the release name — see [`release-notes/README.md`](release-notes/
 - `providers/` — shared provider/function installs and `ProviderConfig` (apply once per cluster)
 - `kcl/<name>/` — KCL composition source (`kcl.mod`, `main.k`)
 - `examples/<group>/<name>/xr.yaml` — one minimal XR per package, mirroring `package/<group>/<name>/`; further variants are snippets on the
-  package's API page. `make test` validates each against its XRD. The policy scenario kit lives beside `examples/auth/policy/xr.yaml`
+  package's API page. `make test` validates each against its XRD. `examples/sandbox/` is the cluster kit for the whole system (`run.sh`: personas, bindings, policies, the tenant kinds), not a package example
 - `tests/cases/<name>/` — test cases; `tests/lib/` shared harness (see [Testing](#testing))
 - `docs/` — **generic documentation** for anyone who uses, operates or builds on the platform — usage, delivery, and
   guideline material, not where the platform is headed. Hub: `docs/README.md`. The sections:
@@ -326,7 +326,7 @@ release commit. Gitea no longer publishes.
 | Crossplane | v2.3 (render engine pinned to v2.3.1 in `tests/crossplane-version.txt`) |
 | provider-opentofu | v1.1.9 |
 | provider-terraform (archived, `providers/archive/`) | v1.1.5 |
-| provider-kubernetes | v1.2.1 |
+| provider-kubernetes | v1.4.1 |
 | provider-sql | v0.15.0 |
 | provider-vault (OpenBao configuration, hub only — [RFC-008](development-docs/rfc/008-built-in-tools-identity-and-catalog.md)) | v4.1.0 |
 | function-kcl | v0.12.1 |

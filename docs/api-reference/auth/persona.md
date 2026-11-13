@@ -54,7 +54,7 @@ also how a team that crosses several products is given each one's slice — one 
 
 **It converges, it does not switch:** a new or removed mapping reaches the persona, the bindings and the policies at their next reconcile. To see it
 sooner, nudge a policy: `kubectl annotate xpolicy <name> wxops.test/nudge="$(date +%s)" --overwrite`. The sandbox plays it end to end with
-`./run.sh mapping` ([trying the templates](policy.md#trying-the-templates-on-a-cluster)).
+`./run.sh mapping` ([the sandbox kit](../../../examples/sandbox/README.md#what-each-scenario-shows)).
 
 ## spec.parameters
 
