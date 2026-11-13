@@ -2,12 +2,14 @@
 
 ## Status
 <!-- Draft | In review | Accepted | Declined | Withdrawn | Implemented — and the GitHub issue that carries the discussion, e.g. "Draft · #42" -->
-Implemented (Phases 0, 2–3, 5–6) — shipped in `release-2026-11-12`; drafted 2026-11-05. Builds on [RFC-009](009-scm-personas.md) (personas, bindings, the policy
+Implemented — shipped in `release-2026-11-12`, closed 2026-11-13; drafted 2026-11-05. Builds on [RFC-009](009-scm-personas.md) (personas, bindings, the policy
 templates) and takes over what [RFC-005](005-git-mapped-authorization.md) left for the tenant kinds. Group, scope and field ownership are decided in
 [ADR-005](../adr/005-kind-ownership-scope-and-naming.md), and the environment is chosen per app (§2b). `release-2026-11-12` ships the new kinds (Phases 2 and
-3), the migration runbook (5) and the archive (6). The cluster checks stay open (Phases 1 and 4): the handovers of a database cluster, an app and a database,
-and the lifecycle rows through real logins. This RFC draws the boundaries on the hub alone; multi-cluster and Argo CD across clusters will revisit placement
-when they arrive.
+3), the migration runbook (5) and the archive (6). Phases 1 and 4 closed on the sandbox: the policy handover is proven, the other three handovers were not
+needed (no cluster held those XRs) and stay documented but unrun, and the lifecycle rows of §3 live in the sandbox kit. What is left over is listed under
+[Known limits](#known-limits-and-where-they-go): environment and promotion go to a new RFC (RFC-011, not yet drafted), per-owner secret stores to
+[RFC-008](008-built-in-tools-identity-and-catalog.md). This RFC draws the boundaries on the hub alone; multi-cluster and Argo CD across clusters will revisit
+placement when they arrive.
 
 ## Summary
 
@@ -127,7 +129,7 @@ its own.** `owner-required` is not needed for the tenant kinds — in a tenant n
 
 | Piece | Today | New |
 |---|---|---|
-| Composed resource kind | `kubernetes.crossplane.io/v1alpha2` `Object` (cluster-scoped) | `kubernetes.m.crossplane.io/v1alpha1` `Object` (namespaced) — a namespaced XR composes only into its own namespace. Present in provider-kubernetes v1.2.1 |
+| Composed resource kind | `kubernetes.crossplane.io/v1alpha2` `Object` (cluster-scoped) | `kubernetes.m.crossplane.io/v1alpha1` `Object` (namespaced) — a namespaced XR composes only into its own namespace. Present since provider-kubernetes v1.2.1; the reference stack runs v1.4.1 |
 | Provider config | `ProviderConfig` named by `spec.parameters.cluster` | The hub's `ClusterProviderConfig`, platform-owned and fixed by the composition — a tenant neither creates nor names one |
 | Owner | — / `spec.parameters.owner` | `function-extra-resources` reads the XR's `Namespace` (by `metadata.namespace`); no `wxops.cloud/owner` → a new XR renders nothing, `ready: false`, `syncMessage` says the namespace is not a tenant namespace; one that already composed resources **fails the reconcile** instead, so removing a label never deletes a running app or database. Fails closed |
 | Labels | `_userLabels \| selector \| wxops.cloud/*` (`kcl/tenant-app/main.k:267`) | User labels minus `wxops.cloud/*`, then `wxops.cloud/owner` from the namespace, on every composed resource and inside every manifest |
@@ -145,8 +147,9 @@ desired manifest, so the provider never sees a label it did not write.
   `Database` must sit beside its `Cluster`. The namespaced `Object` stays in the tenant's namespace and its manifest targets the CNPG namespace. The
   provider's namespaced `Object` controller applies the manifest's own namespace — **as written**: it does not default a missing one to the Object's (every namespaced
   manifest a tenant composition emits sets `metadata.namespace`, and `tests/invariants.py` enforces it) and does not restrict it — and it wraps cluster-scoped kinds too,
-  as its own example does and as the provider-sql `Role` needs. Read in the provider's v1.2.1 code, **not yet run on a cluster** (Phase 1; the API server and the provider's
-  RBAC are the parts the code cannot answer). A namespaced `Object` also has no `spec.deletionPolicy` — its CRD lists none — so an `Object` that must outlive its XR
+  as its own example does and as the provider-sql `Role` needs. Read in the provider's v1.2.1 code, re-checked against v1.4.1's CRD, and seen on the sandbox on
+  2026-11-12: an `XDatabase` composes into the CNPG namespace and pushes its credentials. A namespaced `Object` also has no `spec.deletionPolicy` — its CRD lists
+  none, in v1.4.1 as in v1.2.1 — so an `Object` that must outlive its XR
   leaves `Delete` out of `spec.managementPolicies`. These resources are outside any tenant namespace, so the composition's owner label is the only one they get.
 - **`clusterRef` and `clusterNamespace` become platform decisions.** Today a person may point a database at any CNPG cluster. On the tenant kind, the
   composition accepts only a pool cluster labelled `shared`, or the dedicated `XDatabaseCluster` named `<owner>-<dbName>-cluster` whose `wxops.cloud/owner` equals the
@@ -158,7 +161,8 @@ desired manifest, so the provider never sees a label it did not write.
   every peer `XTenantDatabase`; once namespaced, those peers are in other tenants' namespaces, and `function-extra-resources` does not document listing a namespaced kind
   across them. Decided instead: the first assignment is the cluster an `XTenantDatabase` of the same owner and `dbName` already runs on (the same database, moving kinds —
   adoption needs it), else a stable hash of `<owner>/<dbName>` over the shared clusters of its environment, kept in `status.clusterRef` so a new cluster never moves a
-  database. A **stable spread, not least-loaded**; least-loaded returns if the Phase 1 spike shows other namespaces can be read.
+  database. A **stable spread, not least-loaded**, and it stays so: an `XDatabase` reads only its own namespace (decided 2026-11-13) — listing other teams'
+  databases is the wrong scope for a tenant kind, even if the API allowed it.
 - **The PostgreSQL database name is unique by construction.** `dbName` was unique per cluster, so two teams could not both have `app`; names are now unique per namespace,
   so two teams naming a database `app` is normal and would collide on one cluster. The database is named `<owner>-<dbName>` (like its role) unless `databaseName` is set —
   which a migration sets to the old bare `dbName`, since the name of an existing CNPG database cannot change. This also removes the need to see other teams' databases.
@@ -172,6 +176,9 @@ desired manifest, so the provider never sees a label it did not write.
   `xdatabases`, labelled `aggregate-to-persona-developers` and `aggregate-to-persona-owners`. Bound with `scope: owned`, it reaches only the team's
   namespaces.
 - A read piece grants `get`, `list` and `watch` on those kinds to all three team personas, so reading them does not depend on Kubernetes' `view`.
+- **Both pieces also go to `wxops:persona-platform`** (2026-11-13, found by the sandbox kit's `tenant` mode). That role is `admin` plus its own pieces, and `admin`
+  does not aggregate a CRD with no `aggregate-to-admin` label: without them the platform persona could change a namespace's Deployments but not read its
+  `XApp`s — nor change the `protected` ones that template leaves to the platform team. Cluster-wide, `wxops:platform-admin` already wrote the whole group.
 - `wxops:piece:platform-read` adds `tenant.wxops.cloud`.
 - `wxops:platform-edit` keeps `xtenantapps`/`xtenantdatabases` until the old kinds are archived, then loses them. The Platform API roles go back to what
   RFC-005 meant them for: platform-run, cluster-scoped kinds.
@@ -216,16 +223,16 @@ cases for an app's own environment, including an update that changes it.
 
 - [x] **Phase 0 — decide.** Group, scope and Q1–Q4 are settled in [ADR-005](../adr/005-kind-ownership-scope-and-naming.md). The order is policies, database clusters, apps, then
   databases; the style is handover in place, with one breaking archive at the end.
-- [ ] **Phase 1 — spike** on the test cluster, by hand, before any package. *Seen on the sandbox 2026-11-12:* all four packages install; an `XDatabase` composes —
-  its namespaced `Object`s through the `ClusterProviderConfig`, and its owner read from the `Namespace` — and pushes its credentials through `vault-tenant`. Still open: the
-  adoptions below, and the namespaced `Usage`:
-  - a namespaced XR composing `kubernetes.m.crossplane.io` `Object`s through a `ClusterProviderConfig`, on provider-kubernetes v1.2.1 (and v1.4.x, P1 #6);
-  - a namespaced `Object` whose manifest targets another namespace (the CNPG one) and a cluster-scoped kind;
-  - `function-extra-resources` reading the XR's `Namespace` — Crossplane's own RBAC to get Namespaces;
-  - optional: `function-extra-resources` listing `XDatabase`s across namespaces — only to bring least-loaded placement back; nothing depends on it;
-  - a namespaced `Usage` ordering the Role after the Database;
-  - **adoption**: an old `XTenantApp`'s `Object`s set to orphan, the XR deleted, a `XApp` of the same name taking the Deployment over by server-side
-    apply — no Pod restart, no selector change.
+- [x] **Phase 1 — spike** on the test cluster. *Closed 2026-11-13 on the sandbox:* all four packages install; an `XDatabase` composes — its namespaced
+  `Object`s through the `ClusterProviderConfig`, its owner read from the `Namespace`, its manifests in the CNPG namespace — and pushes its credentials through
+  `vault-tenant`; the policy handover is proven. What it closed:
+  - a namespaced XR composing `kubernetes.m.crossplane.io` `Object`s through a `ClusterProviderConfig` — seen on v1.2.1; the reference stack moves to v1.4.1, whose
+    `Object` CRDs only add fields;
+  - a namespaced `Object` whose manifest targets another namespace (the CNPG one) and a cluster-scoped kind — seen;
+  - `function-extra-resources` reading the XR's `Namespace` — seen;
+  - listing `XDatabase`s across namespaces — **not pursued**: a tenant kind reads only its own namespace (§5);
+  - the namespaced `Usage` and the **adoptions** of a database cluster, an app and a database — **not run**: no cluster held `XPlatformDatabaseCluster`,
+    `XTenantApp` or `XTenantDatabase` XRs to move. The runbook stays in the migration guide, unproven for those three; run it on a sandbox first if one ever does.
 - [x] **Phase 2 — `XApp`.** Package, tests, API page, persona piece, `ClusterProviderConfig` for the hub, and `env-gate` on an app's own environment (§2b).
   Release `safe` for the new package, and for the `platform-policy` change (additive, though it widens what `env-gate` enforces — say so in the release notes). **Shipped in `release-2026-11-12`**, `env-gate` on the app's environment included and proven on the sandbox on 2026-11-12
   (`./run.sh env-gate`, 21 of 21 rows); the Phase 1 spike items for `XApp` (the `.m` Objects, the Namespace lookup, adoption with no restart) are still to run on a cluster. The package takes `appName` as an
@@ -233,10 +240,12 @@ cases for an app's own environment, including an update that changes it.
 - [x] **Phase 3 — `XDatabase`.** Package with the pool and dedicated-cluster checks, tests, API page. Release `safe`. `namespace-guard` in `Deny` first.
   **Shipped in `release-2026-11-12`**, writing through the `ClusterSecretStore` `vault-tenant`. The cluster spike items for it (the cross-namespace `Object`, the namespaced `Usage`, adoption with no password rotation and no new OpenBao
   version, the dedicated handover) are still to run on a cluster.
-- [ ] **Phase 4 — the lifecycle rows** of §3 on the cluster, through real logins: CREATE / UPDATE / DELETE by the owner, by another team, by Argo CD; label
-  forging through `labels`; a non-tenant namespace; a guarded environment, written and renamed by someone outside the gate's persona. *The guarded-environment rows pass by
-  impersonation* (`./run.sh env-gate`, 21 of 21, 2026-11-12); the rest are open.
-- [x] **Phase 5 — migrate** (the runbook — running it is the user's; policies are moved on the sandbox, database clusters, apps and databases are next). A migration page in `docs/user-guide/`: per XR, orphan → create the new kind → verify adoption → delete the old XR; in Git,
+- [x] **Phase 4 — the lifecycle rows** of §3: CREATE / UPDATE / DELETE by the owner, by another team, by Argo CD; label forging through `labels`; a non-tenant
+  namespace; a guarded environment, written and renamed by someone outside the gate's persona. *Closed 2026-11-13:* the guarded-environment rows pass by
+  impersonation (`./run.sh env-gate`, 21 of 21 on 2026-11-12; 23 of 23 on 2026-11-13 with the `XDatabase` rows); the other rows are the sandbox kit's `tenant` mode (`examples/sandbox/run.sh tenant`), which passed by
+  impersonation on 2026-11-13 (27 of 27, after the platform persona gained the tenant pieces, §6) and stays in the kit to learn and re-check the kinds.
+- [x] **Phase 5 — migrate** (the runbook — running it is the user's; policies are moved on the sandbox, and no cluster held database clusters, apps or databases
+  of the old kinds; none was installed from the registry, so no bridge release is needed). A migration page in `docs/user-guide/`: per XR, orphan → create the new kind → verify adoption → delete the old XR; in Git,
   sync waves so Argo CD creates the new kind before it prunes the old. Portal switches kinds (`docs/user-guide/portal-integration.md`).
 - [x] **Phase 6 — archive** (shipped in `release-2026-11-12`, breaking — a cluster takes it only after its own handover) `XPlatformPolicy`, `XPlatformDatabaseCluster`, `XTenantApp`, `XTenantDatabase` in a breaking release; `wxops:platform-edit` loses the tenant kinds; RFC-005 Phase 2 drops the
   tenant kinds from its "label Core XRs" step.
@@ -256,10 +265,24 @@ Settled 2026-11-11:
 
 - **Environment — per app, optional, any name; one `XApp` per environment; promotion through Git; guarded by `env-gate` on the app's own field** (§2b).
 
-Open:
+Closed 2026-11-13:
 
 5. **Same manifest names on migration.** Adoption needs the new kind to render the same names inside each manifest (`metadata.name = appName` for the
    Deployment, Service and the rest). The `Object`s themselves change kind, from cluster-scoped `<appName>-deployment` to namespaced
-   `payment/<appName>-deployment`, so the two never clash. Confirm in Phase 1 that only the `Object`s change hands.
+   `payment/<appName>-deployment`, so the two never clash. **Closed without a cluster run:** no `XTenantApp` needed to move. The design stands (`appName` is
+   optional on `XApp` so a migrated app keeps its names), and the first real `XApp` handover is what would confirm it.
 6. **A database without an environment — settled 2026-11-11: the `dev` pool**, the one every `XTenantDatabase` defaulted to, so a migration is a copy. A team that runs a
    production database says `environment: prod`. Revisit if a default pool that is not `dev` is wanted.
+
+## Known limits, and where they go
+
+What this RFC ships but does not solve, recorded when it closed (2026-11-13):
+
+| Limit | Today | Where it goes |
+|---|---|---|
+| **Tenants share one secret store** | `XDatabase` writes through the `ClusterSecretStore` `vault-tenant` (the `tenants/` mount), fixed by the composition, so an `ExternalSecret` can still name another team's OpenBao path | Per-owner stores and OpenBao roles — [RFC-008](008-built-in-tools-identity-and-catalog.md) |
+| **Database pools know three environments** | `XDatabaseCluster.environment` accepts `dev`, `staging` and `prod`, while `XDatabase.environment` accepts any name (§2b): a shared database in another environment finds no pool and says so | Environment and promotion — RFC-011, not yet drafted |
+| **Environments share the hub** | Every environment lands in the team's namespace on the hub, told apart by the XR's name (§2b); `env-gate` protects what is declared, not what really runs in production | Mapping an environment to a cluster — RFC-011 and [multi-cluster](../core-ideas/multi-cluster.md) |
+| **The discovery label keeps its old value** | `wxops.cloud/managed-by: platform-database-clusters` on every `XDatabaseCluster`, matched exactly by `XDatabase` | A shorter value, after testing — a deliberate change to both kinds at once |
+| **Placement is a stable spread** | A hash of `<owner>/<dbName>` over the environment's shared clusters, kept in `status.clusterRef` (§5) | Stays: a tenant kind does not read other namespaces |
+| **Three handovers are unproven** | The runbooks for database clusters, apps and databases were never run; only the policy handover was | Run on a sandbox first, the day a cluster holds those XRs |
