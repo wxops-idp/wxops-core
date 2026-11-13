@@ -73,7 +73,9 @@ rules:
     verbs: ["create", "update", "patch", "delete"]
 ---
 # The W'xOps tenant kinds (ADR-005): written by developers and owners in the namespaces they are bound in — and only there, which is what makes the namespace the owner.
-# Read is its own piece, granted explicitly to every team persona so it does not depend on Kubernetes' `view` aggregating a kind. A rule for a kind whose CRD is not
+# The platform persona gets both pieces too: `admin` does not aggregate a CRD that carries no aggregate-to-admin label, and without them the platform team could
+# change a namespace's Deployments but not its XApps — nor the `protected` ones that template reserves for it.
+# Read is its own piece, granted explicitly to every persona so it does not depend on Kubernetes' `view` aggregating a kind. A rule for a kind whose CRD is not
 # installed grants nothing until it is.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -82,6 +84,7 @@ metadata:
   labels:
     auth.wxops.cloud/aggregate-to-persona-developers: "true"
     auth.wxops.cloud/aggregate-to-persona-owners: "true"
+    auth.wxops.cloud/aggregate-to-persona-platform: "true"
 rules:
   - apiGroups: ["tenant.wxops.cloud"]
     resources: ["xapps", "xdatabases"]
@@ -95,6 +98,7 @@ metadata:
     auth.wxops.cloud/aggregate-to-persona-viewers: "true"
     auth.wxops.cloud/aggregate-to-persona-developers: "true"
     auth.wxops.cloud/aggregate-to-persona-owners: "true"
+    auth.wxops.cloud/aggregate-to-persona-platform: "true"
 rules:
   - apiGroups: ["tenant.wxops.cloud"]
     resources: ["*", "*/status"]
